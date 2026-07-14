@@ -1,3 +1,48 @@
 # Code Generation Skill
 
-Purpose: Generate high-quality, clean, and well-documented code according to best practices.
+## Purpose
+Generate high-quality, clean, and well-documented code that is production-ready, not just "working".
+
+## Standards
+
+### Code Quality Checklist (apply to every generated file)
+- [ ] Naming communicates intent (variables, functions, classes)
+- [ ] Functions do one thing (single responsibility)
+- [ ] Error handling is explicit — no swallowed errors
+- [ ] Edge cases are handled (null, empty, out-of-range)
+- [ ] No hardcoded values that belong in config/constants
+- [ ] No TODO comments without context (why and when)
+- [ ] Security: no injection points, no secret in code
+
+### Structure Guidelines
+```
+# Good function structure:
+1. Validate inputs (fail fast, fail loudly)
+2. Execute the core logic
+3. Return result or throw explicit error
+
+# Never:
+- Return null to signal error (use Result type or throw)
+- Catch all exceptions silently
+- Mix IO and business logic in the same function
+```
+
+## Process
+
+1. **Understand before writing** — Read existing patterns in the codebase first
+2. **Write the interface first** — function signature, types, and docstring
+3. **Write the happy path** — make it work for the normal case
+4. **Add edge case handling** — inputs that could break it
+5. **Add error handling** — explicit, not catch-all
+6. **Write tests** — at minimum, happy path + one failure case
+7. **Run critic** — apply code-critic checklist before presenting
+
+## Output Format
+- Use language-appropriate idiomatic patterns
+- Code blocks labeled with the language
+- If generating multiple files, list them first, then generate each
+- Explain non-obvious decisions inline with comments
+
+## Critic Integration
+After generating significant code, run `code-critic.md` checklist.
+Do not present code with BLOCKER-level issues unfixed.

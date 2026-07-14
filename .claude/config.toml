@@ -1,0 +1,59 @@
+# .claude/config.toml
+# Project-level configuration for Claude Code / Copilot CLI
+# This file lives at the repo root. Commit it to version control.
+
+# ─── Memory ───────────────────────────────────────────────────────────────────
+[memory]
+enabled = true
+
+# Auto-save a metadata summary at session end
+[memory.session]
+save_on_end = true
+
+# Watch memory files for external edits
+[memory.watcher]
+enabled = true
+
+# Chunk sizes for indexing
+[memory.index]
+max_chunk_chars = 1600
+chunk_overlap_chars = 320
+
+# Embedding for semantic search (set to "auto" to use local if available)
+[memory.embedding]
+provider = "auto"
+dimensions = 1024
+
+# Search settings
+[memory.search]
+max_results = 8
+min_score = 0.3
+vector_weight = 0.7
+text_weight = 0.3
+
+# Inject relevant memory at the start of each session
+[memory.initial_injection]
+enabled = true
+min_score = 0.0
+
+# Dream consolidation: runs after 5+ sessions to reorganize memory
+[memory.dream]
+enabled = true
+min_hours = 12
+min_sessions = 3
+
+# ─── Compaction ───────────────────────────────────────────────────────────────
+[compaction]
+# Flush memory before compaction so no context is lost
+[compaction.memory_flush]
+enabled = true
+
+# ─── Skills ───────────────────────────────────────────────────────────────────
+[skills]
+# Skills in this repo's .claude/skills/ are loaded automatically.
+# Add extra personal skill directories here:
+# paths = ["~/.claude/skills"]
+
+# ─── Agent Behavior ───────────────────────────────────────────────────────────
+# Project-level agent rules are in AGENTS.md at the repo root.
+# Subdirectory AGENTS.md files can add or override rules for their subtree.
