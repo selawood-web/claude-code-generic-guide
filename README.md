@@ -4,6 +4,12 @@ A complete, generic infrastructure for software development with AI coding assis
 
 ---
 
+## See It In Action
+
+→ **[demo/WALKTHROUGH.md](demo/WALKTHROUGH.md)** — A full session walkthrough: debugging a JWT auth bug using `/debug`, `/code-review`, `/commit`, and `/learn`, from bug report to committed fix in ~17 minutes.
+
+---
+
 ## What This Is
 
 A **plug-in infrastructure layer** you drop into any project to get:
