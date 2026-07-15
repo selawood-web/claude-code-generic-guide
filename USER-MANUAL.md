@@ -1,0 +1,927 @@
+# User Manual — AI Development Infrastructure
+
+**Version 1.0 · July 2026**
+
+This manual explains how to install, configure, and use the generic AI development infrastructure in this repository. It is written for software developers who want an AI coding assistant that gets smarter the longer they use it.
+
+---
+
+## Table of Contents
+
+1. [What This Is](#1-what-this-is)
+2. [How It Works — The Big Picture](#2-how-it-works--the-big-picture)
+3. [Prerequisites](#3-prerequisites)
+4. [Installation](#4-installation)
+5. [First Session — Getting Started](#5-first-session--getting-started)
+6. [Skills Reference](#6-skills-reference)
+7. [Memory System](#7-memory-system)
+8. [Session Lifecycle](#8-session-lifecycle)
+9. [Customizing for Your Project](#9-customizing-for-your-project)
+10. [Flow-Studio System](#10-flow-studio-system)
+11. [Daily Workflow Cheatsheet](#11-daily-workflow-cheatsheet)
+12. [Troubleshooting](#12-troubleshooting)
+
+---
+
+## 1. What This Is
+
+This repository is a **plug-in infrastructure layer** you drop on top of any software project to give your AI coding assistant (Claude Code, GitHub Copilot CLI, or any compatible tool) the behavior of a senior principal engineer.
+
+Out of the box, every AI session starts from zero — no memory of previous decisions, no knowledge of your codebase, no understanding of your conventions. **This infrastructure fixes that.**
+
+What you get:
+
+| Component | What it does |
+|-----------|-------------|
+| `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
+| 12 Skill workflows | Step-by-step procedures for every common dev task |
+| Memory system | Knowledge that persists and grows across every session |
+| Session protocol | A ritual that turns sessions into compounding knowledge |
+| Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
+| Flow-Studio | A complete AI orchestration system with critics and decision logic |
+
+**The core promise:** By month 3, your AI starts sessions knowing your project's architecture, conventions, and history — instead of starting from scratch every time.
+
+---
+
+## 2. How It Works — The Big Picture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Your Project                          │
+│                                                         │
+│  ┌──────────┐   ┌─────────────┐   ┌────────────────┐   │
+│  │ AGENTS.md│   │ .claude/    │   │ ~/.claude/     │   │
+│  │          │   │ skills/     │   │ memory/        │   │
+│  │ WHO the  │   │             │   │                │   │
+│  │ AI is    │   │ WHAT it     │   │ WHAT it        │   │
+│  │          │   │ can do      │   │ remembers      │   │
+│  └──────────┘   └─────────────┘   └────────────────┘   │
+│       ↓                ↓                   ↓            │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │              AI Coding Assistant                  │  │
+│  │         (Claude Code / Copilot CLI)               │  │
+│  └───────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Three layers, working together:**
+
+1. **Identity layer (`AGENTS.md`)** — Rules that shape every response. The AI behaves as a senior principal engineer: direct, self-critical, concise, and always extracting knowledge.
+
+2. **Skills layer (`.claude/skills/`)** — Executable workflows. When you say "review this code" or "commit my changes," the AI follows a professional, step-by-step procedure instead of improvising.
+
+3. **Memory layer (`~/.claude/memory/`)** — Persistent knowledge. Decisions, patterns, and findings are saved between sessions. Each session builds on the last.
+
+---
+
+## 3. Prerequisites
+
+| Requirement | Notes |
+|-------------|-------|
+| Claude Code **or** GitHub Copilot CLI | Either works. Claude Code: `npm install -g @anthropic-ai/claude-code`. Copilot CLI: install from VS Code. |
+| Git | Required for version control skills |
+| `gh` CLI (optional) | Required for PR and GitHub-related skills. Install: [cli.github.com](https://cli.github.com) |
+| Memory feature enabled | See [Installation](#4-installation) |
+
+---
+
+## 4. Installation
+
+### Step 1 — Copy `AGENTS.md` into your project
+
+```bash
+cp /path/to/this-repo/AGENTS.md /path/to/your-project/AGENTS.md
+```
+
+This is the single most important file. It immediately gives the AI professional behavior for your project. **Commit it to version control** so your whole team benefits.
+
+> **Tip:** Edit the "Project Conventions" section at the bottom of `AGENTS.md` to describe your actual tech stack, test runner, branch naming, etc. The AI will follow these conventions automatically.
+
+---
+
+### Step 2 — Copy the `.claude/` directory
+
+```bash
+cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
+```
+
+This installs:
+- All 12 skill workflows
+- `config.toml` with memory and compaction settings
+- Session lifecycle hooks
+
+> **Tip:** Commit `.claude/skills/` and `.claude/config.toml` to version control. Do not commit `.claude/hooks/` if the shell scripts have local paths — adjust them first.
+
+---
+
+### Step 3 — Enable memory (one-time global setup)
+
+Memory is what makes sessions accumulate knowledge. Enable it globally:
+
+```toml
+# Add to: ~/.claude/config.toml
+[memory]
+enabled = true
+```
+
+Or start any session with the flag:
+```bash
+claude --experimental-memory
+```
+
+Verify memory is active:
+```bash
+claude inspect | grep memory
+```
+
+---
+
+### Step 4 — Seed your global memory
+
+Copy the engineering wisdom template to your global memory file:
+
+```bash
+mkdir -p ~/.claude/memory
+cp /path/to/this-repo/MEMORY.md ~/.claude/memory/MEMORY.md
+```
+
+This pre-loads principles about architecture, code quality, security, performance, and operations into every future session. **Edit this file anytime** to add your own learnings — the AI will automatically pick them up.
+
+---
+
+### Step 5 — Verify installation
+
+Start a new AI session in your project directory and run:
+
+```
+/skills
+```
+
+You should see the 12 installed skills listed. Then:
+
+```
+what do you remember?
+```
+
+You should see the global engineering principles from `MEMORY.md`.
+
+If skills don't appear, check that `.claude/skills/` exists in the project root (or run `claude inspect`).
+
+---
+
+## 5. First Session — Getting Started
+
+### Starting a session
+
+```bash
+# In your project directory:
+claude
+
+# Or with Copilot CLI:
+# Open VS Code terminal and start a new Copilot chat
+```
+
+### The first thing to say
+
+Tell the AI your goal for this session:
+
+> "I want to build a user authentication system with email/password login. Start with requirements."
+
+The AI will invoke the **requirements skill** automatically and walk you through a structured process.
+
+### What the AI does automatically
+
+- Reads `AGENTS.md` — knows your project conventions
+- Searches memory — loads any relevant knowledge from previous sessions
+- Selects the right skill — matches your request to the best workflow
+
+---
+
+## 6. Skills Reference
+
+Skills are invoked by typing `/skill-name` or just describing what you want — the AI picks the right skill automatically.
+
+---
+
+### `/commit` — Git Commit
+
+**Use when:** You want to commit changes.
+
+**What it does:**
+1. Inspects staged and unstaged changes
+2. Determines the right commit type (`feat`, `fix`, `refactor`, etc.)
+3. Writes a conventional commit message
+4. Commits and confirms
+
+**Examples:**
+```
+commit my changes
+/commit
+save my work
+```
+
+**Sample output:**
+```
+feat(auth): add JWT token refresh endpoint
+
+Adds a POST /auth/refresh route that accepts a valid refresh token
+and returns a new access token. Refresh tokens expire after 30 days.
+```
+
+---
+
+### `/pr` — Pull Request
+
+**Use when:** You want to create a GitHub pull request.
+
+**What it does:**
+1. Verifies all changes are committed
+2. Pushes the branch if not already pushed
+3. Generates a structured PR description (summary, changes, testing notes)
+4. Creates the PR via `gh pr create`
+
+**Examples:**
+```
+create a PR
+open a pull request
+/pr
+```
+
+---
+
+### `/code-review` — Code Review
+
+**Use when:** You want professional feedback on code.
+
+**What it does:**
+Reviews code across 6 dimensions: correctness, security, performance, maintainability, test coverage, and style. Issues are categorized by severity:
+
+| Level | Meaning |
+|-------|---------|
+| 🔴 BLOCKER | Must fix before merge |
+| 🟡 IMPORTANT | Should fix — significant quality concern |
+| 🔵 SUGGESTION | Optional improvement |
+| ✅ GOOD | Acknowledges quality work |
+
+**Examples:**
+```
+review my code
+review the last commit
+/code-review
+review PR #42
+```
+
+---
+
+### `/architecture` — System Architecture Design
+
+**Use when:** You need to design or plan a system.
+
+**What it does:**
+Follows a structured process:
+1. Requirements extraction (scale, latency, constraints)
+2. High-level component design
+3. Technology choices with rationale and rejected alternatives
+4. Trade-off analysis table
+5. Risk identification
+6. MVP scope definition
+
+The architecture critic runs automatically — any critical issues are addressed before the design is presented.
+
+**Examples:**
+```
+design an architecture for a real-time chat app
+how should I structure a multi-tenant SaaS backend?
+/architecture
+```
+
+---
+
+### `/requirements` — Requirements Gathering
+
+**Use when:** You have a vague idea and need to turn it into a specification.
+
+**What it does:**
+Conducts a structured interview to extract:
+- The actual problem (not the stated solution)
+- Success criteria
+- MVP scope vs. v2 features
+- User stories with acceptance criteria
+- Constraints and open questions
+
+Produces a spec document precise enough to implement without ambiguity.
+
+**Examples:**
+```
+I want to build a notification system
+help me plan this feature
+/requirements
+I have an idea for...
+```
+
+---
+
+### `/testing` — Test Suite Generation
+
+**Use when:** You need to write tests.
+
+**What it does:**
+Selects the appropriate test type (unit, integration, E2E), generates tests following the Arrange-Act-Assert structure, covers happy path + edge cases + failure paths, and integrates with your existing test framework.
+
+**Examples:**
+```
+write tests for this function
+add test coverage
+/testing
+unit tests for the auth module
+```
+
+---
+
+### `/debug` — Systematic Debugging
+
+**Use when:** Something is broken or not behaving as expected.
+
+**What it does:**
+Follows a systematic process:
+1. Reproduce the bug reliably
+2. Narrow the scope (binary search)
+3. Form a hypothesis
+4. Test the hypothesis
+5. Find the root cause (not just the symptom)
+6. Write a regression test
+
+**Examples:**
+```
+this function isn't working
+/debug
+I'm getting a 500 error when...
+why is this happening?
+```
+
+---
+
+### `/refactor` — Code Refactoring
+
+**Use when:** Code needs to be cleaned up without changing behavior.
+
+**What it does:**
+1. Writes characterization tests first (if none exist)
+2. Identifies the specific problem (too long, duplicated, unclear, etc.)
+3. Applies one refactoring at a time
+4. Runs tests after each step
+5. Commits each working step
+
+**Examples:**
+```
+refactor this class
+clean up this file
+/refactor
+this code is too complex
+```
+
+---
+
+### `/learn` — Knowledge Capture
+
+**Use when:** You discover something worth remembering for future sessions.
+
+**What it does:**
+Extracts the reusable principle (not just the raw fact), categorizes and tags it, and writes it to the appropriate memory file (project-specific or global).
+
+**Examples:**
+```
+learn! the JWT library doesn't throw on missing claims
+remember this pattern
+/learn
+```
+
+**Format for explicit capture:**
+```
+remember: [principle] — reason: [why it matters]
+remember globally: [universal principle]
+```
+
+---
+
+### `/standup` — Session Summary
+
+**Use when:** You want a summary of what was accomplished.
+
+**What it does:**
+Generates a structured standup report:
+- ✅ Done
+- 🔄 In Progress
+- 🔜 Next
+- 💡 Notes
+
+**Examples:**
+```
+standup
+what did we do today?
+/standup
+session summary
+```
+
+---
+
+### `/deploy` — Deployment
+
+**Use when:** You want to deploy to an environment.
+
+**What it does:**
+Runs through a pre-deployment checklist, executes the deployment (adapted to your platform), verifies the deployment succeeded, and monitors for the first 15 minutes.
+
+**Examples:**
+```
+deploy to staging
+/deploy
+ship this
+```
+
+---
+
+### `/security-review` — Security Audit
+
+**Use when:** You want to check code for security vulnerabilities.
+
+**What it does:**
+Reviews against the OWASP Top 10:
+- SQL/command injection
+- Broken authentication
+- Sensitive data exposure
+- Security misconfigurations
+- Broken access control
+- XSS
+- Insecure dependencies
+- Insecure deserialization
+- SSRF
+
+Findings are rated CRITICAL / HIGH / MEDIUM / LOW.
+
+**Examples:**
+```
+security review
+check for vulnerabilities
+/security-review
+is this secure?
+```
+
+---
+
+## 7. Memory System
+
+Memory is the most powerful feature of this infrastructure. It is what makes sessions accumulate knowledge instead of resetting.
+
+### Where memory lives
+
+```
+~/.claude/memory/
+  MEMORY.md                          ← Global (all projects)
+  <project-slug>-<hash>/
+    MEMORY.md                        ← This project only
+    sessions/
+      2026-07-15.md                  ← Session summaries
+      2026-07-14.md
+```
+
+### Saving to memory
+
+**Automatic:** At the end of each session, a metadata summary is saved automatically (message counts, topics, files touched).
+
+**Semi-automatic (recommended):** Run `/flush` before ending a session or before compaction. This generates a rich LLM-written summary of decisions, patterns, and findings — indexed and searchable.
+
+**Manual — explicit fact:**
+```
+remember: always use parameterized queries in this codebase — reason: the ORM has a known escape issue with special characters
+```
+
+**Manual — global principle:**
+```
+remember globally: always enable strict mode in TypeScript — reason: catches null/undefined errors at compile time
+```
+
+**Manual — via skill:**
+```
+/learn
+```
+
+### Reading from memory
+
+**Automatic:** On the first turn of each session, relevant memory is injected based on the current directory and topic.
+
+**Manual queries:**
+```
+what do you remember about this project?
+what do you know about authentication in this codebase?
+search memory for "database migration"
+```
+
+**Browse all memory files:**
+```
+/memory
+```
+
+### Consolidating memory (weekly task)
+
+After 5+ sessions, run:
+```
+/dream
+```
+
+This consolidates scattered session logs into an organized, deduplicated knowledge base. Reduces noise and improves search quality.
+
+### Memory quality rules
+
+Good memory entries are:
+- **Specific** — not "we use React" but "we use React 18 with the App Router — pages go in `app/`, not `pages/`"
+- **Rationale-bearing** — include the *why*, not just the *what*
+- **Durable** — written as permanent statements, not "today we decided X"
+
+Bad memory entries:
+- Vague or context-free
+- Sensitive data (credentials, PII)
+- One-off facts that won't repeat
+
+---
+
+## 8. Session Lifecycle
+
+### Starting a session (checklist)
+
+1. Open your project directory
+2. Start the AI tool (`claude` or Copilot chat)
+3. Memory is injected automatically — verify with:
+   ```
+   what do you remember about this project?
+   ```
+4. State your goal for this session explicitly
+5. Review any open work:
+   ```
+   git --no-pager log --oneline -10
+   gh issue list --assignee @me
+   ```
+
+### During a session
+
+**When context gets large:** Run `/compact` before the tool forces it:
+```
+/compact focus on [what's most important to preserve]
+```
+
+**When you discover something important:** Capture it immediately:
+```
+remember: [discovery] — reason: [why it matters]
+```
+
+Don't wait until the end of the session. Memory is most accurate when captured in the moment.
+
+### Ending a session (checklist)
+
+Run these before closing:
+
+```
+# 1. Flush session summary to memory
+/flush
+
+# 2. Capture key learnings
+/learn
+
+# 3. Commit any open work
+/commit
+
+# 4. Weekly: consolidate memory
+/dream
+```
+
+### Resuming a session
+
+```bash
+# Continue the most recent session for this directory
+claude -c
+
+# Resume a specific session by ID
+claude --resume <session-id>
+
+# Browse all sessions (in TUI)
+/load
+```
+
+### The knowledge growth curve
+
+| Time | What the AI knows |
+|------|------------------|
+| Day 1 | Global engineering principles (from `MEMORY.md`) |
+| Week 1 | Your tech stack, architecture decisions |
+| Week 2 | Bug patterns, API quirks, debugging paths |
+| Month 1 | Team conventions, domain knowledge |
+| Month 3+ | Deep project history — the AI "knows this codebase" |
+
+---
+
+## 9. Customizing for Your Project
+
+### 1. Edit `AGENTS.md` — Project Conventions
+
+Find the "Project Conventions" section and replace the example with your actual stack:
+
+```markdown
+## Project Conventions
+
+- Language: TypeScript (strict mode)
+- Framework: Next.js 14 (App Router)
+- Database: PostgreSQL via Prisma ORM
+- Tests: Vitest + React Testing Library
+- Style: ESLint + Prettier (configured in root)
+- Branch naming: feature/<JIRA-ticket>-short-description
+- PR size limit: 400 lines (excluding generated/migration files)
+- Commit format: conventional commits (see examples in git log)
+```
+
+### 2. Add your own skills
+
+Create a new skill for any repeatable workflow:
+
+```bash
+mkdir -p .claude/skills/my-workflow
+```
+
+Create `.claude/skills/my-workflow/SKILL.md`:
+
+```markdown
+---
+name: my-workflow
+description: [What this does and when to invoke it — be specific about trigger phrases]
+when-to-use: [trigger phrase 1], [trigger phrase 2]
+---
+
+# My Workflow
+
+## Steps
+
+1. [First step with specific commands]
+2. [Second step]
+3. [Verify it worked]
+```
+
+Or use the built-in skill creator:
+```
+/skillify
+```
+
+### 3. Capture project conventions in memory
+
+After establishing a convention with your team, save it:
+
+```
+remember: we use kebab-case for API route paths (e.g. /user-profile not /userProfile) — reason: REST convention and consistent with our nginx config
+```
+
+### 4. Update global memory with your principles
+
+Edit `~/.claude/memory/MEMORY.md` directly to add your own engineering principles. The file watcher picks up changes immediately — no restart needed.
+
+### 5. Project-specific AGENTS.md in subdirectories
+
+For monorepos or projects with distinct parts, add AGENTS.md files in subdirectories:
+
+```
+my-repo/
+  AGENTS.md              ← repo-wide rules
+  packages/
+    frontend/
+      AGENTS.md          ← "Use React. Components in src/components/"
+    backend/
+      AGENTS.md          ← "Use Express. REST conventions."
+```
+
+Rules accumulate — the AI sees all of them, with deeper files taking precedence.
+
+---
+
+## 10. Flow-Studio System
+
+Flow-Studio is the orchestration layer inside `Flow-Studio/`. It defines the AI's thinking system: how it decides what to do, how it criticizes its own work, and how it extracts knowledge.
+
+You don't need to interact with Flow-Studio directly — it works in the background. But understanding it helps you tune the AI's behavior.
+
+### Core system (`Flow-Studio/core/`)
+
+| File | Purpose |
+|------|---------|
+| `system/core-prompt.md` | Master identity and rules for Workflow Studio |
+| `orchestrator/behavior.md` | Decision tree for skill selection |
+| `orchestrator/decision-engine.md` | Operating mode logic |
+| `critics/code-critic.md` | Code review rubric |
+| `critics/architecture-critic.md` | Architecture review rubric |
+| `memory/README.md` | Memory layer documentation |
+| `knowledge-base/extraction-rules.md` | What to capture and how |
+
+### Knowledge base (`Flow-Studio/core/knowledge-base/entries/`)
+
+Pre-seeded with engineering wisdom:
+
+| File | Contents |
+|------|----------|
+| `architecture-patterns.md` | Monolith vs. microservices, CQRS, repository pattern, hexagonal architecture |
+| `engineering-principles.md` | Naming, error handling, SRP, composition, fail fast, immutability |
+| `common-pitfalls.md` | N+1 queries, race conditions, JWT attacks, IDOR, migration mistakes |
+
+**Add your own entries** by creating new `.md` files in this directory. Use the same format:
+
+```markdown
+## [Category]
+
+### [Topic Title]
+**Principle**: [The rule in one sentence]
+**Context**: [When this applies]
+**Rationale**: [Why — the reasoning]
+**Tags**: #tag1 #tag2
+```
+
+### Operating modes
+
+The AI automatically selects a mode based on your request:
+
+| Mode | Trigger words | What happens |
+|------|--------------|-------------|
+| **Planner** | "I want to build", "help me", vague idea | Requirements gathering |
+| **Architect** | "design", "structure", "how should I..." | Architecture skill + architect critic |
+| **Builder** | "implement", "write code", "add feature" | Code generation + code critic |
+| **Reviewer** | "review", "check my code" | Code review skill + code critic |
+| **Debugger** | "bug", "error", "not working" | Debug skill |
+
+---
+
+## 11. Daily Workflow Cheatsheet
+
+### Starting work
+
+```bash
+claude -c                          # resume last session
+```
+```
+what do you remember about this project?   # verify memory loaded
+I want to: [your goal today]               # state the goal
+```
+
+### Common tasks
+
+```
+/requirements    ← new feature idea
+/architecture    ← design a system
+/debug           ← something is broken
+/code-review     ← review changes
+/refactor        ← clean up code
+/testing         ← write tests
+/security-review ← audit for vulnerabilities
+```
+
+### Git workflow
+
+```
+/commit          ← stage and commit with conventional message
+/pr              ← create a pull request
+/deploy          ← deploy to an environment
+```
+
+### Knowledge management
+
+```
+remember: [fact] — reason: [why]   ← save something now
+/learn                             ← structured knowledge capture
+/flush                             ← save session summary (before ending)
+/dream                             ← consolidate memory (weekly)
+/memory                            ← browse all memory files
+```
+
+### Context management
+
+```
+/compact [focus]       ← compress history before it auto-compacts
+/skills                ← list available skills
+claude inspect         ← see what's loaded (skills, rules, memory)
+```
+
+---
+
+## 12. Troubleshooting
+
+### Skills not appearing
+
+```bash
+# Check what skills are loaded
+claude inspect
+
+# Verify the skills directory exists
+ls .claude/skills/
+```
+
+Skills require a `SKILL.md` file inside each skill directory. Check that the file exists and has valid YAML frontmatter (`---` delimiters and `name`/`description` fields).
+
+---
+
+### Memory not working
+
+```bash
+# Check memory is enabled
+claude inspect | grep -i memory
+
+# Check if the flag is set
+claude --experimental-memory
+
+# Check config file
+cat ~/.claude/config.toml
+```
+
+If memory was disabled when you started the session, start a new session:
+```
+/new
+```
+
+---
+
+### AI not following AGENTS.md rules
+
+```bash
+# Verify AGENTS.md is being loaded
+claude inspect
+```
+
+AGENTS.md must be in the git repository root or current directory. Rules from deeper directories supplement (not replace) root rules.
+
+If you're not in a git repo, only the current directory is scanned.
+
+---
+
+### `/flush` not saving anything useful
+
+Flush works best when the session has substantial history. If you just started or the session was compacted, flush will save minimal content. Use `/learn` for targeted knowledge capture instead.
+
+---
+
+### Context window fills up too fast
+
+Use `/compact` proactively with a focus hint:
+```
+/compact focus on [the most important current context]
+```
+
+For very long sessions, `/compact` multiple times is fine. Memory is re-injected after each compaction, so important project context is recovered automatically.
+
+---
+
+### The AI is ignoring my instructions
+
+Check precedence order:
+1. AGENTS.md rules (highest — always active)
+2. Skill SKILL.md instructions (active when skill is invoked)
+3. Your in-session prompt
+
+If the AI is overriding your request, it may be following a rule in AGENTS.md that conflicts. Edit AGENTS.md to resolve conflicts.
+
+---
+
+### Knowledge is not accumulating across sessions
+
+Verify you are:
+1. Running `/flush` before ending sessions
+2. Starting new sessions in the same directory (memory is directory-scoped)
+3. Using `claude -c` to resume rather than starting a fresh session
+
+Check what's in memory:
+```bash
+ls ~/.claude/memory/
+cat ~/.claude/memory/MEMORY.md
+```
+
+---
+
+## Quick Reference Card
+
+| Task | Command |
+|------|---------|
+| Start AI | `claude` or `claude -c` (resume) |
+| List skills | `/skills` |
+| Commit | `/commit` |
+| Pull Request | `/pr` |
+| Code review | `/code-review` |
+| Design system | `/architecture` |
+| Gather requirements | `/requirements` |
+| Write tests | `/testing` |
+| Debug | `/debug` |
+| Refactor | `/refactor` |
+| Security audit | `/security-review` |
+| Save knowledge | `/learn` or `remember: ...` |
+| Session summary | `/standup` |
+| Save session | `/flush` |
+| Consolidate memory | `/dream` |
+| Browse memory | `/memory` |
+| Compress context | `/compact [focus]` |
+| Check what's loaded | `claude inspect` |
+| Create new skill | `/skillify` |
+
+---
+
+*For the full Claude Code / Copilot CLI reference, see the `docs/` directory (22 chapters covering every feature).*
