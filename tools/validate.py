@@ -101,31 +101,43 @@ def check_catalogs() -> None:
 
     Mechanizes the drift class caught by hand in review: counts bumped while
     catalog content lagged, or a skill added without its catalog rows.
+    Catalog files the project does not have are skipped, so this validator is
+    safe to copy into repos that adopt the skills without the guide's docs.
     """
     skills = sorted(
         os.path.basename(os.path.dirname(p))
         for p in tracked(".claude/skills/*/SKILL.md")
     )
-    readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
-    agents = open(os.path.join(ROOT, "AGENTS.md"), encoding="utf-8").read()
-    manual = open(os.path.join(ROOT, "USER-MANUAL.md"), encoding="utf-8").read()
+
+    def read_if_present(name: str) -> str | None:
+        path = os.path.join(ROOT, name)
+        if not os.path.exists(path):
+            return None
+        return open(path, encoding="utf-8").read()
+
+    readme = read_if_present("README.md")
+    agents = read_if_present("AGENTS.md")
+    manual = read_if_present("USER-MANUAL.md")
 
     for name in skills:
-        if f"| `{name}` | `/{name}` |" not in readme:
+        if readme is not None and f"| `{name}` | `/{name}` |" not in readme:
             fail(f"README.md: skill '{name}' missing from the Available Skills table")
-        if f"| `/{name}` |" not in agents:
+        if agents is not None and f"| `/{name}` |" not in agents:
             fail(f"AGENTS.md: skill '{name}' missing from the skill table")
-        if f"### `/{name}` —" not in manual:
+        if manual is not None and f"### `/{name}` —" not in manual:
             fail(f"USER-MANUAL.md: skill '{name}' has no per-skill entry in section 6")
 
-    for row_name in re.findall(r"^\| `([a-z0-9-]+)` \| `/[a-z0-9-]+` \|", readme, re.M):
-        if row_name not in skills:
-            fail(f"README.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
+    if readme is not None:
+        for row_name in re.findall(r"^\| `([a-z0-9-]+)` \| `/[a-z0-9-]+` \|", readme, re.M):
+            if row_name not in skills:
+                fail(f"README.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
 
     count_re = re.compile(
         r"\b(\d+)\s+(?:production-ready\s+|reusable\s+|installed\s+)?[Ss]kill(?:s\b| workflows\b)"
     )
     for doc_name, text in (("README.md", readme), ("USER-MANUAL.md", manual)):
+        if text is None:
+            continue
         for stated in count_re.findall(text):
             if int(stated) != len(skills):
                 fail(
