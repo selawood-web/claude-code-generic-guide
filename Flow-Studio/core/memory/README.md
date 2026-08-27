@@ -7,9 +7,9 @@ Responsible for long-term and short-term knowledge retention across sessions.
 
 | Type | Scope | Location | Contents |
 |------|-------|----------|----------|
-| **Global** | All projects | `~/.claude/memory/MEMORY.md` | Universal engineering principles, personal preferences |
-| **Workspace** | Current project | `~/.claude/memory/<project>/MEMORY.md` | Project architecture, conventions, discovered patterns |
-| **Session** | Single session | `~/.claude/memory/<project>/sessions/` | Session summaries, debugging logs |
+| **Global** | All projects | `~/.claude/CLAUDE.md` | Universal engineering principles, personal preferences |
+| **Auto memory** | Current project | `~/.claude/projects/<project>/memory/` | Notes Claude writes itself; `MEMORY.md` index loaded every session |
+| **Session logs** | Session history | `~/.claude/memory/<project>/sessions/` | Summaries written by `/flush`, consolidated by `/dream` |
 
 ## Memory Operations
 
@@ -20,13 +20,15 @@ remember globally: [universal principle] — tags: #category
 ```
 
 ### Write (automatic)
-- Session end: auto-save metadata summary
-- Pre-compaction: `/flush` triggered by hook
-- Manual: `/flush` for rich LLM-generated summary
+- Auto memory: Claude saves notes itself during the session ("Saved 2 memories")
+- Pre-compaction: the PreCompact hook reminds to run `/flush`
+- Manual: `/flush` for a rich structured session summary
 
 ### Read (automatic)
-- First turn injection: relevant memory is loaded at session start
-- After compaction: memory searched again to recover lost context
+- Session start: `~/.claude/CLAUDE.md`, the project `CLAUDE.md`, and the
+  auto-memory `MEMORY.md` index are loaded
+- After compaction: the project-root `CLAUDE.md` is re-injected; topic files
+  are re-read on demand
 
 ### Read (explicit)
 ```
@@ -37,7 +39,7 @@ search memory for [keyword]
 
 ### Consolidate
 ```
-/dream    ← reorganizes scattered memory into coherent topics
+/dream    ← reorganizes scattered session logs into coherent topics
 ```
 
 ## Memory Quality Rules

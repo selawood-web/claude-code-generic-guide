@@ -1,6 +1,11 @@
 # .claude/config.toml
-# Project-level configuration for Claude Code / Copilot CLI
-# This file lives at the repo root. Commit it to version control.
+#
+# NOTE: Claude Code does not read this file. Its real configuration is
+# .claude/settings.json (hooks, permissions, auto memory toggle); memory,
+# skills, and compaction work as described in README "Knowledge Persistence
+# System" without any of the settings below. This file is kept as an
+# illustrative reference of the intended memory-layer tuning, and for any
+# compatible tool that does consume TOML configuration.
 
 # ─── Memory ───────────────────────────────────────────────────────────────────
 [memory]

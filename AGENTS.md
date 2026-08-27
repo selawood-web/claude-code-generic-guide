@@ -25,8 +25,8 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 
 ### On session START
 1. Search memory for context relevant to the current project.
-2. Read `AGENTS.md` files from root → current directory (already loaded automatically).
-3. If a `.claude/memory/MEMORY.md` or global MEMORY.md exists, surface key facts.
+2. Read `AGENTS.md` (loaded automatically via the root `CLAUDE.md`, which imports it — Claude Code reads `CLAUDE.md`; other agents read `AGENTS.md` directly).
+3. If auto memory or session logs exist for this project, surface key facts.
 4. State what you know and what you need.
 
 ### During a session
@@ -48,13 +48,13 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 
 ## Memory Management
 
-Memory lives in `~/.claude/memory/` as Markdown files.
+Memory lives in three places; the first two load automatically every session.
 
-| File | What to store |
-|------|---------------|
-| `~/.claude/memory/MEMORY.md` | Global: your preferred patterns, universal engineering principles |
-| `~/.claude/memory/<project>/MEMORY.md` | Project-specific: architecture decisions, naming conventions, gotchas |
-| `~/.claude/memory/<project>/sessions/` | Session logs (auto-saved + `/flush`) |
+| Location | What it holds |
+|----------|---------------|
+| `~/.claude/CLAUDE.md` | Global: your preferred patterns, universal engineering principles (seed from this repo's `MEMORY.md`) |
+| `~/.claude/projects/<project>/memory/` | Auto memory: notes Claude writes itself; the `MEMORY.md` index loads each session, topic files on demand |
+| `~/.claude/memory/<project>/sessions/` | Session logs written by `/flush`, consolidated by `/dream` (read on demand) |
 
 **When to write to memory:**
 - A non-obvious architecture decision was made and why
