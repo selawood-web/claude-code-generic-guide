@@ -49,11 +49,12 @@ grep -rn "old wording\|old path\|old command" --include="*.md" .
 Success: zero hits for the superseded wording anywhere in the repository.
 
 ### Step 6 — Validate and state the evidence
-Run the repository's checker and say exactly what was verified:
+Run the repository's checker, if it has one, and say exactly what was verified:
 ```bash
-python3 tools/validate.py
+python3 tools/validate.py   # this repo's gate; in other projects, run their doc/link checker
 ```
-Success: links, anchors, and frontmatter green — and the claim "one home, N references, zero stragglers" is backed by the step 5 sweep, not assumed.
+No checker in the project? State the manual evidence instead: which greps ran and came back empty, which links were followed.
+Success: the claim "one home, N references, zero stragglers" is backed by the step 5 sweep and the stated checks, not assumed.
 
 ## Scale
 One drifted sentence needs steps 1, 4, and 5 stated in a line each. A parallel document system needs the full pass, and possibly a decision about whether the duplicate document should exist at all — that decision belongs to the owner, not this skill.

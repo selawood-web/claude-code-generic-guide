@@ -466,6 +466,103 @@ is this secure?
 
 ---
 
+### `/code-generation` — Production-Ready Implementation
+
+**Use when:** You want code implemented to the full quality bar, not just "working".
+
+**What it does:**
+1. Reads existing patterns in the codebase first
+2. Writes interface, happy path, edge cases, and explicit error handling in that order
+3. Writes tests to the charter's bar (happy path, three edge cases, one failure mode)
+4. Runs the code critic checklist before presenting — no unfixed BLOCKERs
+
+**Examples:**
+```
+implement the refresh endpoint
+write code for this
+/code-generation
+```
+
+---
+
+### `/flush` — Session Summary to Memory
+
+**Use when:** A productive session is ending, or before `/compact`.
+
+**What it does:**
+1. Resolves the project's session-log directory under `~/.claude/memory/`
+2. Gathers the session's facts from git and the conversation
+3. Writes a structured summary: goal, what happened, decisions with rationale, files changed, open threads
+4. Prompts you to promote durable findings via `/learn`
+
+**Examples:**
+```
+/flush
+save this session
+flush before we compact
+```
+
+---
+
+### `/dream` — Memory Consolidation
+
+**Use when:** Five or more session logs have accumulated, or weekly.
+
+**What it does:**
+1. Reads all session logs and the project `MEMORY.md`
+2. Merges: dedupes (keeping the version with rationale), groups by section, flags contradictions and staleness instead of dropping them
+3. Archives processed logs — nothing is ever deleted
+4. Reports entries before → after and anything marked `[VERIFY:]`
+
+Stops by itself if there are fewer than two logs to consolidate.
+
+**Examples:**
+```
+/dream
+consolidate memory
+clean up what you know
+```
+
+---
+
+### `/skillify` — Capture a Workflow as a Skill
+
+**Use when:** You just finished a multi-step process the team will repeat.
+
+**What it does:**
+1. Checks the workflow deserves to be a skill (repeatable, not already covered)
+2. Extracts the steps actually taken — including what went wrong, so the skill encodes the corrected path
+3. Writes `.claude/skills/<name>/SKILL.md` in the house format and validates the frontmatter
+4. Registers it in the catalog tables and reminds you to commit it
+
+**Examples:**
+```
+/skillify
+make this a skill
+capture this workflow
+```
+
+---
+
+### `/reconcile-docs` — One Home Per Rule
+
+**Use when:** Two documents state the same rule differently, or duplication has crept across docs.
+
+**What it does:**
+1. Finds every statement of the rule, including rewordings
+2. Picks the authoritative home; resolves conflicts before rewriting (never averages two versions)
+3. Rewrites every other site as a reference, using verified-unique replacements
+4. Re-sweeps for stragglers, then runs the repo's validator and states the evidence
+
+**Examples:**
+```
+/reconcile-docs
+these two files disagree
+remove the duplication between the README and the manual
+```
+
+---
+
 ## 7. Memory System
 
 Memory is the most powerful feature of this infrastructure. It is what makes sessions accumulate knowledge instead of resetting.
