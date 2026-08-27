@@ -78,7 +78,7 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── config.toml              ← Illustrative settings reference (Claude Code reads settings.json)
-│   ├── settings.json            ← Hook registration (PreCompact, SessionEnd)
+│   ├── settings.json            ← Hook registration (SessionStart, PreCompact, SessionEnd)
 │   ├── skills/                  ← 17 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
