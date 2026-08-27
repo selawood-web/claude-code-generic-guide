@@ -14,7 +14,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 A **plug-in infrastructure layer** you drop into any project to get:
 - A senior principal engineer mindset embedded in your AI assistant
-- 12 production-ready skill workflows (commit, PR, code review, architecture, etc.)
+- 15 production-ready skill workflows (commit, PR, code review, architecture, memory capture, etc.)
 - Automatic knowledge capture across sessions — context that accumulates over time
 - Self-criticism and quality gates built into every workflow
 - A seeded knowledge base with architecture patterns, engineering principles, and common pitfalls
@@ -33,7 +33,7 @@ This immediately gives your AI assistant professional engineering behavior.
 ```bash
 cp -r .claude/ /path/to/your-project/.claude/
 ```
-This installs all 12 skill workflows.
+This installs all 15 skill workflows and the hook wiring (`settings.json`).
 
 ### 3. Enable memory (one-time setup)
 ```toml
@@ -73,7 +73,8 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── config.toml              ← Memory, skills, and compaction settings
-│   ├── skills/                  ← 12 reusable skill workflows
+│   ├── settings.json            ← Hook registration (PreCompact, SessionEnd)
+│   ├── skills/                  ← 15 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
 │   │   ├── code-review/         ← Systematic code review
@@ -121,6 +122,9 @@ claude-code-generic-guide/
 | `standup` | `/standup` | Session summary / daily report |
 | `deploy` | `/deploy` | Deployment with pre-flight checklist |
 | `security-review` | `/security-review` | OWASP-based security audit |
+| `flush` | `/flush` | Structured session summary written to the memory log |
+| `dream` | `/dream` | Consolidate session logs into the knowledge base |
+| `skillify` | `/skillify` | Capture a completed workflow as a new skill |
 
 ---
 

@@ -36,7 +36,9 @@ argument-hint: "[optional: scope or message hint]"
 4. **Compose message**
    - Subject: `<type>(<scope>): <imperative verb> <what>` — max 72 chars, no period
    - Body (if needed): explain WHY, not WHAT
-   - Footer: `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+   - Footer: use your team's AI attribution convention if one exists (e.g. a
+     `Co-authored-by:` trailer naming the assistant actually in use). Do not
+     hardcode a specific assistant — attribution must match who did the work.
 
 5. **Commit**
    ```
