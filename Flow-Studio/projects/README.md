@@ -1,1 +1,0 @@
-Extract and list active projects from the document. Output one bullet per project with name and status. If no projects are present, say "No active projects were provided."Extract and list active projects from the document. Output one bullet per project with name and status. If no projects are present, say "No active projects were provided."

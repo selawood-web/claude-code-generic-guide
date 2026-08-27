@@ -1,3 +1,11 @@
+---
+name: code-generation
+description: Generate production-ready code with explicit error handling, edge cases, and tests. Use when the user says "implement", "write code", "build this function/module", or "add this feature".
+when-to-use: implement, write code, generate code, build feature, add function
+allowed-tools: powershell, bash
+argument-hint: "[what to implement]"
+---
+
 # Code Generation Skill
 
 ## Purpose
@@ -41,7 +49,7 @@ back here. See `WORKING-CHARTER.md`, *Code Module*.
 6. **Write tests** — per function touched: one happy path, at least three edge cases (empty input,
    boundary value, unexpected type), and one failure mode. Run the full suite, not just the new tests;
    target 90 percent coverage on changed lines
-7. **Run critic** — apply code-critic checklist before presenting
+7. **Run critic** — apply the checklist in `../code-review/code-critic.md` before presenting
 
 ## Output Format
 - Use language-appropriate idiomatic patterns
@@ -50,5 +58,5 @@ back here. See `WORKING-CHARTER.md`, *Code Module*.
 - Explain non-obvious decisions inline with comments
 
 ## Critic Integration
-After generating significant code, run `code-critic.md` checklist.
+After generating significant code, run the `../code-review/code-critic.md` checklist.
 Do not present code with BLOCKER-level issues unfixed.

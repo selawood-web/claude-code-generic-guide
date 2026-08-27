@@ -8,6 +8,10 @@ argument-hint: "[optional: PR number or file path]"
 
 # Code Review Skill
 
+The full review rubric — six dimensions with a severity scale — lives in
+[`code-critic.md`](code-critic.md) beside this file. Use it for deep reviews;
+the steps below are the working procedure.
+
 ## Review Dimensions (in order of priority)
 
 1. **Correctness** — Does it do what it claims? Does it handle edge cases?

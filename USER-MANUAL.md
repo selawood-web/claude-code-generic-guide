@@ -17,7 +17,7 @@ This manual explains how to install, configure, and use the generic AI developme
 7. [Memory System](#7-memory-system)
 8. [Session Lifecycle](#8-session-lifecycle)
 9. [Customizing for Your Project](#9-customizing-for-your-project)
-10. [Flow-Studio System](#10-flow-studio-system)
+10. [Critics and Knowledge Base](#10-critics-and-knowledge-base)
 11. [Daily Workflow Cheatsheet](#11-daily-workflow-cheatsheet)
 12. [Troubleshooting](#12-troubleshooting)
 
@@ -34,11 +34,11 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 15 Skill workflows | Step-by-step procedures for every common dev task |
+| 16 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
-| Flow-Studio | A complete AI orchestration system with critics and decision logic |
+| Critics & knowledge base | Review rubrics inside the skills, plus seeded engineering wisdom in `knowledge-base/` |
 
 **The core promise:** By month 3, your AI starts sessions knowing your project's architecture, conventions, and history — instead of starting from scratch every time.
 
@@ -107,7 +107,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 15 skill workflows
+- All 16 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 - `config.toml` (an illustrative settings reference — Claude Code reads `settings.json`)
@@ -154,7 +154,7 @@ Start a new AI session in your project directory and run:
 /skills
 ```
 
-You should see the 15 installed skills listed. Then:
+You should see the 16 installed skills listed. Then:
 
 ```
 what do you remember?
@@ -696,25 +696,27 @@ Rules accumulate — the AI sees all of them, with deeper files taking precedenc
 
 ---
 
-## 10. Flow-Studio System
+## 10. Critics and Knowledge Base
 
-Flow-Studio is the orchestration layer inside `Flow-Studio/`. It defines the AI's thinking system: how it decides what to do, how it criticizes its own work, and how it extracts knowledge.
+The AI's self-review rubrics and seeded engineering wisdom live inside the
+structures that actually use them — there is no separate orchestration layer.
+The identity and rules are `AGENTS.md` (loaded via `CLAUDE.md`); skill
+selection is the assistant's native auto-invocation from each skill's
+description; the operating agreement is `WORKING-CHARTER.md`.
 
-You don't need to interact with Flow-Studio directly — it works in the background. But understanding it helps you tune the AI's behavior.
-
-### Core system (`Flow-Studio/core/`)
+### Critics (inside the skills that run them)
 
 | File | Purpose |
 |------|---------|
-| `system/core-prompt.md` | Master identity and rules for Workflow Studio |
-| `orchestrator/behavior.md` | Decision tree for skill selection |
-| `orchestrator/decision-engine.md` | Operating mode logic |
-| `critics/code-critic.md` | Code review rubric |
-| `critics/architecture-critic.md` | Architecture review rubric |
-| `memory/README.md` | Memory layer documentation |
-| `knowledge-base/extraction-rules.md` | What to capture and how |
+| `.claude/skills/code-review/code-critic.md` | Full code review rubric: 6 dimensions, severity scale |
+| `.claude/skills/architecture/architecture-critic.md` | Full architecture rubric: 7 dimensions, checklist |
+| `.claude/skills/testing/strategy.md` | Test strategy by project phase, coverage targets by code type |
+| `.claude/skills/learn/extraction-rules.md` | What to capture to memory, what to skip, entry format |
 
-### Knowledge base (`Flow-Studio/core/knowledge-base/entries/`)
+Each is referenced from its skill's `SKILL.md` and travels with the skill when
+you copy `.claude/` into a project.
+
+### Knowledge base (`knowledge-base/entries/`)
 
 Pre-seeded with engineering wisdom:
 
@@ -742,11 +744,11 @@ The AI automatically selects a mode based on your request:
 
 | Mode | Trigger words | What happens |
 |------|--------------|-------------|
-| **Planner** | "I want to build", "help me", vague idea | Requirements gathering |
-| **Architect** | "design", "structure", "how should I..." | Architecture skill + architect critic |
-| **Builder** | "implement", "write code", "add feature" | Code generation + code critic |
-| **Reviewer** | "review", "check my code" | Code review skill + code critic |
-| **Debugger** | "bug", "error", "not working" | Debug skill |
+| **Planner** | "I want to build", "help me", vague idea | `/requirements` skill |
+| **Architect** | "design", "structure", "how should I..." | `/architecture` skill + its critic file |
+| **Builder** | "implement", "write code", "add feature" | `/code-generation` skill + the code critic |
+| **Reviewer** | "review", "check my code" | `/code-review` skill + its critic file |
+| **Debugger** | "bug", "error", "not working" | `/debug` skill |
 
 ---
 

@@ -100,6 +100,7 @@ untrusted sources.
 | `/standup` | Session summary / daily standup report |
 | `/deploy` | Deployment workflow |
 | `/security-review` | Security-focused audit |
+| `/code-generation` | Production-ready implementation |
 | `/flush` | Session summary written to the memory log |
 | `/dream` | Consolidating session logs into the knowledge base |
 | `/skillify` | Capturing a completed workflow as a new skill |
@@ -125,6 +126,11 @@ Run `/skillify` after completing a new workflow to capture it as a reusable skil
 - Merge code that fails its own tests.
 - Return from a task without verifying the change works.
 - Answer "what exists now" from memory — versions, prices, APIs, model names get searched first.
+
+### Escalate instead of proceeding
+- Destructive operations (delete data, force-push, drop tables): pause and confirm explicitly first.
+- Contradictory or impossible requirements: state the conflict and ask for resolution.
+- A required third-party API or service is unavailable: state the blocker clearly.
 
 ### Commit conventions
 ```

@@ -66,7 +66,9 @@ Produce:
 5. What to build first (MVP slice)
 
 ## Architecture Critic Checklist
-Run this before presenting the architecture:
+The full critic — seven dimensions, failure modes, severity scale — lives in
+[`architecture-critic.md`](architecture-critic.md) beside this file. Minimum
+bar before presenting any architecture:
 - [ ] Is this the simplest architecture that meets the stated requirements?
 - [ ] Could a team of the stated size operate this in production?
 - [ ] What is the single point of failure? Is that acceptable?

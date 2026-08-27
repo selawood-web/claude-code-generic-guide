@@ -179,12 +179,13 @@ These travel with the charter into any project:
 
 > Copying the charter into another project? Replace this section. The list above stays.
 
-**What it is:** a drop-in documentation and configuration layer — 86 markdown files,
-two bash hooks, one TOML config, one VS Code tasks file. No application code, no build,
-no test runner, no CI.
+**What it is:** a drop-in documentation and configuration layer — markdown, two bash
+hooks, a JSON settings file, a TOML reference, VS Code tasks, and one Python validator
+(`tools/validate.py`) that CI runs on every pull request. No application code beyond
+that validator.
 
-**Languages here:** Markdown, and bash for `.claude/hooks/*.sh`. Python and JavaScript
-are the defaults above; neither appears in this repo.
+**Languages here:** Markdown, bash for `.claude/hooks/*.sh`, and Python for
+`tools/validate.py`.
 
 **Branch boundary — strict.** Work happens on the session's own `claude/*` branch.
 `master` moves only through a pull request. Nothing outside the branch gets touched.
@@ -198,13 +199,14 @@ are the defaults above; neither appears in this repo.
   `name`, `description`, `when-to-use`, `allowed-tools`, `argument-hint`. A malformed header
   does not error; the skill just silently stops loading.
 - **Single-homed rules.** A rule stated in this charter is *referenced* from `AGENTS.md`,
-  `MEMORY.md`, and Flow-Studio, never restated there. Two copies drift, and that drift is
+  `MEMORY.md`, and the skills, never restated there. Two copies drift, and that drift is
   what this charter was written to end.
 - **`.claude/config.toml` stays valid TOML.** It is parsed at session start; a syntax error
   takes memory, skills, and compaction settings down with it.
 
-**Verification here.** There is no test suite, so gate stages 2 and 3 have nothing to
-execute — that is not a pass, it is a missing instrument. The equivalent evidence for a
-documentation change: internal links resolve, every path named in the Quick Start still
-exists, frontmatter still parses, and no rule gained a second home. State which of those
-were actually checked, the same way a test result would be stated.
+**Verification here.** `tools/validate.py` is the executable gate: links, anchors,
+empty files, skill frontmatter, config parsing, the CLAUDE.md bridge, and hook health —
+run it locally before any push; CI runs it on every pull request. What it cannot check
+stays a stated claim: no rule gained a second home, and instructions match the live
+product (the charter's currency rule — verify against official docs before writing
+product facts).

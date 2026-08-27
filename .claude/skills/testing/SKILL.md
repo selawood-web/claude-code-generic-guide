@@ -8,6 +8,9 @@ argument-hint: "[file, module, or function to test]"
 
 # Testing Skill
 
+Per-phase strategy (greenfield / legacy / bugfix) and coverage targets by code
+type live in [`strategy.md`](strategy.md) beside this file.
+
 ## Testing Pyramid (apply proportionally)
 
 ```
