@@ -108,7 +108,7 @@ A decision without its rationale becomes a mystery. Future engineers will change
 Before adding to a codebase, understand what's already there. Reading existing patterns takes 15 minutes; rebuilding a wheel takes a day and creates inconsistency.
 
 ### Test the Failure Path
-The happy path is easy. The failure path is where real bugs live. Every PR should include a test for at least one failure case.
+The happy path is easy. The failure path is where real bugs live. Per function touched, the bar is one happy path, at least three edge cases (empty input, boundary value, unexpected type), and one failure mode — run against the full suite, not just the new tests.
 
 ### Reproduce Before Fixing
 Never fix a bug you cannot reproduce. A fix without a reproduction is a guess. A regression test that fails before the fix and passes after is proof.
