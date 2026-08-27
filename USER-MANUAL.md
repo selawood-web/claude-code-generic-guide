@@ -88,11 +88,19 @@ What you get:
 
 ## 4. Installation
 
-### Step 1 — Copy `AGENTS.md` into your project
+**The fast way:** run `./install.sh /path/to/your-project` from this repo — it
+performs steps 1–2 below in one command, never overwrites existing files, and
+prints what remains for you. The manual steps, for understanding each piece:
+
+### Step 1 — Copy `AGENTS.md` and `CLAUDE.md` into your project
 
 ```bash
-cp /path/to/this-repo/AGENTS.md /path/to/your-project/AGENTS.md
+cp /path/to/this-repo/AGENTS.md /path/to/this-repo/CLAUDE.md /path/to/your-project/
 ```
+
+Both files are needed: Claude Code reads `CLAUDE.md` (which imports
+`@AGENTS.md`); other assistants read `AGENTS.md` directly. Without the bridge,
+Claude Code never loads the rules at all.
 
 This is the single most important file. It immediately gives the AI professional behavior for your project. **Commit it to version control** so your whole team benefits.
 

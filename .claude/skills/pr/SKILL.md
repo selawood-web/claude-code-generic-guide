@@ -10,10 +10,12 @@ argument-hint: "[optional: PR title hint]"
 
 ## Steps
 
-1. **Verify branch state**
+1. **Detect the default branch — never assume `main`**
    ```
+   DEFAULT=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+   DEFAULT=${DEFAULT:-main}
    git --no-pager status
-   git --no-pager log origin/main..HEAD --oneline
+   git --no-pager log "origin/${DEFAULT}..HEAD" --oneline
    ```
    Ensure all changes are committed. Count commits to be included.
 
@@ -25,7 +27,7 @@ argument-hint: "[optional: PR title hint]"
 3. **Gather PR metadata**
    - Title: `<type>(<scope>): <concise description>` matching conventional commits
    - Body: use the template below
-   - Base branch: typically `main` or `develop`
+   - Base branch: the detected default (`$DEFAULT`), unless the team uses a develop branch
    - Draft: ask if this should be a draft PR
 
 4. **PR body template**
@@ -45,7 +47,7 @@ argument-hint: "[optional: PR title hint]"
 
 5. **Create PR via gh CLI**
    ```
-   gh pr create --title "<title>" --body "<body>" --base main
+   gh pr create --title "<title>" --body "<body>" --base "$DEFAULT"
    ```
    Or for draft: add `--draft`
 
