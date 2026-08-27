@@ -95,7 +95,8 @@ claude-code-generic-guide/
 │   │   ├── code-generation/     ← Production-ready code generation
 │   │   ├── flush/               ← Session summary to memory log
 │   │   ├── dream/               ← Memory consolidation
-│   │   └── skillify/            ← Workflow capture as new skill
+│   │   ├── skillify/            ← Workflow capture as new skill
+│   │   └── reconcile-docs/      ← One home per rule across documents
 │   └── hooks/                   ← Session lifecycle hooks
 │
 ├── knowledge-base/              ← Seeded engineering wisdom (patterns, principles, pitfalls)
@@ -141,7 +142,7 @@ The knowledge system has three layers:
 ### 1. Automatic (built-in)
 - Auto memory: Claude writes and recalls per-project notes in `~/.claude/projects/<project>/memory/`; the index loads every session
 - `CLAUDE.md` (importing `AGENTS.md`) and `~/.claude/CLAUDE.md` load every session
-- Pre-compaction and session-end hooks fire via `.claude/settings.json`
+- Session-start, pre-compaction, and session-end hooks fire via `.claude/settings.json` — every session opens with repo health and memory pointers
 
 ### 2. Semi-automatic (you trigger it)
 - `/flush` — write an LLM-generated session summary before compacting or closing
