@@ -6,9 +6,10 @@ Checks, in order:
   2. Every relative markdown link resolves to a real file.
   3. Every heading anchor referenced in a link exists in the target file.
   4. Every .claude/skills/*/SKILL.md has valid frontmatter with the five house keys.
-  5. .claude/config.toml parses as TOML.
+  5. Every skill appears in every catalog, and stated skill counts match reality.
   6. .claude/settings.json and .vscode/*.json parse as JSON.
-  7. Hook scripts pass bash -n and carry the executable bit in the git index.
+  7. The root CLAUDE.md exists and imports @AGENTS.md (the bridge).
+  8. Hook scripts pass bash -n and carry the executable bit in the git index.
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -19,7 +20,6 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
 
 ROOT = subprocess.check_output(
     ["git", "rev-parse", "--show-toplevel"], text=True
@@ -89,12 +89,6 @@ def check_skills() -> None:
 
 
 def check_configs() -> None:
-    toml_path = os.path.join(ROOT, ".claude", "config.toml")
-    if os.path.exists(toml_path):
-        try:
-            tomllib.load(open(toml_path, "rb"))
-        except tomllib.TOMLDecodeError as exc:
-            fail(f".claude/config.toml: invalid TOML — {exc}")
     for path in tracked(".claude/settings.json") + tracked(".vscode/*.json"):
         try:
             json.load(open(os.path.join(ROOT, path), encoding="utf-8"))

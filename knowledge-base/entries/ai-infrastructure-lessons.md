@@ -43,7 +43,7 @@ product and made functional or honest.
 ### Config that nothing reads is worse than no config
 **Principle**: Every mechanism a repo documents must be executable or explicitly labeled as illustrative — a config file no tool parses teaches users a false model of how the system works.
 **Context**: Settings files, hook directories, and command references in any tooling repo.
-**Evidence**: `.claude/config.toml` was parsed by nothing while presenting itself as the memory configuration; it now carries a header stating what actually reads what.
+**Evidence**: `.claude/config.toml` was parsed by nothing while presenting itself as the memory configuration; it was first labeled as illustrative, then deleted once the owner confirmed nothing needed it.
 **Tags**: #configuration #honesty #documentation
 
 ### One home per rule

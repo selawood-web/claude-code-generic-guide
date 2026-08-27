@@ -110,7 +110,6 @@ This installs:
 - All 17 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
-- `config.toml` (an illustrative settings reference — Claude Code reads `settings.json`)
 
 > **Tip:** Commit the whole `.claude/` directory to version control — skills, `settings.json`, and hooks are all portable.
 

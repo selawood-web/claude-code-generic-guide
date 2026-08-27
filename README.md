@@ -77,7 +77,6 @@ claude-code-generic-guide/
 ├── WORKING-CHARTER.md           ← Standing operating agreement: how the AI thinks, talks, and gates code
 │
 ├── .claude/                     ← AI tooling configuration
-│   ├── config.toml              ← Illustrative settings reference (Claude Code reads settings.json)
 │   ├── settings.json            ← Hook registration (SessionStart, PreCompact, SessionEnd)
 │   ├── skills/                  ← 17 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits

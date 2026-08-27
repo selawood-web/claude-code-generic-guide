@@ -179,8 +179,8 @@ These travel with the charter into any project:
 
 > Copying the charter into another project? Replace this section. The list above stays.
 
-**What it is:** a drop-in documentation and configuration layer — markdown, two bash
-hooks, a JSON settings file, a TOML reference, VS Code tasks, and one Python validator
+**What it is:** a drop-in documentation and configuration layer — markdown, three bash
+hooks, a JSON settings file, VS Code tasks, and one Python validator
 (`tools/validate.py`) that CI runs on every pull request. No application code beyond
 that validator.
 
@@ -201,8 +201,6 @@ that validator.
 - **Single-homed rules.** A rule stated in this charter is *referenced* from `AGENTS.md`,
   `MEMORY.md`, and the skills, never restated there. Two copies drift, and that drift is
   what this charter was written to end.
-- **`.claude/config.toml` stays valid TOML.** It is parsed at session start; a syntax error
-  takes memory, skills, and compaction settings down with it.
 
 **Verification here.** `tools/validate.py` is the executable gate: links, anchors,
 empty files, skill frontmatter, config parsing, the CLAUDE.md bridge, and hook health —
