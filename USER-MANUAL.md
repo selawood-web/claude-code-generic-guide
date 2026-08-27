@@ -108,31 +108,27 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 
 This installs:
 - All 15 skill workflows
-- `config.toml` with memory and compaction settings
-- Session lifecycle hooks
+- `settings.json`, which registers the session lifecycle hooks
+- The hook scripts themselves (they reference only `$HOME`, so they are portable)
+- `config.toml` (an illustrative settings reference — Claude Code reads `settings.json`)
 
-> **Tip:** Commit `.claude/skills/` and `.claude/config.toml` to version control. Do not commit `.claude/hooks/` if the shell scripts have local paths — adjust them first.
+> **Tip:** Commit the whole `.claude/` directory to version control — skills, `settings.json`, and hooks are all portable.
 
 ---
 
-### Step 3 — Enable memory (one-time global setup)
+### Step 3 — Memory needs no enabling
 
-Memory is what makes sessions accumulate knowledge. Enable it globally:
+Memory is what makes sessions accumulate knowledge, and in Claude Code it is
+on by default: Claude keeps per-project notes at
+`~/.claude/projects/<project>/memory/` and loads the `MEMORY.md` index there
+every session. Your curated context loads from `CLAUDE.md` and
+`~/.claude/CLAUDE.md`. The `/flush` and `/dream` skills add the session-log
+layer on top.
 
-```toml
-# Add to: ~/.claude/config.toml
-[memory]
-enabled = true
+Verify what loaded in any session:
 ```
-
-Or start any session with the flag:
-```bash
-claude --experimental-memory
-```
-
-Verify memory is active:
-```bash
-claude inspect | grep memory
+/context   ← lists the memory files in context
+/memory    ← browse and edit them; toggle auto memory
 ```
 
 ---
@@ -509,7 +505,7 @@ remember globally: always enable strict mode in TypeScript — reason: catches n
 
 ### Reading from memory
 
-**Automatic:** On the first turn of each session, relevant memory is injected based on the current directory and topic.
+**Automatic:** At the start of each session, `CLAUDE.md`, `~/.claude/CLAUDE.md`, and the auto-memory `MEMORY.md` index are loaded; topic files are read on demand.
 
 **Manual queries:**
 ```
@@ -552,7 +548,7 @@ Bad memory entries:
 
 1. Open your project directory
 2. Start the AI tool (`claude` or Copilot chat)
-3. Memory is injected automatically — verify with:
+3. `CLAUDE.md` and the auto-memory index load automatically — verify with:
    ```
    what do you remember about this project?
    ```
@@ -605,7 +601,7 @@ claude -c
 claude --resume <session-id>
 
 # Browse all sessions (in TUI)
-/load
+/resume
 ```
 
 ### The knowledge growth curve
@@ -824,34 +820,20 @@ Skills require a `SKILL.md` file inside each skill directory. Check that the fil
 
 ### Memory not working
 
-```bash
-# Check memory is enabled
-claude inspect | grep -i memory
-
-# Check if the flag is set
-claude --experimental-memory
-
-# Check config file
-cat ~/.claude/config.toml
-```
-
-If memory was disabled when you started the session, start a new session:
-```
-/new
-```
+In a session, run `/context` to see which memory files actually loaded, and
+`/memory` to browse them. Auto memory can be toggled from `/memory` (it stores
+`autoMemoryEnabled` in `~/.claude/settings.json`); check it was not switched
+off. If a file is missing from `/context`, Claude cannot see it.
 
 ---
 
 ### AI not following AGENTS.md rules
 
-```bash
-# Verify AGENTS.md is being loaded
-claude inspect
-```
-
-AGENTS.md must be in the git repository root or current directory. Rules from deeper directories supplement (not replace) root rules.
-
-If you're not in a git repo, only the current directory is scanned.
+Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Check that the project root has
+a `CLAUDE.md` importing `@AGENTS.md` (this repo ships one), then run `/context`
+in a session and confirm the files appear under **Memory files**. If they are
+listed and still ignored, make the instructions more specific — vague rules get
+vague compliance.
 
 ---
 
@@ -868,7 +850,7 @@ Use `/compact` proactively with a focus hint:
 /compact focus on [the most important current context]
 ```
 
-For very long sessions, `/compact` multiple times is fine. Memory is re-injected after each compaction, so important project context is recovered automatically.
+For very long sessions, `/compact` multiple times is fine. The project-root `CLAUDE.md` is re-injected after each compaction, so your standing instructions survive; conversation-only context does not, which is why `/flush` before compacting matters.
 
 ---
 
@@ -892,8 +874,8 @@ Verify you are:
 
 Check what's in memory:
 ```bash
-ls ~/.claude/memory/
-cat ~/.claude/memory/MEMORY.md
+ls ~/.claude/projects/*/memory/           # auto memory — Claude's own notes
+ls ~/.claude/memory/*/sessions/           # session logs written by /flush
 ```
 
 ---

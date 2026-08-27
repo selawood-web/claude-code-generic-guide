@@ -1,8 +1,9 @@
 # Global Engineering Memory
 
 > This file seeds the AI's global memory with durable engineering principles.
-> Copy to `~/.claude/memory/MEMORY.md` and customize with your own learnings.
-> The AI will inject relevant entries at the start of each session.
+> Append it to `~/.claude/CLAUDE.md` (or pull it in with an `@` import) and
+> customize with your own learnings. `~/.claude/CLAUDE.md` is loaded at the
+> start of every session, in every project.
 
 ---
 

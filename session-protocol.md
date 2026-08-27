@@ -68,7 +68,8 @@ Capture knowledge in real-time, not just at the end. Use these trigger moments:
 - The focus text helps the LLM preserve the most important context.
 
 ### After compaction
-- Memory is automatically searched to re-inject relevant context.
+- The project-root `CLAUDE.md` is re-injected after compaction; auto-memory
+  topic files are re-read on demand.
 - Verify: `what do you remember about [current topic]?`
 
 ---
@@ -122,11 +123,11 @@ claude -c   # continue most recent session for current directory
 claude --resume <session-id>
 
 # Or: browse sessions
-/load   ← in the TUI
+/resume   ← in the TUI
 ```
 
 On resume:
-1. Memory is injected automatically.
+1. `CLAUDE.md` and the auto-memory index load automatically.
 2. Check what was happening: `what were we working on?`
 3. Verify git state: `git --no-pager status && git --no-pager log --oneline -5`
 
@@ -173,11 +174,14 @@ These are searchable: `search memory for "authentication bug"`
 When running automated sessions:
 
 ```bash
-# Create a named session that persists context
-claude -p "Run the full test suite and fix any failures" -s "test-fix-$(date +%Y%m%d)"
+# Run a task headlessly (each -p invocation is its own session)
+claude -p "Run the full test suite and fix any failures"
 
-# Resume it if the task is long-running
-claude -p "Continue fixing the remaining failures" -r "test-fix-$(date +%Y%m%d)"
+# Name a session so it can be resumed later
+claude -n "test-fix-$(date +%Y%m%d)"
+
+# Resume a named session with a follow-up task
+claude -r "test-fix-$(date +%Y%m%d)" "Continue fixing the remaining failures"
 ```
 
 For CI/CD automation:

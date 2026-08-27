@@ -1,6 +1,15 @@
 # Claude Code Generic Guide
 
-**Complete Documentation Mirror for Claude Code**
+**Documentation Mirror for Claude Code**
+
+> **Provenance.** These 22 chapters are a snapshot mirror, captured when this
+> repository was initialized (July 2026), and describe the product surface as
+> of that capture — including some mechanisms (`config.toml`, TUI internals)
+> that differ from current Claude Code. They are reference reading, not
+> installation instructions. For steps you actually run, use the repository's
+> own README, AGENTS.md, and session-protocol.md, which are maintained against
+> the live product; the canonical up-to-date documentation is
+> https://code.claude.com/docs.
 
 22 chapters covering installation, authentication, keyboard shortcuts, slash commands, configuration, theming, MCP servers, skills, plugins, hooks, custom models, project rules, memory, headless mode, agent mode, subagents, sessions, sandbox, plan mode, background tasks, terminal support, and permissions & safety.
 

@@ -102,6 +102,15 @@ def check_configs() -> None:
             fail(f"{path}: invalid JSON — {exc}")
 
 
+def check_claude_md_bridge() -> None:
+    """AGENTS.md only loads into Claude Code via the CLAUDE.md import bridge."""
+    path = os.path.join(ROOT, "CLAUDE.md")
+    if not os.path.exists(path):
+        fail("CLAUDE.md: missing — AGENTS.md never loads into Claude Code without it")
+    elif "@AGENTS.md" not in open(path, encoding="utf-8").read():
+        fail("CLAUDE.md: does not import @AGENTS.md — the behavior rules never load")
+
+
 def check_hooks() -> None:
     index = subprocess.check_output(
         ["git", "ls-files", "-s", ".claude/hooks/"], cwd=ROOT, text=True
@@ -122,6 +131,7 @@ def main() -> int:
     check_markdown()
     check_skills()
     check_configs()
+    check_claude_md_bridge()
     check_hooks()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")

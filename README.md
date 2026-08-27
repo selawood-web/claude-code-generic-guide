@@ -23,11 +23,14 @@ A **plug-in infrastructure layer** you drop into any project to get:
 
 ## Quick Start
 
-### 1. Drop AGENTS.md into your project root
+### 1. Drop AGENTS.md and CLAUDE.md into your project root
 ```bash
-cp AGENTS.md /path/to/your-project/AGENTS.md
+cp AGENTS.md CLAUDE.md /path/to/your-project/
 ```
-This immediately gives your AI assistant professional engineering behavior.
+This gives your AI assistant professional engineering behavior. Both files are
+needed: Claude Code reads `CLAUDE.md` (which imports `@AGENTS.md`), while other
+assistants read `AGENTS.md` directly — without the `CLAUDE.md` bridge, Claude
+Code never loads the rules at all.
 
 ### 2. Copy the .claude/ directory
 ```bash
@@ -35,20 +38,21 @@ cp -r .claude/ /path/to/your-project/.claude/
 ```
 This installs all 15 skill workflows and the hook wiring (`settings.json`).
 
-### 3. Enable memory (one-time setup)
-```toml
-# ~/.claude/config.toml
-[memory]
-enabled = true
-```
-Or start with: `claude --experimental-memory`
+### 3. Memory needs no enabling
+Claude Code's auto memory is on by default: Claude keeps per-project notes at
+`~/.claude/projects/<project>/memory/` and loads the `MEMORY.md` index there at
+the start of every session. Curated instructions load from `CLAUDE.md` (which
+imports `AGENTS.md` here) and from `~/.claude/CLAUDE.md`. On top of that, this
+repo's `/flush` and `/dream` skills maintain the session-log layer. Nothing to
+switch on.
 
 ### 4. Seed your global memory
 ```bash
-# Copy the global memory template
-cp MEMORY.md ~/.claude/memory/MEMORY.md
+# Append the global memory seed to your user-level instructions
+cat MEMORY.md >> ~/.claude/CLAUDE.md
 ```
-This pre-loads engineering wisdom into every future session.
+`~/.claude/CLAUDE.md` is loaded at the start of every session in every project,
+so this pre-loads engineering wisdom everywhere.
 
 ### 5. Use the session protocol
 Read `session-protocol.md` to understand how to start, manage, and end sessions to maximize knowledge retention.
@@ -67,12 +71,13 @@ cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
 claude-code-generic-guide/
 │
 ├── AGENTS.md                    ← Master AI behavior rules (copy to your project)
+├── CLAUDE.md                    ← Import bridge: how Claude Code loads AGENTS.md
 ├── MEMORY.md                    ← Global memory seed template
 ├── session-protocol.md          ← How to manage sessions for knowledge persistence
 ├── WORKING-CHARTER.md           ← Standing operating agreement: how the AI thinks, talks, and gates code
 │
 ├── .claude/                     ← AI tooling configuration
-│   ├── config.toml              ← Memory, skills, and compaction settings
+│   ├── config.toml              ← Illustrative settings reference (Claude Code reads settings.json)
 │   ├── settings.json            ← Hook registration (PreCompact, SessionEnd)
 │   ├── skills/                  ← 15 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
@@ -86,7 +91,10 @@ claude-code-generic-guide/
 │   │   ├── learn/               ← Knowledge capture
 │   │   ├── standup/             ← Session summaries
 │   │   ├── deploy/              ← Deployment workflow
-│   │   └── security-review/     ← Security audit
+│   │   ├── security-review/     ← Security audit
+│   │   ├── flush/               ← Session summary to memory log
+│   │   ├── dream/               ← Memory consolidation
+│   │   └── skillify/            ← Workflow capture as new skill
 │   └── hooks/                   ← Session lifecycle hooks
 │
 ├── Flow-Studio/                 ← Complete AI orchestration system
@@ -133,9 +141,9 @@ claude-code-generic-guide/
 The knowledge system has three layers:
 
 ### 1. Automatic (built-in)
-- Session metadata saved at session end
-- Memory injected at session start
-- Pre-compaction flush triggered by hook
+- Auto memory: Claude writes and recalls per-project notes in `~/.claude/projects/<project>/memory/`; the index loads every session
+- `CLAUDE.md` (importing `AGENTS.md`) and `~/.claude/CLAUDE.md` load every session
+- Pre-compaction and session-end hooks fire via `.claude/settings.json`
 
 ### 2. Semi-automatic (you trigger it)
 - `/flush` — write an LLM-generated session summary before compacting or closing
@@ -143,8 +151,8 @@ The knowledge system has three layers:
 - `learn` skill — capture a specific pattern or decision
 
 ### 3. Manual (curated)
-- `MEMORY.md` in the repo — project conventions and decisions
-- `~/.claude/memory/MEMORY.md` — global engineering principles
+- `MEMORY.md` in the repo — the seed you append to `~/.claude/CLAUDE.md`
+- `~/.claude/CLAUDE.md` — global engineering principles, loaded every session
 - Knowledge base entries in `Flow-Studio/core/knowledge-base/entries/`
 
 ---
@@ -185,7 +193,7 @@ After any significant session:
 
 ## Claude Code / Copilot CLI Reference
 
-Full 22-chapter documentation in `/docs/`:
+Full 22-chapter documentation in `/docs/` — a snapshot mirror (see the provenance note in `docs/index.md`); for current product behavior the canonical source is https://code.claude.com/docs:
 - Sessions, memory, skills, agents, MCP servers, plugins, hooks, and more
 - See `docs/index.md` for the full table of contents
 
