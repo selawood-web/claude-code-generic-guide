@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 12 Skill workflows | Step-by-step procedures for every common dev task |
+| 15 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -107,7 +107,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 12 skill workflows
+- All 15 skill workflows
 - `config.toml` with memory and compaction settings
 - Session lifecycle hooks
 
@@ -158,7 +158,7 @@ Start a new AI session in your project directory and run:
 /skills
 ```
 
-You should see the 12 installed skills listed. Then:
+You should see the 15 installed skills listed. Then:
 
 ```
 what do you remember?

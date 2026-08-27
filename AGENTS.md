@@ -99,6 +99,10 @@ untrusted sources.
 | `/learn` | Explicitly capturing a pattern or decision |
 | `/standup` | Session summary / daily standup report |
 | `/deploy` | Deployment workflow |
+| `/security-review` | Security-focused audit |
+| `/flush` | Session summary written to the memory log |
+| `/dream` | Consolidating session logs into the knowledge base |
+| `/skillify` | Capturing a completed workflow as a new skill |
 
 Run `/skills` to list all available skills.
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.
