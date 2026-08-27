@@ -58,4 +58,10 @@ product and made functional or honest.
 **Evidence**: This entry exists because a `/flush` to local memory in the authoring session would have persisted nothing.
 **Tags**: #memory #cloud-sessions #persistence
 
+### The first install is the real test of the guide
+**Principle**: A reusable layer is only proven when it lands in a project unlike its home — install it somewhere real early, treat every downstream finding as an upstream bug report, and port the fix upstream the same day so no later adopter inherits it.
+**Context**: Any template, starter kit, or drop-in infrastructure meant to be copied into other repositories; anything whose CI can only exercise it in its own repo.
+**Evidence**: The first install of this infrastructure (psychexpert) was reviewed by a third-party bot within minutes and surfaced three defects the guide's own CI could never see — a skill hardcoding a default branch the guide itself does not use, a GNU-only date flag that fails on macOS, and a log write into a directory that does not exist on fresh machines. All three were fixed upstream and downstream within the hour; the installer that now automates adoption carries those fixes for every future project.
+**Tags**: #workflow #portability #dogfooding #feedback-loop
+
 ---
