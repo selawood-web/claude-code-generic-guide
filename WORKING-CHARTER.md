@@ -168,9 +168,43 @@ needs the same discipline, stated briefly. Heavy process for heavy changes.
 
 ## STANDING CONSTRAINTS
 
+These travel with the charter into any project:
+
 - **Usual languages:** Python, JavaScript
 - **Environment:** VS Code with Claude Code
-- **Branch boundary:** set per project at the start of code work (see Code Module)
-- **Must never break:** (established per project)
 - **Out of scope:** skills/code from GitHub or untrusted sources; external
   app hand-offs
+
+### This repository — claude-code-generic-guide
+
+> Copying the charter into another project? Replace this section. The list above stays.
+
+**What it is:** a drop-in documentation and configuration layer — 86 markdown files,
+two bash hooks, one TOML config, one VS Code tasks file. No application code, no build,
+no test runner, no CI.
+
+**Languages here:** Markdown, and bash for `.claude/hooks/*.sh`. Python and JavaScript
+are the defaults above; neither appears in this repo.
+
+**Branch boundary — strict.** Work happens on the session's own `claude/*` branch.
+`master` moves only through a pull request. Nothing outside the branch gets touched.
+
+**Must never break:**
+
+- **The drop-in contract.** README's Quick Start tells people to copy exact paths:
+  `AGENTS.md`, `.claude/`, `MEMORY.md`, `WORKING-CHARTER.md`. Renaming or moving any of
+  them invalidates every install instruction in the repo and every copy already deployed.
+- **Skill loading.** Every `.claude/skills/<name>/SKILL.md` keeps its YAML frontmatter —
+  `name`, `description`, `when-to-use`, `allowed-tools`, `argument-hint`. A malformed header
+  does not error; the skill just silently stops loading.
+- **Single-homed rules.** A rule stated in this charter is *referenced* from `AGENTS.md`,
+  `MEMORY.md`, and Flow-Studio, never restated there. Two copies drift, and that drift is
+  what this charter was written to end.
+- **`.claude/config.toml` stays valid TOML.** It is parsed at session start; a syntax error
+  takes memory, skills, and compaction settings down with it.
+
+**Verification here.** There is no test suite, so gate stages 2 and 3 have nothing to
+execute — that is not a pass, it is a missing instrument. The equivalent evidence for a
+documentation change: internal links resolve, every path named in the Quick Start still
+exists, frontmatter still parses, and no rule gained a second home. State which of those
+were actually checked, the same way a test result would be stated.
