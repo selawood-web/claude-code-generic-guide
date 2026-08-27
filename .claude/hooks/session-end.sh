@@ -10,12 +10,15 @@ SESSION_DIR="${HOME}/.claude/sessions"
 MEMORY_DIR="${HOME}/.claude/memory"
 HOOK_LOG="${HOME}/.claude/hooks/session-end.log"
 
-echo "[$(date -Iseconds)] session-end hook triggered" >> "$HOOK_LOG"
+# date -Iseconds is GNU-only; this format works on BSD/macOS date too
+STAMP="$(date +%Y-%m-%dT%H:%M:%S%z)"
 
-# Create memory dir if it doesn't exist
-mkdir -p "$MEMORY_DIR"
+# Create both target directories before writing — neither exists by default
+mkdir -p "$(dirname "$HOOK_LOG")" "$MEMORY_DIR"
+
+echo "[$STAMP] session-end hook triggered" >> "$HOOK_LOG"
 
 # Write a session-end marker so the next session knows to check memory
-echo "[$(date -Iseconds)] Session ended. Run /memory to review captured knowledge." >> "${MEMORY_DIR}/session-markers.log"
+echo "[$STAMP] Session ended. Run /memory to review captured knowledge." >> "${MEMORY_DIR}/session-markers.log"
 
 exit 0
