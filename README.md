@@ -25,6 +25,16 @@ A **plug-in infrastructure layer** you drop into any project to get:
 
 ## Quick Start
 
+### The fast way — one command
+```bash
+./install.sh /path/to/your-project
+```
+Copies everything below in one step — rules, bridge, all 17 skills, hooks,
+validator, and CI — without overwriting anything that already exists, then
+prints the only steps that need a human: filling in your project's conventions
+and constraints, and the `/context` verification. Prefer to understand each
+piece first? The manual steps:
+
 ### 1. Drop AGENTS.md and CLAUDE.md into your project root
 ```bash
 cp AGENTS.md CLAUDE.md /path/to/your-project/
@@ -72,6 +82,7 @@ cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
 ```
 claude-code-generic-guide/
 │
+├── install.sh                   ← One-command install into another project
 ├── SYSTEM-OVERVIEW.md           ← Plain-language visual map of the whole system
 ├── AGENTS.md                    ← Master AI behavior rules (copy to your project)
 ├── CLAUDE.md                    ← Import bridge: how Claude Code loads AGENTS.md
