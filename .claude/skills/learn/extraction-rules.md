@@ -44,8 +44,8 @@ Extract when ANY of these are true:
 
 | Target | What goes here |
 |--------|---------------|
-| `~/.claude/memory/MEMORY.md` | Universal principles applicable across all projects |
-| `~/.claude/memory/<project>/MEMORY.md` | Project-specific decisions, conventions, findings |
+| `~/.claude/CLAUDE.md` | Universal principles applicable across all projects |
+| Auto memory (`remember: ...` in session) | Project-specific decisions, conventions, findings |
 | Session logs (via `/flush`) | Full session context for future retrieval |
 
 ## Extraction Trigger Phrases

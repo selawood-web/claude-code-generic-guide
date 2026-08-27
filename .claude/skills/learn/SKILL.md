@@ -75,6 +75,11 @@ what do you remember about [topic]?
 
 ## Format for memory entries
 
+The canonical extraction rules — what to capture, what to skip, trigger
+phrases, and the full entry format — live in
+[`extraction-rules.md`](extraction-rules.md) beside this file.
+
+
 ```markdown
 ## [Category]
 

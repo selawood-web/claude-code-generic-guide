@@ -82,6 +82,23 @@ Before moving to architecture:
 - Ask: "Does this capture what you meant?"
 - Resolve any open questions
 
+## Anti-Patterns to Avoid
+
+| Anti-pattern | Correct approach |
+|--------------|-----------------|
+| Building what the user asked for literally | Understand the underlying problem first |
+| Assuming a requirement is obvious | Ask explicitly — it rarely is |
+| Writing requirements as tasks ("the system shall...") | Write as user outcomes ("as a user, I can...") |
+| Gold-plating MVP | Aggressively scope to the minimum viable outcome |
+| Ignoring non-functional requirements | Explicitly ask about scale, reliability, compliance |
+
+## The Quality Bar for a Finished Spec
+A completed requirements document passes four audiences:
+- A developer can implement it without asking additional questions
+- A product owner can use it to verify the implementation
+- A designer can use it to sketch the UX
+- A QA engineer can use it to write acceptance tests
+
 ## Knowledge Extraction
 Save reusable domain knowledge discovered during requirements:
 ```

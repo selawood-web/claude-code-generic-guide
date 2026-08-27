@@ -14,7 +14,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 A **plug-in infrastructure layer** you drop into any project to get:
 - A senior principal engineer mindset embedded in your AI assistant
-- 15 production-ready skill workflows (commit, PR, code review, architecture, memory capture, etc.)
+- 16 production-ready skill workflows (commit, PR, code review, architecture, code generation, memory capture, etc.)
 - Automatic knowledge capture across sessions — context that accumulates over time
 - Self-criticism and quality gates built into every workflow
 - A seeded knowledge base with architecture patterns, engineering principles, and common pitfalls
@@ -36,7 +36,7 @@ Code never loads the rules at all.
 ```bash
 cp -r .claude/ /path/to/your-project/.claude/
 ```
-This installs all 15 skill workflows and the hook wiring (`settings.json`).
+This installs all 16 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
 
 ### 3. Memory needs no enabling
 Claude Code's auto memory is on by default: Claude keeps per-project notes at
@@ -79,7 +79,7 @@ claude-code-generic-guide/
 ├── .claude/                     ← AI tooling configuration
 │   ├── config.toml              ← Illustrative settings reference (Claude Code reads settings.json)
 │   ├── settings.json            ← Hook registration (PreCompact, SessionEnd)
-│   ├── skills/                  ← 15 reusable skill workflows
+│   ├── skills/                  ← 16 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
 │   │   ├── code-review/         ← Systematic code review
@@ -92,19 +92,15 @@ claude-code-generic-guide/
 │   │   ├── standup/             ← Session summaries
 │   │   ├── deploy/              ← Deployment workflow
 │   │   ├── security-review/     ← Security audit
+│   │   ├── code-generation/     ← Production-ready code generation
 │   │   ├── flush/               ← Session summary to memory log
 │   │   ├── dream/               ← Memory consolidation
 │   │   └── skillify/            ← Workflow capture as new skill
 │   └── hooks/                   ← Session lifecycle hooks
 │
-├── Flow-Studio/                 ← Complete AI orchestration system
-│   ├── core/
-│   │   ├── system/              ← Core system prompt (Workflow Studio)
-│   │   ├── orchestrator/        ← Decision engine and behavior rules
-│   │   ├── critics/             ← Code and architecture critics
-│   │   ├── memory/              ← Memory layer documentation
-│   │   └── knowledge-base/      ← Knowledge extraction rules + seeded entries
-│   └── skills/                  ← Flow-Studio skill definitions
+├── knowledge-base/              ← Seeded engineering wisdom (patterns, principles, pitfalls)
+├── tools/                       ← validate.py — the repo's CI quality gate
+├── .github/workflows/           ← CI: runs the validator on every PR
 │
 └── docs/                        ← Full Claude Code / Copilot CLI reference (22 chapters)
     ├── 01-getting-started.md
@@ -130,6 +126,7 @@ claude-code-generic-guide/
 | `standup` | `/standup` | Session summary / daily report |
 | `deploy` | `/deploy` | Deployment with pre-flight checklist |
 | `security-review` | `/security-review` | OWASP-based security audit |
+| `code-generation` | `/code-generation` | Production-ready implementation with critic pass |
 | `flush` | `/flush` | Structured session summary written to the memory log |
 | `dream` | `/dream` | Consolidate session logs into the knowledge base |
 | `skillify` | `/skillify` | Capture a completed workflow as a new skill |
@@ -153,7 +150,7 @@ The knowledge system has three layers:
 ### 3. Manual (curated)
 - `MEMORY.md` in the repo — the seed you append to `~/.claude/CLAUDE.md`
 - `~/.claude/CLAUDE.md` — global engineering principles, loaded every session
-- Knowledge base entries in `Flow-Studio/core/knowledge-base/entries/`
+- Knowledge base entries in `knowledge-base/entries/`
 
 ---
 
