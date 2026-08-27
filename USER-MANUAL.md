@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 16 Skill workflows | Step-by-step procedures for every common dev task |
+| 17 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -107,7 +107,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 16 skill workflows
+- All 17 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 - `config.toml` (an illustrative settings reference — Claude Code reads `settings.json`)
@@ -154,7 +154,7 @@ Start a new AI session in your project directory and run:
 /skills
 ```
 
-You should see the 16 installed skills listed. Then:
+You should see the 17 installed skills listed. Then:
 
 ```
 what do you remember?

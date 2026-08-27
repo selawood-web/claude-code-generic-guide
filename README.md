@@ -14,7 +14,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 A **plug-in infrastructure layer** you drop into any project to get:
 - A senior principal engineer mindset embedded in your AI assistant
-- 16 production-ready skill workflows (commit, PR, code review, architecture, code generation, memory capture, etc.)
+- 17 production-ready skill workflows (commit, PR, code review, architecture, code generation, memory capture, etc.)
 - Automatic knowledge capture across sessions — context that accumulates over time
 - Self-criticism and quality gates built into every workflow
 - A seeded knowledge base with architecture patterns, engineering principles, and common pitfalls
@@ -36,7 +36,7 @@ Code never loads the rules at all.
 ```bash
 cp -r .claude/ /path/to/your-project/.claude/
 ```
-This installs all 16 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
+This installs all 17 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
 
 ### 3. Memory needs no enabling
 Claude Code's auto memory is on by default: Claude keeps per-project notes at
@@ -79,7 +79,7 @@ claude-code-generic-guide/
 ├── .claude/                     ← AI tooling configuration
 │   ├── config.toml              ← Illustrative settings reference (Claude Code reads settings.json)
 │   ├── settings.json            ← Hook registration (PreCompact, SessionEnd)
-│   ├── skills/                  ← 16 reusable skill workflows
+│   ├── skills/                  ← 17 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
 │   │   ├── code-review/         ← Systematic code review
@@ -130,6 +130,7 @@ claude-code-generic-guide/
 | `flush` | `/flush` | Structured session summary written to the memory log |
 | `dream` | `/dream` | Consolidate session logs into the knowledge base |
 | `skillify` | `/skillify` | Capture a completed workflow as a new skill |
+| `reconcile-docs` | `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
 
 ---
 

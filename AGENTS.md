@@ -104,6 +104,7 @@ untrusted sources.
 | `/flush` | Session summary written to the memory log |
 | `/dream` | Consolidating session logs into the knowledge base |
 | `/skillify` | Capturing a completed workflow as a new skill |
+| `/reconcile-docs` | Merging duplicated rules across documents into one home |
 
 Run `/skills` to list all available skills.
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.
