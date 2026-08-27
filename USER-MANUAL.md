@@ -135,34 +135,33 @@ Verify what loaded in any session:
 
 ### Step 4 — Seed your global memory
 
-Copy the engineering wisdom template to your global memory file:
+Append the engineering wisdom template to your user-level instructions:
 
 ```bash
-mkdir -p ~/.claude/memory
-cp /path/to/this-repo/MEMORY.md ~/.claude/memory/MEMORY.md
+cat /path/to/this-repo/MEMORY.md >> ~/.claude/CLAUDE.md
 ```
 
-This pre-loads principles about architecture, code quality, security, performance, and operations into every future session. **Edit this file anytime** to add your own learnings — the AI will automatically pick them up.
+`~/.claude/CLAUDE.md` is loaded at the start of every session in every project, so this pre-loads principles about architecture, code quality, security, performance, and operations everywhere. **Edit this file anytime** (`/memory` opens it) — the next session picks up your changes.
 
 ---
 
 ### Step 5 — Verify installation
 
-Start a new AI session in your project directory and run:
+Start a new AI session in your project directory and ask:
 
 ```
-/skills
+what skills are available?
 ```
 
-You should see the 17 installed skills listed. Then:
+You should see the 17 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
 ```
 
-You should see the global engineering principles from `MEMORY.md`.
+You should see the global engineering principles you seeded into `~/.claude/CLAUDE.md`.
 
-If skills don't appear, check that `.claude/skills/` exists in the project root (or run `claude inspect`).
+If skills don't appear, check that `.claude/skills/` exists in the project root and that each `SKILL.md` has valid frontmatter — a malformed header fails silently. `python3 tools/validate.py` checks exactly this.
 
 ---
 
@@ -773,7 +772,7 @@ remember: we use kebab-case for API route paths (e.g. /user-profile not /userPro
 
 ### 4. Update global memory with your principles
 
-Edit `~/.claude/memory/MEMORY.md` directly to add your own engineering principles. The file watcher picks up changes immediately — no restart needed.
+Edit `~/.claude/CLAUDE.md` directly (or via `/memory`) to add your own engineering principles. Changes load at the start of the next session.
 
 ### 5. Project-specific AGENTS.md in subdirectories
 
@@ -895,8 +894,8 @@ remember: [fact] — reason: [why]   ← save something now
 
 ```
 /compact [focus]       ← compress history before it auto-compacts
-/skills                ← list available skills
-claude inspect         ← see what's loaded (skills, rules, memory)
+/context               ← see what's loaded and how much context it uses
+/memory                ← browse and edit memory files
 ```
 
 ---
@@ -906,12 +905,12 @@ claude inspect         ← see what's loaded (skills, rules, memory)
 ### Skills not appearing
 
 ```bash
-# Check what skills are loaded
-claude inspect
-
-# Verify the skills directory exists
+# Verify the skills directory exists and every SKILL.md parses
 ls .claude/skills/
+python3 tools/validate.py
 ```
+
+A skill with malformed frontmatter does not error — it just never loads.
 
 Skills require a `SKILL.md` file inside each skill directory. Check that the file exists and has valid YAML frontmatter (`---` delimiters and `name`/`description` fields).
 
@@ -984,7 +983,7 @@ ls ~/.claude/memory/*/sessions/           # session logs written by /flush
 | Task | Command |
 |------|---------|
 | Start AI | `claude` or `claude -c` (resume) |
-| List skills | `/skills` |
+| List skills | ask "what skills are available?" |
 | Commit | `/commit` |
 | Pull Request | `/pr` |
 | Code review | `/code-review` |
@@ -1000,7 +999,7 @@ ls ~/.claude/memory/*/sessions/           # session logs written by /flush
 | Consolidate memory | `/dream` |
 | Browse memory | `/memory` |
 | Compress context | `/compact [focus]` |
-| Check what's loaded | `claude inspect` |
+| Check what's loaded | `/context` |
 | Create new skill | `/skillify` |
 
 ---

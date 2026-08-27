@@ -102,6 +102,43 @@ def check_configs() -> None:
             fail(f"{path}: invalid JSON — {exc}")
 
 
+def check_catalogs() -> None:
+    """Every skill directory appears in every catalog, and stated counts match.
+
+    Mechanizes the drift class caught by hand in review: counts bumped while
+    catalog content lagged, or a skill added without its catalog rows.
+    """
+    skills = sorted(
+        os.path.basename(os.path.dirname(p))
+        for p in tracked(".claude/skills/*/SKILL.md")
+    )
+    readme = open(os.path.join(ROOT, "README.md"), encoding="utf-8").read()
+    agents = open(os.path.join(ROOT, "AGENTS.md"), encoding="utf-8").read()
+    manual = open(os.path.join(ROOT, "USER-MANUAL.md"), encoding="utf-8").read()
+
+    for name in skills:
+        if f"| `{name}` | `/{name}` |" not in readme:
+            fail(f"README.md: skill '{name}' missing from the Available Skills table")
+        if f"| `/{name}` |" not in agents:
+            fail(f"AGENTS.md: skill '{name}' missing from the skill table")
+        if f"### `/{name}` —" not in manual:
+            fail(f"USER-MANUAL.md: skill '{name}' has no per-skill entry in section 6")
+
+    for row_name in re.findall(r"^\| `([a-z0-9-]+)` \| `/[a-z0-9-]+` \|", readme, re.M):
+        if row_name not in skills:
+            fail(f"README.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
+
+    count_re = re.compile(
+        r"\b(\d+)\s+(?:production-ready\s+|reusable\s+|installed\s+)?[Ss]kill(?:s\b| workflows\b)"
+    )
+    for doc_name, text in (("README.md", readme), ("USER-MANUAL.md", manual)):
+        for stated in count_re.findall(text):
+            if int(stated) != len(skills):
+                fail(
+                    f"{doc_name}: states {stated} skills but .claude/skills/ contains {len(skills)}"
+                )
+
+
 def check_claude_md_bridge() -> None:
     """AGENTS.md only loads into Claude Code via the CLAUDE.md import bridge."""
     path = os.path.join(ROOT, "CLAUDE.md")
@@ -130,6 +167,7 @@ def check_hooks() -> None:
 def main() -> int:
     check_markdown()
     check_skills()
+    check_catalogs()
     check_configs()
     check_claude_md_bridge()
     check_hooks()

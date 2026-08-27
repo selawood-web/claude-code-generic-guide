@@ -106,7 +106,7 @@ untrusted sources.
 | `/skillify` | Capturing a completed workflow as a new skill |
 | `/reconcile-docs` | Merging duplicated rules across documents into one home |
 
-Run `/skills` to list all available skills.
+Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.
 
 ---
