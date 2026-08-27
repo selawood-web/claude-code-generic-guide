@@ -23,11 +23,14 @@ A **plug-in infrastructure layer** you drop into any project to get:
 
 ## Quick Start
 
-### 1. Drop AGENTS.md into your project root
+### 1. Drop AGENTS.md and CLAUDE.md into your project root
 ```bash
-cp AGENTS.md /path/to/your-project/AGENTS.md
+cp AGENTS.md CLAUDE.md /path/to/your-project/
 ```
-This immediately gives your AI assistant professional engineering behavior.
+This gives your AI assistant professional engineering behavior. Both files are
+needed: Claude Code reads `CLAUDE.md` (which imports `@AGENTS.md`), while other
+assistants read `AGENTS.md` directly — without the `CLAUDE.md` bridge, Claude
+Code never loads the rules at all.
 
 ### 2. Copy the .claude/ directory
 ```bash
