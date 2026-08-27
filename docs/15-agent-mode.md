@@ -126,7 +126,7 @@ Beyond the base ACP protocol, Claude Code defines extension methods under the `c
 | **Authentication**         | `claude/auth/*`        | `get_url`, `submit_code`                         |
 | **Feedback & Telemetry**   | `claude/*`             | `feedback`, `telemetry/*`                        |
 
-The full extension methods catalog with 72 methods is documented in `ACP_EXTENSION_METHODS.md`.
+This table is a summary; the full catalog runs to 72 extension methods.
 
 ### Notifications (Agent to Client)
 
@@ -271,4 +271,3 @@ for await (const update of client.streamPrompt("List the files in this project")
 
 - [ACP Specification](https://agentclientprotocol.com/protocol/prompt-turn)
 - [Protocol Introduction](https://agentclientprotocol.com/overview/introduction)
-- [Extension Methods Reference](../../anthropic-claude-shell/ACP_EXTENSION_METHODS.md) -- full catalog of 72 `claude/*` methods
