@@ -6,6 +6,8 @@ A complete, generic infrastructure for software development with AI coding assis
 
 ## See It In Action
 
+→ **[SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md)** — How it all fits together: a plain-language visual map of every skill, hook, and guard, the flows connecting them, and the idea behind the system.
+
 → **[demo/WALKTHROUGH.md](demo/WALKTHROUGH.md)** — A full session walkthrough: debugging a JWT auth bug using `/debug`, `/code-review`, `/commit`, and `/learn`, from bug report to committed fix in ~17 minutes.
 
 ---
@@ -70,6 +72,7 @@ cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
 ```
 claude-code-generic-guide/
 │
+├── SYSTEM-OVERVIEW.md           ← Plain-language visual map of the whole system
 ├── AGENTS.md                    ← Master AI behavior rules (copy to your project)
 ├── CLAUDE.md                    ← Import bridge: how Claude Code loads AGENTS.md
 ├── MEMORY.md                    ← Global memory seed template
