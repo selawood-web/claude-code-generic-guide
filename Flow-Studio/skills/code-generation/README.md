@@ -3,6 +3,10 @@
 ## Purpose
 Generate high-quality, clean, and well-documented code that is production-ready, not just "working".
 
+This skill's process is the *draft* stage of the working charter's gate — static analysis, tests, and
+the requirement check still run after it, and a failure at any stage restores the baseline and comes
+back here. See `WORKING-CHARTER.md`, *Code Module*.
+
 ## Standards
 
 ### Code Quality Checklist (apply to every generated file)
@@ -34,7 +38,9 @@ Generate high-quality, clean, and well-documented code that is production-ready,
 3. **Write the happy path** — make it work for the normal case
 4. **Add edge case handling** — inputs that could break it
 5. **Add error handling** — explicit, not catch-all
-6. **Write tests** — at minimum, happy path + one failure case
+6. **Write tests** — per function touched: one happy path, at least three edge cases (empty input,
+   boundary value, unexpected type), and one failure mode. Run the full suite, not just the new tests;
+   target 90 percent coverage on changed lines
 7. **Run critic** — apply code-critic checklist before presenting
 
 ## Output Format
