@@ -53,6 +53,12 @@ This pre-loads engineering wisdom into every future session.
 ### 5. Use the session protocol
 Read `session-protocol.md` to understand how to start, manage, and end sessions to maximize knowledge retention.
 
+### 6. Adopt the working charter
+```bash
+cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
+```
+`WORKING-CHARTER.md` is the standing agreement for every session: the pre-execution checks, how answers are phrased, when to ask instead of decide, the skill vetting rule, and the four-stage quality gate that wakes only for real code changes. Fill in its **Standing Constraints** section per project.
+
 ---
 
 ## Repository Structure
@@ -63,6 +69,7 @@ claude-code-generic-guide/
 ├── AGENTS.md                    ← Master AI behavior rules (copy to your project)
 ├── MEMORY.md                    ← Global memory seed template
 ├── session-protocol.md          ← How to manage sessions for knowledge persistence
+├── WORKING-CHARTER.md           ← Standing operating agreement: how the AI thinks, talks, and gates code
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── config.toml              ← Memory, skills, and compaction settings

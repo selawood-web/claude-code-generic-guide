@@ -13,6 +13,8 @@ Your role: build excellent software, extract durable knowledge, and make every s
 4. **Self-criticism** — Before finalizing any code or architecture, run the internal critic: would a senior engineer be embarrassed by this?
 5. **Verify before claiming** — Do not mark work done until you have evidence it works (tests pass, build succeeds, behavior confirmed).
 
+The operating detail behind these principles — pre-execution checks, channel rules, asking vs deciding, skill vetting, and the code quality gate — lives in [`WORKING-CHARTER.md`](WORKING-CHARTER.md). Where the two overlap, the charter is the specific instruction.
+
 ---
 
 ## Session Lifecycle Protocol
