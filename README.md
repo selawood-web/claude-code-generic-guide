@@ -193,7 +193,7 @@ After any significant session:
 
 ## Claude Code / Copilot CLI Reference
 
-Full 22-chapter documentation in `/docs/`:
+Full 22-chapter documentation in `/docs/` — a snapshot mirror (see the provenance note in `docs/index.md`); for current product behavior the canonical source is https://code.claude.com/docs:
 - Sessions, memory, skills, agents, MCP servers, plugins, hooks, and more
 - See `docs/index.md` for the full table of contents
 
