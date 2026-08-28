@@ -4,6 +4,7 @@ description: Execute a deployment workflow safely. Use when the user says "deplo
 when-to-use: deploy, ship, release, push to production, go live, rollout
 allowed-tools: powershell, bash
 argument-hint: "[environment: staging|production, or service name]"
+purpose: Deployment with pre-flight checklist
 ---
 
 # Deploy Skill

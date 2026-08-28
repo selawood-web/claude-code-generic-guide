@@ -25,7 +25,7 @@ ROOT = subprocess.check_output(
     ["git", "rev-parse", "--show-toplevel"], text=True
 ).strip()
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
-SKILL_KEYS = ("name", "description", "when-to-use", "allowed-tools", "argument-hint")
+SKILL_KEYS = ("name", "description", "when-to-use", "allowed-tools", "argument-hint", "purpose")
 
 findings: list[str] = []
 
@@ -121,7 +121,7 @@ def check_catalogs() -> None:
         return text
 
     readme = read_catalog("README.md", "| Skill | Invoke |")
-    agents = read_catalog("AGENTS.md", "| Skill | Trigger |")
+    agents = read_catalog("AGENTS.md", "| Skill | Purpose |")
     manual = read_catalog("USER-MANUAL.md", "### `/")
 
     for name in skills:
@@ -148,6 +148,26 @@ def check_catalogs() -> None:
                 fail(
                     f"{doc_name}: states {stated} skills but .claude/skills/ contains {len(skills)}"
                 )
+
+
+def check_context_budget() -> None:
+    """Always-loaded files are paid for in every session's context — keep them lean.
+
+    CLAUDE.md, AGENTS.md, and the charter load at every session start. Detail
+    belongs in on-demand companion files (skill bodies load only at invocation).
+    Budgets are generous; exceeding one means structure, not trimming words.
+    """
+    budgets = {"CLAUDE.md": 2_048, "AGENTS.md": 13_312, "WORKING-CHARTER.md": 13_312}
+    for name, budget in budgets.items():
+        path = os.path.join(ROOT, name)
+        if not os.path.exists(path):
+            continue
+        size = os.path.getsize(path)
+        if size > budget:
+            fail(
+                f"{name}: {size} bytes exceeds the {budget}-byte always-loaded "
+                f"context budget — move detail into on-demand companion files"
+            )
 
 
 def check_claude_md_bridge() -> None:
@@ -179,6 +199,7 @@ def main() -> int:
     check_markdown()
     check_skills()
     check_catalogs()
+    check_context_budget()
     check_configs()
     check_claude_md_bridge()
     check_hooks()

@@ -4,6 +4,7 @@ description: Generate a concise standup report or session summary from recent wo
 when-to-use: standup, daily summary, session recap, what did we do, progress report, what happened
 allowed-tools: powershell, bash
 argument-hint: "[optional: time range or focus area]"
+purpose: Session summary / daily report
 ---
 
 # Standup / Session Summary Skill

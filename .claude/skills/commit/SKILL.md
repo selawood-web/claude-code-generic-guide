@@ -4,6 +4,7 @@ description: Create a well-formatted git commit following conventional commits s
 when-to-use: commit, save changes, check in, git commit
 allowed-tools: powershell, bash
 argument-hint: "[optional: scope or message hint]"
+purpose: Conventional commits with staged diff review
 ---
 
 # Git Commit Skill

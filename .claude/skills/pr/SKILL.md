@@ -4,6 +4,7 @@ description: Create a pull request for the current branch. Use when the user say
 when-to-use: create PR, open pull request, submit PR, push PR
 allowed-tools: powershell, bash
 argument-hint: "[optional: PR title hint]"
+purpose: PR creation with structured description
 ---
 
 # Pull Request Skill

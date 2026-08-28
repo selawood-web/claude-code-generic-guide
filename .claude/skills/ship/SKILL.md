@@ -4,6 +4,7 @@ description: Run the whole finish line in one command — validate, commit, push
 when-to-use: ship, ship it, finish and merge, land it, commit push pr merge, run the whole cycle
 allowed-tools: powershell, bash
 argument-hint: "[optional: no-merge | commit message hint]"
+purpose: The whole finish line in one command: commit, push, PR, green CI, merge
 ---
 
 # Ship Skill

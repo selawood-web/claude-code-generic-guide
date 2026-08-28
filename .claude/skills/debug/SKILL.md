@@ -4,6 +4,7 @@ description: Systematically debug an issue, error, or unexpected behavior. Use w
 when-to-use: debug, fix bug, error, exception, not working, broken, unexpected behavior
 allowed-tools: powershell, bash
 argument-hint: "[error message or description of the problem]"
+purpose: Systematic root cause analysis
 ---
 
 # Debug Skill

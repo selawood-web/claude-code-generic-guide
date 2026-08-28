@@ -4,6 +4,7 @@ description: Gather and formalize requirements from vague ideas into actionable 
 when-to-use: gather requirements, plan a feature, I want to build, help me design, requirements
 allowed-tools: powershell, bash
 argument-hint: "[feature or product idea]"
+purpose: Vague idea → actionable spec
 ---
 
 # Requirements Gathering Skill

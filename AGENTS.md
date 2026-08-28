@@ -87,30 +87,32 @@ Fails any of the three — drop it, do the job directly, and say in one line why
 safe to run, not good enough for this job. Skills and code are never pulled from GitHub or other
 untrusted sources.
 
-| Skill | Trigger |
+<!-- ccgg:skills:start -->
+| Skill | Purpose |
 |-------|---------|
-| `/commit` | Committing changes |
-| `/pr` | Creating a pull request |
-| `/code-review` | Reviewing code |
-| `/architecture` | Designing system architecture |
-| `/requirements` | Gathering/refining requirements |
-| `/testing` | Generating test suites |
-| `/debug` | Systematic debugging |
-| `/refactor` | Refactoring code |
-| `/learn` | Explicitly capturing a pattern or decision |
-| `/standup` | Session summary / daily standup report |
-| `/deploy` | Deployment workflow |
-| `/security-review` | Security-focused audit |
-| `/code-generation` | Production-ready implementation |
-| `/flush` | Session summary written to the memory log |
-| `/dream` | Consolidating session logs into the knowledge base |
-| `/skillify` | Capturing a completed workflow as a new skill |
-| `/reconcile-docs` | Merging duplicated rules across documents into one home |
-| `/decide` | Structured decision with research, debate, and a durable record |
-| `/product-brief` | Evaluating a product/app idea before building it |
-| `/git-steward` | New-project bootstrap (name, GitHub repo) and automatic git lifecycle |
-| `/deploy-steward` | Provisioning a deploy target (Railway default) and enforcing execution at every milestone |
-| `/ship` | The whole commit → push → PR → green CI → merge cycle in one command |
+| `/architecture` | System design with trade-off analysis |
+| `/code-generation` | Production-ready implementation with critic pass |
+| `/code-review` | Multi-dimension review with severity levels |
+| `/commit` | Conventional commits with staged diff review |
+| `/debug` | Systematic root cause analysis |
+| `/decide` | Structured decision: research, debate, durable record |
+| `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
+| `/deploy` | Deployment with pre-flight checklist |
+| `/dream` | Consolidate session logs into the knowledge base |
+| `/flush` | Structured session summary written to the memory log |
+| `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
+| `/learn` | Explicit knowledge capture to memory |
+| `/pr` | PR creation with structured description |
+| `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
+| `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
+| `/refactor` | Safe refactoring with regression safety |
+| `/requirements` | Vague idea → actionable spec |
+| `/security-review` | OWASP-based security audit |
+| `/ship` | The whole finish line in one command: commit, push, PR, green CI, merge |
+| `/skillify` | Capture a completed workflow as a new skill |
+| `/standup` | Session summary / daily report |
+| `/testing` | Test suite generation (unit/integration/E2E) |
+<!-- ccgg:skills:end -->
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.

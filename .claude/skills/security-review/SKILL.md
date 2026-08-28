@@ -4,6 +4,7 @@ description: Perform a security-focused review of code changes or the full codeb
 when-to-use: security review, security audit, check security, vulnerabilities, is this secure, OWASP
 allowed-tools: powershell, bash
 argument-hint: "[file, PR, or scope to review]"
+purpose: OWASP-based security audit
 ---
 
 # Security Review Skill

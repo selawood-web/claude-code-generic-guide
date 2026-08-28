@@ -4,6 +4,7 @@ description: Generate production-ready code with explicit error handling, edge c
 when-to-use: implement, write code, generate code, build feature, add function
 allowed-tools: powershell, bash
 argument-hint: "[what to implement]"
+purpose: Production-ready implementation with critic pass
 ---
 
 # Code Generation Skill

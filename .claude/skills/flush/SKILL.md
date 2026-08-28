@@ -4,6 +4,7 @@ description: Write a structured summary of the current session to the memory log
 when-to-use: flush, save session, session summary, before compact, end of session, preserve context
 allowed-tools: powershell, bash
 argument-hint: "[optional: topics to emphasize in the summary]"
+purpose: Structured session summary written to the memory log
 ---
 
 # Flush Skill — Session Summary to Memory
