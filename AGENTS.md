@@ -48,13 +48,14 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 
 ## Memory Management
 
-Memory lives in three places; the first two load automatically every session.
+Memory lives in four places; the first two load automatically every session.
 
 | Location | What it holds |
 |----------|---------------|
 | `~/.claude/CLAUDE.md` | Global: your preferred patterns, universal engineering principles (seed from this repo's `MEMORY.md`) |
 | `~/.claude/projects/<project>/memory/` | Auto memory: notes Claude writes itself; the `MEMORY.md` index loads each session, topic files on demand |
 | `~/.claude/memory/<project>/sessions/` | Session logs written by `/flush`, consolidated by `/dream` (read on demand) |
+| `decisions/` (in the repo) | Durable decision records and product briefs written by `/decide` and `/product-brief` — recall before re-deciding |
 
 **When to write to memory:**
 - A non-obvious architecture decision was made and why
@@ -105,6 +106,8 @@ untrusted sources.
 | `/dream` | Consolidating session logs into the knowledge base |
 | `/skillify` | Capturing a completed workflow as a new skill |
 | `/reconcile-docs` | Merging duplicated rules across documents into one home |
+| `/decide` | Structured decision with research, debate, and a durable record |
+| `/product-brief` | Evaluating a product/app idea before building it |
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.

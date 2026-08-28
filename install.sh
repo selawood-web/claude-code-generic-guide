@@ -4,7 +4,7 @@
 #
 #     ./install.sh /path/to/your-project
 #
-# Copies the behavior rules, the 17 skills, the lifecycle hooks, the validator,
+# Copies the behavior rules, the 19 skills, the lifecycle hooks, the validator,
 # and the CI workflow. Never overwrites anything that already exists — existing
 # files are reported and left alone. Safe to run twice.
 #
@@ -60,7 +60,7 @@ if [ -e "$TARGET/.claude/skills" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/skills" "$TARGET/.claude/skills"
-  note_copied ".claude/skills/ (17 skills)"
+  note_copied ".claude/skills/ (19 skills)"
 fi
 if [ -e "$TARGET/.claude/hooks" ]; then
   note_skipped ".claude/hooks/"
@@ -147,5 +147,5 @@ echo "  3. Seed global memory ONCE per machine (skip if done before):"
 echo "       cat $SRC/MEMORY.md >> ~/.claude/CLAUDE.md"
 echo "  4. Verify: open a fresh session in the project, run /context —"
 echo "     CLAUDE.md must appear under Memory files. Then ask:"
-echo "     'what skills are available?' — expect seventeen."
+echo "     'what skills are available?' — expect nineteen."
 echo "  5. Commit the new files."
