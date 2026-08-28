@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 19 Skill workflows | Step-by-step procedures for every common dev task |
+| 20 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 19 skill workflows
+- All 20 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 19 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 20 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -605,6 +605,25 @@ should we rewrite this service in Go?
 /product-brief a meal-planning app for shift workers
 I have an app idea — is it worth building?
 evaluate this feature idea
+```
+
+---
+
+### `/git-steward` — Project Bootstrap & Automatic Git
+
+**Use when:** Starting a new project that needs a name and a GitHub repo, or when you want git handled automatically from here on.
+
+**What it does:**
+1. For a new project: proposes 2–3 kebab-case names, initializes git with a stack-appropriate `.gitignore`, and creates the GitHub repository (private by default)
+2. From then on, acts as standing steward: working branch before the first code change, a conventional commit (via `/commit`) at each verified milestone, a push after each commit
+3. Offers `/pr` when work is review-ready — opening the PR is proposed, never assumed
+4. Hard boundaries stay: no force-push, no direct pushes to main, no committing unverified work, no going public without your say-so
+
+**Examples:**
+```
+/git-steward a CLI that tracks my reading list
+set up git and a repo for this project
+handle git for me automatically
 ```
 
 ---

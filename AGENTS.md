@@ -108,6 +108,7 @@ untrusted sources.
 | `/reconcile-docs` | Merging duplicated rules across documents into one home |
 | `/decide` | Structured decision with research, debate, and a durable record |
 | `/product-brief` | Evaluating a product/app idea before building it |
+| `/git-steward` | New-project bootstrap (name, GitHub repo) and automatic git lifecycle |
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.
