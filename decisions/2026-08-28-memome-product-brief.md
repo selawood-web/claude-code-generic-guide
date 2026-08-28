@@ -137,7 +137,9 @@ Conditions attached to the Go:
 1. **Week-1 Hebrew ASR bake-off** on real noisy phone audio (Whisper vs ivrit.ai
    fine-tune vs ElevenLabs Scribe) — the single most load-bearing unverified
    assumption. If no option reaches usable accuracy, pause and reassess (this is
-   the kill criterion, not a speed bump).
+   the kill criterion, not a speed bump). Runnable kit with recording protocol
+   and pass/kill thresholds: [memome-asr-bakeoff/](memome-asr-bakeoff/PROTOCOL.md)
+   (prepared 2026-08-28; needs the owner's own recordings to produce the verdict).
 2. **Cloud-backed offline-first storage in P0** — never local-only for this user
    population.
 3. **The P1 list is the pre-agreed cut line** when the timeline slips — scope
