@@ -110,6 +110,7 @@ untrusted sources.
 | `/product-brief` | Evaluating a product/app idea before building it |
 | `/git-steward` | New-project bootstrap (name, GitHub repo) and automatic git lifecycle |
 | `/deploy-steward` | Provisioning a deploy target (Railway default) and enforcing execution at every milestone |
+| `/ship` | The whole commit → push → PR → green CI → merge cycle in one command |
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.

@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 21 Skill workflows | Step-by-step procedures for every common dev task |
+| 22 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 21 skill workflows
+- All 22 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 21 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 22 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -643,6 +643,26 @@ handle git for me automatically
 /deploy-steward
 set up deployment on railway
 make this run in the cloud from day one
+```
+
+---
+
+### `/ship` — One-Command Finish Line
+
+**Use when:** The work is done and verified, and you want commit → push → PR → green CI → merge to happen without step-by-step prompts.
+
+**What it does:**
+1. Preflight: real changes exist, you're on a working branch, the quality gate is green — a red gate aborts the ship
+2. Commits (via `/commit`), pushes with retry, opens or updates the PR (via `/pr`)
+3. Watches CI and drives it to green — fixes failures rather than merging around them
+4. Merges when CI is green, no conflicts, and no changes-requested review — typing `/ship` is your merge authorization for that one cycle
+5. `/ship no-merge` stops after the PR opens; one summary report either way
+
+**Examples:**
+```
+/ship
+ship it
+/ship no-merge
 ```
 
 ---
