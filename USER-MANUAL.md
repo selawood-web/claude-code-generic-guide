@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 22 Skill workflows | Step-by-step procedures for every common dev task |
+| 23 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 22 skill workflows
+- All 23 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 22 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 23 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -663,6 +663,25 @@ make this run in the cloud from day one
 /ship
 ship it
 /ship no-merge
+```
+
+---
+
+### `/wire` — One-Command CCGG Rollout
+
+**Use when:** You want CCGG installed and live-synced in another of your repositories.
+
+**What it does:**
+1. Reaches the target repo (path or clone), branches off its default branch
+2. Runs the guide's `install.sh` (never overwrites existing files), then merges the `CCGG_HOME`/`CCGG_REPO` env block into its settings so live sync is on from day one
+3. Validates in the target and tests the session-start sync path
+4. Opens the PR and reports the two human steps (project conventions, standing constraints); already-wired projects get update-only, never a re-install
+
+**Examples:**
+```
+/wire my-other-project
+install ccgg into cabicad
+roll ccgg out to psychexpert
 ```
 
 ---

@@ -112,6 +112,7 @@ untrusted sources.
 | `/skillify` | Capture a completed workflow as a new skill |
 | `/standup` | Session summary / daily report |
 | `/testing` | Test suite generation (unit/integration/E2E) |
+| `/wire` | Roll CCGG into another repo: install, live-sync config, validated PR |
 <!-- ccgg:skills:end -->
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).

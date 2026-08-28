@@ -9,6 +9,13 @@ purpose: Consolidate session logs into the knowledge base
 
 # Dream Skill — Memory Consolidation
 
+## Memory Budget
+`MEMORY.md` loads at session start, so it is paid for in every session's context.
+Target: keep it under ~8 KB / 200 lines. When consolidation would push it over,
+move the oldest or least-referenced entries into topic files beside it
+(`<topic>.md`, loaded on demand) and leave a one-line index pointer in
+`MEMORY.md`. Nothing is deleted — the budget forces structure, not loss.
+
 ## Purpose
 Session logs accumulate fragments; `MEMORY.md` should hold organized knowledge. This skill merges the fragments into the knowledge base, removes duplication, and flags contradictions — without ever deleting source material.
 

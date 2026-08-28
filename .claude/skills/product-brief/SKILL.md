@@ -34,7 +34,8 @@ Shared companions (in the `decide` skill directory, which travels with this one)
 
 ### Step 3 — Market research (mandatory)
 Current facts are searched, never recalled — per AGENTS.md → Never → "Answer 'what
-exists now' from memory". Research:
+exists now' from memory". Check the research cache first and write findings back
+per [`../decide/research-cache.md`](../decide/research-cache.md). Research:
 - Who already solves this problem, and how (direct competitors, workarounds)?
 - What do the incumbents charge? Where do their users complain?
 - What would make someone switch — is the differentiation real or cosmetic?
