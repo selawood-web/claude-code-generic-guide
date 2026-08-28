@@ -1,9 +1,9 @@
 # Product brief — "Shop OS" for small cabinet & furniture shops
 
 - **Date:** 2026-08-28
-- **Status:** proposed
+- **Status:** decided
 - **Type:** product-brief
-- **Deciders:** selawood (verdict awaiting confirmation)
+- **Deciders:** selawood (confirmed 2026-08-28)
 - **Supersedes / superseded by:** —
 
 ## Context
@@ -77,8 +77,8 @@ Core reason: every quote is a commercial commitment; a photo underdetermines wha
 drives its price, so an AI-led quote fails exactly where user tolerance is lowest.
 
 ## MVP definition
-On confirmation of this verdict, run `/requirements` to produce the spec (the brief
-holds *why build*; the spec holds *what*). The value-testing slice: a shop enters
+Spec: [specs/2026-08-28-shop-os-mvp-requirements.md](../specs/2026-08-28-shop-os-mvp-requirements.md)
+(the brief holds *why build*; the spec holds *what*). The value-testing slice: a shop enters
 its hourly rate + material price list in under one evening, produces a branded quote
 faster than its spreadsheet, and sees quoted-vs-actual margin on its first completed
 job. Deployable from the first milestone (deploy-steward owns that).
