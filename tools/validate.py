@@ -101,23 +101,28 @@ def check_catalogs() -> None:
 
     Mechanizes the drift class caught by hand in review: counts bumped while
     catalog content lagged, or a skill added without its catalog rows.
-    Catalog files the project does not have are skipped, so this validator is
-    safe to copy into repos that adopt the skills without the guide's docs.
+    A file is treated as a catalog only when it actually contains the CCGG
+    catalog marker — a downstream project's own README.md (or manual) without
+    the skills table is skipped, so this validator is safe to copy into repos
+    that adopt the skills without the guide's docs.
     """
     skills = sorted(
         os.path.basename(os.path.dirname(p))
         for p in tracked(".claude/skills/*/SKILL.md")
     )
 
-    def read_if_present(name: str) -> str | None:
+    def read_catalog(name: str, marker: str) -> str | None:
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             return None
-        return open(path, encoding="utf-8").read()
+        text = open(path, encoding="utf-8").read()
+        if marker not in text:
+            return None  # the project's own doc, not a CCGG catalog
+        return text
 
-    readme = read_if_present("README.md")
-    agents = read_if_present("AGENTS.md")
-    manual = read_if_present("USER-MANUAL.md")
+    readme = read_catalog("README.md", "| Skill | Invoke |")
+    agents = read_catalog("AGENTS.md", "| Skill | Trigger |")
+    manual = read_catalog("USER-MANUAL.md", "### `/")
 
     for name in skills:
         if readme is not None and f"| `{name}` | `/{name}` |" not in readme:

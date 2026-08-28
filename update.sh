@@ -38,7 +38,10 @@ changed=0
 sync_file() { # $1 = path relative to both roots
   if ! cmp -s "$SRC/$1" "$TARGET/$1" 2>/dev/null; then
     mkdir -p "$TARGET/$(dirname "$1")"
-    cp "$SRC/$1" "$TARGET/$1"
+    # Atomic rename, never in-place cp: this may replace the very hook that is
+    # running us, and truncating a running script's inode corrupts its execution.
+    tmp="$TARGET/$1.ccgg-tmp.$$"
+    cp "$SRC/$1" "$tmp" && mv -f "$tmp" "$TARGET/$1"
     changed=$((changed+1))
     if [ "$QUIET" -eq 0 ]; then echo "  ~ $1"; fi
   fi
