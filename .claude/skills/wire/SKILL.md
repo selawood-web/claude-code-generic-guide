@@ -54,6 +54,8 @@ CCGG-owned files.
 - `python3 tools/validate.py` in the target → OK.
 - Run the target's session-start hook once with `CCGG_HOME` pointing at the
   local guide clone: it must sync (or report current) and exit 0.
+- Run the `/efficiency` audit in the target (report-only) and carry its
+  findings into the Step 6 report — applying fixes stays the owner's call.
 
 ### Step 6 — PR and report
 Commit (`chore: install CCGG with live sync`), push the branch, open the PR

@@ -10,6 +10,7 @@ Checks, in order:
   6. .claude/settings.json and .vscode/*.json parse as JSON.
   7. The root CLAUDE.md exists and imports @AGENTS.md (the bridge).
   8. Hook scripts pass bash -n and carry the executable bit in the git index.
+  9. Always-loaded files carry no session-volatile content (cache stability).
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -170,6 +171,40 @@ def check_context_budget() -> None:
             )
 
 
+ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md")
+VOLATILE_RES = (
+    re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
+    re.compile(r"\blast (updated|generated|synced|run)\b", re.I),
+)
+
+
+def volatile_lines(text: str) -> list[tuple[int, str]]:
+    """Lines carrying session-volatile content — ISO dates, 'last updated' markers.
+
+    Always-loaded files must stay byte-stable: any churn invalidates the
+    provider's prompt cache for every following session (charter, Efficiency).
+    Pure function so the check is unit-testable without a repository.
+    """
+    hits = []
+    for no, line in enumerate(text.splitlines(), 1):
+        if any(rx.search(line) for rx in VOLATILE_RES):
+            hits.append((no, line.strip()))
+    return hits
+
+
+def check_volatile_content() -> None:
+    for name in ALWAYS_LOADED:
+        path = os.path.join(ROOT, name)
+        if not os.path.exists(path):
+            continue
+        text = open(path, encoding="utf-8", errors="replace").read()
+        for no, line in volatile_lines(text):
+            fail(
+                f"{name}:{no}: session-volatile content in an always-loaded file "
+                f"(invalidates the prompt cache) — move it on-demand: {line[:60]}"
+            )
+
+
 def check_claude_md_bridge() -> None:
     """AGENTS.md only loads into Claude Code via the CLAUDE.md import bridge."""
     path = os.path.join(ROOT, "CLAUDE.md")
@@ -200,6 +235,7 @@ def main() -> int:
     check_skills()
     check_catalogs()
     check_context_budget()
+    check_volatile_content()
     check_configs()
     check_claude_md_bridge()
     check_hooks()

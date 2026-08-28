@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 23 Skill workflows | Step-by-step procedures for every common dev task |
+| 24 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 23 skill workflows
+- All 24 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 23 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 24 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -527,6 +527,22 @@ Stops by itself if there are fewer than two logs to consolidate.
 /dream
 consolidate memory
 clean up what you know
+```
+
+---
+
+### `/efficiency` — Token-Efficiency Audit
+
+**Use when:** You want to know whether this project follows the charter's token-efficiency rules — or why sessions feel expensive.
+
+**What it does:**
+Runs four report-only checks: volatile content in auto-loaded files (cache poison), total auto-loaded context size against the ~15K-token budget, presence of the charter's subagent-isolation rule, and model-routing defaults in project conventions. Each finding comes with its concrete fix; it changes nothing by itself.
+
+**Examples:**
+```
+/efficiency
+audit token usage
+check the context budget
 ```
 
 ---

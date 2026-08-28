@@ -18,3 +18,5 @@ jobs:
           python-version: "3.12"
       - name: Validate links, skills, configs, and hooks
         run: python tools/validate.py
+      - name: Unit tests for the validator
+        run: python -m unittest discover -s tools -p "test_*.py" -v
