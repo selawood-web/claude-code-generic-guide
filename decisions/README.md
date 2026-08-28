@@ -20,3 +20,4 @@ the skills get their own `decisions/` folder created by `/decide` on first use.
 | Date | Title | Type | Status |
 |------|-------|------|--------|
 | 2026-08-28 | [Adopt a decision-support system](2026-08-28-adopt-decision-support-system.md) | decision | decided |
+| 2026-08-28 | [MemoMe — ADHD-first thought capture and closure app](2026-08-28-memome-product-brief.md) | product-brief | proposed |
