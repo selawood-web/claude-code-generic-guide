@@ -1,9 +1,10 @@
 # MemoMe — ADHD-first thought capture and closure app
 
 - **Date:** 2026-08-28
-- **Status:** proposed
+- **Status:** decided
 - **Type:** product-brief
-- **Deciders:** שחר (product owner) — pending confirmation
+- **Deciders:** שחר (product owner) — confirmed 2026-08-28, with one amendment:
+  Cart Mode pulled back into the MVP
 - **Supersedes / superseded by:** —
 
 ## Context
@@ -102,7 +103,9 @@ friction tax forever) and the owner has already voted against it with his feet.
 Tension noted: Champion/Skeptic argue for minimum surface area while the owner's
 v0.3 marks cart mode and document→task as "critical". Resolution: the owner's own
 V2.1 spec already deferred both — the debate independently confirmed his
-reconciliation rather than fighting it. Cart mode is first in the post-MVP queue.
+reconciliation rather than fighting it. Amendment on confirmation: the owner
+pulled Cart Mode back into the MVP (low complexity, daily value, no AI pipeline —
+it widens UI scope, not risk surface); camera/OCR stays deferred.
 
 ## Market landscape
 
@@ -121,7 +124,8 @@ undercuts Numo (~$16/mo) and Voicenotes (~$8.33/mo-equivalent).
 **Go — in the merged v3.0 shape** ([spec](2026-08-28-memome-spec-v3.0-merged.md)):
 V2.1's scope, stack, and timeline as the spine; v0.3's ADHD interaction mechanics
 (Smart Triage sheet, micro-interactions, progressive disclosure, per-board
-check-in, undo toast) as the substance; camera/OCR and cart mode deferred.
+check-in, undo toast, Cart Mode — the last restored to MVP by owner decision) as
+the substance; camera/OCR deferred.
 
 Core reason: the problem is real (owner-experienced, market-confirmed), the
 differentiation is a genuine three-axis combination, and the narrow scope makes
@@ -154,9 +158,11 @@ V2.1 spec (provided by the owner; its content is fully folded into v3.0).
 - Committing to Flutter + Supabase; switching frontend later is a rewrite.
 - OpenAI dependency for classification (mitigated: behind an edge function,
   swappable; accepted: deprecation churn).
-- Deferred cart mode and document→task are the features the owner rated most
-  personally exciting — accepted as the price of a validated core loop; cart mode
-  is explicitly first in the v1.1 queue.
+- Deferring document→task (camera/OCR) postpones a feature the owner rated
+  critical — accepted as the price of a validated core loop; it heads the v1.1
+  queue. Cart Mode, initially deferred for the same reason, was restored to the
+  MVP by owner decision — the accepted cost is added UI scope in weeks 7-8,
+  putting extra pressure on the pre-agreed P1 cut line.
 - The 1,000-user beta exit criterion is ambitious for an unmarketed solo app —
   accepted as a launch gate, not a build gate; the personal gate comes first.
 - N=1 persona risk: what works for the owner may not generalize — the 20-user

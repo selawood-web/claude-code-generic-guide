@@ -115,6 +115,14 @@ Everything else waits.
     paste. No OAuth2 in MVP.
 17. **Time externalization** — deadlines shown as relative distance ("בעוד 3
     ימים"), not static dates.
+18. **Shopping Cart Mode** (v0.3 module C, in full — owner decision 2026-08-28
+    overriding V2.1's deferral; low complexity, daily value) — normal mode: a
+    shopping list in בית/קניות, add by voice ("תוסיף חלב") / text / list. "אני
+    בסופר" switches to shopping mode: every item large with a bold checkbox; tap =
+    item dims to light grey + green ✓ ("בעגלה") but **stays in the list**; untapped
+    items stay white and prominent — what's missing is obvious; tap again = back to
+    white ("טעות, לא לקחתי"). Finish: "כל הפריטים בעגלה!" → "לשמור כרשימה קבועה?"
+    → clear. Recurring staples loadable into a new list in one tap.
 
 ### P1 (in MVP if timeline holds, first out if it slips)
 - **Home-screen widget** — capture without opening the app.
@@ -127,17 +135,14 @@ Everything else waits.
   deferred with it).
 
 ### Deferred (v1.1+, in priority order)
-1. **Shopping Cart Mode** (v0.3 module C — grey+✓ = in cart, white = missing,
-   items never disappear mid-shop; "לשמור כרשימה קבועה?"). Low complexity, high
-   daily value — first candidate once the MVP loop is proven. Until then a shopping
-   list is a regular list in בית/קניות.
-2. **Camera capture + OCR** — product recognition, handwritten-list splitting,
+1. **Camera capture + OCR** — product recognition, handwritten-list splitting,
    **document → task with attachment** (municipal fine → "תשלום קנס" with the photo
    attached; invoice, prescription, business card). Highest-complexity module;
-   deferred by V2.1 and by the viability debate.
-3. Weekly Sweep ("עדיין רלוונטי?" swipe review) and Recurring Detection.
-4. Automatic 2-way Google Calendar sync (OAuth2).
-5. v2+: voice search, GPS contextual reminders, in-camera product price search,
+   deferred by V2.1 and by the viability debate. (Adding a product to the shopping
+   list by camera waits with this module; voice/text/list entry cover the MVP.)
+2. Weekly Sweep ("עדיין רלוונטי?" swipe review) and Recurring Detection.
+3. Automatic 2-way Google Calendar sync (OAuth2).
+4. v2+: voice search, GPS contextual reminders, in-camera product price search,
    list sharing, comfort mode (large font / high contrast), repeated-idea
    detection.
 
@@ -202,7 +207,7 @@ Freemium (V2.1):
 | 1 | Setup + spikes | Flutter project, Supabase schema, CI/CD; **two de-risking spikes: Hebrew ASR bake-off on noisy phone audio; Flutter RTL layout check** |
 | 2-4 | Core loop | Capture Hub UI (voice/text/list), local storage, voice recording, micro-interactions + undo toast (v0.3's "week 1: does haptic+checkmark create the 'saved' feeling?" test happens here, before any AI logic) |
 | 5-6 | AI pipeline | Whisper + GPT-4o-mini edge functions, offline queue, error fallbacks, Smart Triage sheet with confidence threshold |
-| 7-8 | Features | Item splitting, tagging, Ideas folder, Daily Check-in, Wall of Fame, filtered task list |
+| 7-8 | Features | Item splitting, tagging, Ideas folder, Daily Check-in, Wall of Fame, filtered task list, Shopping Cart Mode |
 | 9-10 | Polish | Haptics, completion animations, bug fixes, Sentry + PostHog, P1 features if green |
 | 11 | Beta | Closed beta, 20 ADHD users, watch PostHog drop-offs |
 | 12 | Launch | App Store + Google Play |
