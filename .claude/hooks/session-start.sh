@@ -11,8 +11,15 @@ set -uo pipefail
 # Live update: pull CCGG-owned files (skills, hooks, validator) from the local
 # guide clone when CCGG_HOME points at one, so every session starts on the
 # latest merged guide. Skills also refresh mid-session on next invocation.
-if [ -n "${CCGG_HOME:-}" ] && [ -x "${CCGG_HOME}/update.sh" ]; then
-  "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || true
+# When the clone is absent (fresh machine, cloud session) and CCGG_REPO gives
+# the guide's URL, clone it first — degrading to silence if that fails.
+if [ -n "${CCGG_HOME:-}" ]; then
+  if [ ! -d "$CCGG_HOME" ] && [ -n "${CCGG_REPO:-}" ] && command -v git >/dev/null 2>&1; then
+    git clone --depth 1 -q "$CCGG_REPO" "$CCGG_HOME" 2>/dev/null || true
+  fi
+  if [ -x "${CCGG_HOME}/update.sh" ]; then
+    "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || true
+  fi
 fi
 
 # Repo health: run the validator when the project ships one.

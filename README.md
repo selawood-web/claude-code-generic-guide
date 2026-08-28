@@ -73,8 +73,14 @@ Read `session-protocol.md` to understand how to start, manage, and end sessions 
 Set `CCGG_HOME` to your local clone of this guide (e.g. in each project's
 `.claude/settings.json` under `"env"`, or your shell profile):
 ```json
-{ "env": { "CCGG_HOME": "/path/to/claude-code-generic-guide" } }
+{ "env": {
+    "CCGG_HOME": "/path/to/claude-code-generic-guide",
+    "CCGG_REPO": "https://github.com/<owner>/claude-code-generic-guide.git"
+} }
 ```
+`CCGG_REPO` is optional: when set and `CCGG_HOME` doesn't exist yet (a fresh
+machine, a cloud session), the hook shallow-clones the guide there first — so the
+same committed settings work on every machine that can reach the guide repo.
 The session-start hook then runs `update.sh` on every session start, resume, and
 compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
 files (skills, hooks, validator) in the project. Rules files you customized
