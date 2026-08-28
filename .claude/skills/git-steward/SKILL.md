@@ -4,6 +4,7 @@ description: Bootstrap and automatically manage a project's git lifecycle — na
 when-to-use: new project, set up git, create a repo, put this on github, init the project, handle git for me, git automatically
 allowed-tools: powershell, bash
 argument-hint: "[optional: project purpose or preferred name]"
+purpose: Name a new project, create its GitHub repo, own the git lifecycle automatically
 ---
 
 # Git Steward Skill

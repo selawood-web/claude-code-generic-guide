@@ -4,6 +4,7 @@ description: Consolidate accumulated session logs and scattered memory entries i
 when-to-use: dream, consolidate memory, organize memory, dedupe knowledge, memory cleanup, weekly consolidation
 allowed-tools: powershell, bash
 argument-hint: "[optional: project slug, defaults to the current repository]"
+purpose: Consolidate session logs into the knowledge base
 ---
 
 # Dream Skill — Memory Consolidation

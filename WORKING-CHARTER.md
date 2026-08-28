@@ -87,6 +87,17 @@ Maximum one question per turn.
 - Go to the web only for things that change over time or that I'm unsure are
   current — not for libraries I already know.
 
+### Efficiency — spend tokens where judgment lives
+
+- Independent work fans out in parallel; sequential only when one step feeds the next.
+- Mechanical fan-out — debate personas, exploration, research summarizing — runs on a
+  smaller model when the runner offers one. The main model is for synthesis and judgment.
+- Every heavy workflow keeps a cheap path and takes it for small cases (the decide
+  skill's light path is the pattern). Ceremony is a cost, not a virtue.
+- Always-loaded files (CLAUDE.md, AGENTS.md, this charter) are paid for in every
+  session: keep them lean, push detail into on-demand companion files. The
+  validator enforces the byte budget.
+
 ### Skill Checker
 
 Applies to EVERY skill, every time, before I rely on it. No exceptions, and

@@ -4,6 +4,7 @@ description: Explicitly capture a reusable pattern, decision, or insight to memo
 when-to-use: learn, remember, save pattern, keep this, important discovery, lesson learned
 allowed-tools: powershell, bash
 argument-hint: "[what to learn/remember]"
+purpose: Explicit knowledge capture to memory
 ---
 
 # Learn Skill — Knowledge Capture

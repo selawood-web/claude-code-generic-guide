@@ -4,6 +4,7 @@ description: Generate comprehensive tests for code. Use when the user says "writ
 when-to-use: write tests, add tests, test coverage, unit tests, integration tests, TDD
 allowed-tools: powershell, bash
 argument-hint: "[file, module, or function to test]"
+purpose: Test suite generation (unit/integration/E2E)
 ---
 
 # Testing Skill

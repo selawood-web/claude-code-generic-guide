@@ -154,30 +154,32 @@ claude-code-generic-guide/
 
 ## Available Skills
 
+<!-- ccgg:skills:start -->
 | Skill | Invoke | Purpose |
 |-------|--------|---------|
-| `commit` | `/commit` | Conventional commits with staged diff review |
-| `pr` | `/pr` | PR creation with structured description |
-| `code-review` | `/code-review` | Multi-dimension review with severity levels |
 | `architecture` | `/architecture` | System design with trade-off analysis |
-| `requirements` | `/requirements` | Vague idea → actionable spec |
-| `testing` | `/testing` | Test suite generation (unit/integration/E2E) |
-| `debug` | `/debug` | Systematic root cause analysis |
-| `refactor` | `/refactor` | Safe refactoring with regression safety |
-| `learn` | `/learn` | Explicit knowledge capture to memory |
-| `standup` | `/standup` | Session summary / daily report |
-| `deploy` | `/deploy` | Deployment with pre-flight checklist |
-| `security-review` | `/security-review` | OWASP-based security audit |
 | `code-generation` | `/code-generation` | Production-ready implementation with critic pass |
-| `flush` | `/flush` | Structured session summary written to the memory log |
-| `dream` | `/dream` | Consolidate session logs into the knowledge base |
-| `skillify` | `/skillify` | Capture a completed workflow as a new skill |
-| `reconcile-docs` | `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
+| `code-review` | `/code-review` | Multi-dimension review with severity levels |
+| `commit` | `/commit` | Conventional commits with staged diff review |
+| `debug` | `/debug` | Systematic root cause analysis |
 | `decide` | `/decide` | Structured decision: research, debate, durable record |
-| `product-brief` | `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
-| `git-steward` | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `deploy-steward` | `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
+| `deploy` | `/deploy` | Deployment with pre-flight checklist |
+| `dream` | `/dream` | Consolidate session logs into the knowledge base |
+| `flush` | `/flush` | Structured session summary written to the memory log |
+| `git-steward` | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
+| `learn` | `/learn` | Explicit knowledge capture to memory |
+| `pr` | `/pr` | PR creation with structured description |
+| `product-brief` | `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
+| `reconcile-docs` | `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
+| `refactor` | `/refactor` | Safe refactoring with regression safety |
+| `requirements` | `/requirements` | Vague idea → actionable spec |
+| `security-review` | `/security-review` | OWASP-based security audit |
 | `ship` | `/ship` | The whole finish line in one command: commit, push, PR, green CI, merge |
+| `skillify` | `/skillify` | Capture a completed workflow as a new skill |
+| `standup` | `/standup` | Session summary / daily report |
+| `testing` | `/testing` | Test suite generation (unit/integration/E2E) |
+<!-- ccgg:skills:end -->
 
 ---
 
@@ -222,10 +224,13 @@ Create `.claude/skills/<name>/SKILL.md` with YAML frontmatter:
 ---
 name: my-workflow
 description: [trigger description for auto-invocation]
+purpose: [one-line catalog text]
 ---
 # Steps
 ...
 ```
+Then run `python3 tools/catalog.py --write` — the README/AGENTS tables and all
+stated skill counts are generated from frontmatter, never edited by hand.
 
 ### Capturing learnings
 After any significant session:

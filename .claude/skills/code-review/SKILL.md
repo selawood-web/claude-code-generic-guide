@@ -4,6 +4,7 @@ description: Perform a thorough professional code review of staged changes, unst
 when-to-use: review code, code review, review PR, check changes, review diff
 allowed-tools: powershell, bash
 argument-hint: "[optional: PR number or file path]"
+purpose: Multi-dimension review with severity levels
 ---
 
 # Code Review Skill

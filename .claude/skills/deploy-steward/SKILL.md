@@ -4,6 +4,7 @@ description: Provision a real deployment target — Railway by default — and e
 when-to-use: set up deployment, railway, deploy target, run in the cloud, hosting, make it live, execution environment, deploy from the start
 allowed-tools: powershell, bash
 argument-hint: "[optional: platform override, or environment to provision]"
+purpose: Provision Railway, enforce "done = executing deployed" at every milestone
 ---
 
 # Deploy Steward Skill

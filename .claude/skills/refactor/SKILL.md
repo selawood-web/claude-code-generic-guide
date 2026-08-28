@@ -4,6 +4,7 @@ description: Refactor code to improve structure, readability, or performance wit
 when-to-use: refactor, clean up code, simplify, reduce complexity, improve quality
 allowed-tools: powershell, bash
 argument-hint: "[file or module to refactor]"
+purpose: Safe refactoring with regression safety
 ---
 
 # Refactor Skill

@@ -52,8 +52,15 @@ while IFS= read -r f; do
   sync_file "${f#"$SRC"/}"
 done < <(find "$SRC/.claude/skills" "$SRC/.claude/hooks" -type f 2>/dev/null)
 sync_file "tools/validate.py"
+sync_file "tools/catalog.py"
 
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
+
+# Regenerate the target's marked catalog tables and counts from the synced
+# skills (no-op where the markers are absent or python3 is missing).
+if [ -f "$TARGET/tools/catalog.py" ] && command -v python3 >/dev/null 2>&1; then
+  (cd "$TARGET" && python3 tools/catalog.py --write >/dev/null 2>&1) || true
+fi
 
 REV="$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 if [ "$changed" -gt 0 ]; then
