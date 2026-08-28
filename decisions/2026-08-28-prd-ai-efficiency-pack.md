@@ -1,7 +1,7 @@
 # PRD — CCGG AI-Efficiency Pack
 
 - **Date:** 2026-08-28
-- **Status:** Proposed (awaiting owner review)
+- **Status:** Accepted — open questions resolved by the owner 2026-08-28; implemented on the research branch
 - **Source research:** [AI efficiency techniques 2026](../knowledge-base/research/ai-efficiency-techniques-2026.md) (+ summary deck in the same folder)
 - **Type:** Product requirements document — defines *what* to build; implementation follows the charter gate
 
@@ -155,16 +155,21 @@ Acceptance criteria:
   behavior ("stable content first"), never prices; the research note carries
   the volatile numbers and its staleness class.
 
-## Open Questions
+## Open Questions — resolved (owner, 2026-08-28)
 
-1. Auto-loaded context budget: what threshold should the `/efficiency` audit
-   flag? Proposal: warn above ~15K tokens for the always-loaded set; owner to
-   confirm.
-2. Should `/wire` run `/efficiency` automatically as part of rollout
-   validation, or leave it manual? Proposal: run it, report-only.
-3. Does the subagent-isolation rule belong in the charter (it is a *how*) or
-   in `AGENTS.md` (session lifecycle)? Proposal: charter, with a one-line
-   reference from the lifecycle section.
+1. Auto-loaded context budget: **~15K tokens** for the always-loaded set —
+   the `/efficiency` audit warns above it.
+2. `/wire` runs `/efficiency` automatically, **report-only** — findings go in
+   the wire report; fixes stay the target owner's call.
+3. The subagent-isolation rule lives in the **charter** (*Efficiency*), with
+   a reference from the `AGENTS.md` lifecycle section.
+
+### Implementation deviation
+
+The PRD's "new `docs/` efficiency page" was not built: `docs/` is a frozen
+snapshot mirror of Claude Code documentation, not a home for CCGG guidance.
+The detail lives instead in the `/efficiency` skill body — an on-demand
+companion file, exactly as the charter's context-budget rule prescribes.
 
 ## Milestones
 

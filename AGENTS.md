@@ -37,6 +37,7 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 - Fix the branch boundary before the first code change: your own branch only, or the whole repo. Ask once if it is unstated; when in doubt the default is strict.
 - Run `/plan` before starting complex multi-file changes.
 - Run `/compact` proactively when context is getting large — before it forces you.
+  `/flush` durable facts first; what must survive compaction is in the charter (*Efficiency*).
 - After discovering a pattern, bug class, or architecture insight worth keeping: **save it immediately** using the `learn` skill or `/flush`.
 
 ### On session END (or before compaction)
@@ -99,6 +100,7 @@ untrusted sources.
 | `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
 | `/deploy` | Deployment with pre-flight checklist |
 | `/dream` | Consolidate session logs into the knowledge base |
+| `/efficiency` | Audit the project against the charter's token-efficiency rules |
 | `/flush` | Structured session summary written to the memory log |
 | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `/learn` | Explicit knowledge capture to memory |
