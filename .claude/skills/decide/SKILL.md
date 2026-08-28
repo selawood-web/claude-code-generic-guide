@@ -44,7 +44,7 @@ Interview the user for:
 Criteria come before candidates. Options proposed first anchor the criteria to fit them.
 
 ### Step 4 — Research
-Current facts are searched, never recalled — per AGENTS.md → Never → "Answer 'what exists now' from memory". For each candidate area: current versions, pricing, maintenance status, real-world comparisons.
+Current facts are searched, never recalled — per AGENTS.md → Never → "Answer 'what exists now' from memory". First check the research cache per [`research-cache.md`](research-cache.md): a fresh dated entry replaces the duplicate search; a stale one gets re-searched and updated. Then, for each candidate area: current versions, pricing, maintenance status, real-world comparisons — written back to the cache.
 
 If web tools are unavailable: say so explicitly, and tag every claim drawn from model knowledge `[UNVERIFIED as of model knowledge cutoff]` — in conversation and in the record's Research section.
 
