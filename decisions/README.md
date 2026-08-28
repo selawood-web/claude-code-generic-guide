@@ -23,3 +23,4 @@ the skills get their own `decisions/` folder created by `/decide` on first use.
 | 2026-08-28 | [SQLite vs Postgres for the next app](2026-08-28-sqlite-vs-postgres-next-app.md) | decision | decided |
 | 2026-08-28 | [PRD — CCGG AI-Efficiency Pack](2026-08-28-prd-ai-efficiency-pack.md) | PRD | accepted |
 | 2026-08-28 | [Product brief — "Shop OS" for small cabinet & furniture shops](2026-08-28-shop-os-product-brief.md) | product-brief | decided |
+| 2026-08-28 | [Cut optimizer engine: build vs buy](2026-08-28-cut-optimizer-build-vs-buy.md) | decision | decided |

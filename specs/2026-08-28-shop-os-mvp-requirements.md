@@ -1,7 +1,7 @@
 # Shop OS MVP — Requirements
 
 - **Date:** 2026-08-28
-- **Status:** draft (open questions pending owner answers)
+- **Status:** accepted (owner went with recommendations, 2026-08-28)
 - **Source verdict:** [Product brief — Shop OS](../decisions/2026-08-28-shop-os-product-brief.md) (Pivot, decided)
 
 ## Problem Statement
@@ -117,16 +117,14 @@ Acceptance criteria:
 - Analytics dashboards beyond the job-margin history list.
 - Lumber price feeds — shop-entered prices are the system of record (verdict commitment).
 
-## Open Questions
-1. **Beachhead**: cabinet shops (sheet-goods heavy, cut optimizer shines) or custom
-   furniture makers (hardwood/board-foot heavy)? Recommendation: cabinet shops first —
-   the workflow is more uniform and the documented gap is theirs.
-2. **QuickBooks**: CSV export at launch with QBO API sync in v1.1, or API sync in MVP?
-   Recommendation: CSV first; API sync is the top retention follow-up.
-3. **Pricing**: single tier (~$75/mo) or solo/shop split ($49/$99)? Recommendation:
-   single tier at launch; split only with evidence.
-4. **Cut optimizer**: build (2D guillotine nesting is well-trodden) vs license/embed
-   an existing engine. Needs a build-vs-buy `/decide` pass before implementation.
+## Resolved Questions (owner accepted recommendations, 2026-08-28)
+1. **Beachhead**: cabinet shops first — workflow is more uniform and the documented
+   gap is theirs; furniture makers follow.
+2. **QuickBooks**: CSV export at launch; QBO API sync is the top v1.1 retention
+   follow-up.
+3. **Pricing**: single tier ~$75/mo at launch; split tiers only with evidence.
+4. **Cut optimizer**: settled by build-vs-buy `/decide` pass — see
+   [decisions/2026-08-28-cut-optimizer-build-vs-buy.md](../decisions/2026-08-28-cut-optimizer-build-vs-buy.md).
 
 ## Constraints
 - Team: 1–2 builders, AI-assisted; no enterprise sales motion; subscription $50–100/mo.
