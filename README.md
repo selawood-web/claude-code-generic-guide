@@ -16,7 +16,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 A **plug-in infrastructure layer** you drop into any project to get:
 - A senior principal engineer mindset embedded in your AI assistant
-- 21 production-ready skill workflows (commit, PR, code review, architecture, code generation, decision-making, deployment, memory capture, etc.)
+- 22 production-ready skill workflows (commit, PR, code review, architecture, code generation, decision-making, deployment, memory capture, etc.)
 - Automatic knowledge capture across sessions — context that accumulates over time
 - Self-criticism and quality gates built into every workflow
 - A seeded knowledge base with architecture patterns, engineering principles, and common pitfalls
@@ -29,7 +29,7 @@ A **plug-in infrastructure layer** you drop into any project to get:
 ```bash
 ./install.sh /path/to/your-project
 ```
-Copies everything below in one step — rules, bridge, all 21 skills, hooks,
+Copies everything below in one step — rules, bridge, all 22 skills, hooks,
 validator, and CI — without overwriting anything that already exists, then
 prints the only steps that need a human: filling in your project's conventions
 and constraints, and the `/context` verification. Prefer to understand each
@@ -48,7 +48,7 @@ Code never loads the rules at all.
 ```bash
 cp -r .claude/ /path/to/your-project/.claude/
 ```
-This installs all 21 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
+This installs all 22 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
 
 ### 3. Memory needs no enabling
 Claude Code's auto memory is on by default: Claude keeps per-project notes at
@@ -69,6 +69,20 @@ so this pre-loads engineering wisdom everywhere.
 ### 5. Use the session protocol
 Read `session-protocol.md` to understand how to start, manage, and end sessions to maximize knowledge retention.
 
+### Keeping installed projects current (live sync)
+Set `CCGG_HOME` to your local clone of this guide (e.g. in each project's
+`.claude/settings.json` under `"env"`, or your shell profile):
+```json
+{ "env": { "CCGG_HOME": "/path/to/claude-code-generic-guide" } }
+```
+The session-start hook then runs `update.sh` on every session start, resume, and
+compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
+files (skills, hooks, validator) in the project. Rules files you customized
+(`AGENTS.md`, `CLAUDE.md`, `WORKING-CHARTER.md`, `settings.json`) are never
+touched. Skill updates apply mid-session on the next invocation; behavior-rule
+updates load at the next session start. Customized a CCGG skill in place?
+Rename its directory (it becomes yours) or leave `CCGG_HOME` unset.
+
 ### 6. Adopt the working charter
 ```bash
 cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
@@ -83,6 +97,7 @@ cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
 claude-code-generic-guide/
 │
 ├── install.sh                   ← One-command install into another project
+├── update.sh                    ← Live sync: push merged guide changes into installed projects
 ├── SYSTEM-OVERVIEW.md           ← Plain-language visual map of the whole system
 ├── AGENTS.md                    ← Master AI behavior rules (copy to your project)
 ├── CLAUDE.md                    ← Import bridge: how Claude Code loads AGENTS.md
@@ -92,7 +107,7 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── settings.json            ← Hook registration (SessionStart, PreCompact, SessionEnd)
-│   ├── skills/                  ← 21 reusable skill workflows
+│   ├── skills/                  ← 22 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
 │   │   ├── code-review/         ← Systematic code review
@@ -113,7 +128,8 @@ claude-code-generic-guide/
 │   │   ├── decide/              ← Structured decisions with debate and records
 │   │   ├── product-brief/       ← Product/app idea evaluation
 │   │   ├── git-steward/         ← Project bootstrap + automatic git lifecycle
-│   │   └── deploy-steward/      ← Deploy target (Railway) + execution obligation
+│   │   ├── deploy-steward/      ← Deploy target (Railway) + execution obligation
+│   │   └── ship/                ← One command: commit → push → PR → green CI → merge
 │   └── hooks/                   ← Session lifecycle hooks
 │
 ├── decisions/                   ← Durable decision records and product briefs
@@ -155,6 +171,7 @@ claude-code-generic-guide/
 | `product-brief` | `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
 | `git-steward` | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `deploy-steward` | `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
+| `ship` | `/ship` | The whole finish line in one command: commit, push, PR, green CI, merge |
 
 ---
 

@@ -8,6 +8,13 @@
 # absent, so this script is safe in any project that copies .claude/ in.
 set -uo pipefail
 
+# Live update: pull CCGG-owned files (skills, hooks, validator) from the local
+# guide clone when CCGG_HOME points at one, so every session starts on the
+# latest merged guide. Skills also refresh mid-session on next invocation.
+if [ -n "${CCGG_HOME:-}" ] && [ -x "${CCGG_HOME}/update.sh" ]; then
+  "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || true
+fi
+
 # Repo health: run the validator when the project ships one.
 if [ -f "${CLAUDE_PROJECT_DIR:-.}/tools/validate.py" ] && command -v python3 >/dev/null 2>&1; then
   echo "-- repo validation --"

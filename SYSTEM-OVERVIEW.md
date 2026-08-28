@@ -35,7 +35,7 @@ start from than this one had.
 
 ```mermaid
 flowchart LR
-    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>21 skills, quality gate</i>"]
+    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>22 skills, quality gate</i>"]
     B --> C["Save knowledge<br/><i>learn · flush</i>"]
     C --> D["Session ends<br/><i>hook leaves a marker</i>"]
     D -. "the next session starts<br/>already knowing what this one learned" .-> A
@@ -88,7 +88,7 @@ through a pull request that the owner merges**. The AI proposes; the human decid
 
 ---
 
-## The workers: 21 skills
+## The workers: 22 skills
 
 A skill is a written procedure the AI follows instead of improvising — like a
 checklist an experienced engineer would use. Each triggers when you type its command
@@ -126,6 +126,7 @@ one line of explanation.
 | `/deploy` | Ship safely | Pre-flight checklist, a known rollback plan before anything moves, verification after |
 | `/git-steward` | Git handled automatically | Names a new project, creates its GitHub repo, then commits at verified milestones and pushes — destructive acts always ask first |
 | `/deploy-steward` | Every milestone runs deployed | Provisions Railway at bootstrap, then deploys each milestone to staging and health-checks it — "works on my machine" is not done |
+| `/ship` | The finish line in one word | Commit, push, PR, CI to green, merge — one report at the end; a red gate, conflict, or changes-requested review always stops it |
 
 ### Remember — the memory system, where "smarter" comes from
 
@@ -152,7 +153,7 @@ has to remember anything.
 
 | Hook | When it runs | What it does |
 |------|-------------|--------------|
-| **Session start** | The moment a session opens | Runs the validator and shows the repo's health, then points at the last session log so open threads get picked up. In a project without these tools, it stays silent |
+| **Session start** | The moment a session opens | Syncs CCGG-owned files from the guide clone when `CCGG_HOME` is set (so merged guide PRs reach every session), runs the validator and shows the repo's health, points at the last session log, and surfaces open decision records. In a project without these tools, it stays silent |
 | **Before compaction** | Just before the AI compresses its conversation history | Reminds it to run `/flush` first — so nothing important is lost in the compression |
 | **Session end** | The session closes | Leaves a timestamped marker that the next session's start hook reads back |
 
@@ -203,7 +204,7 @@ twice by a human becomes a check run forever by the machine**.
 |------|----------------|
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks at most one question at a time, escalates instead of proceeding on anything destructive |
-| **The 21 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
+| **The 22 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
 | **The 3 hooks** | Run automatically at session start, before compaction, and at session end — the part of the memory system that needs no one to remember it |
 | **The validator + CI** | Check every proposed change against nine rules and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |
