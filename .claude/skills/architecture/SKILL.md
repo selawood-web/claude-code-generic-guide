@@ -63,7 +63,8 @@ Produce:
 2. Technology list with rationale
 3. Data model sketch (key entities and relationships)
 4. Top 3 risks and mitigations
-5. What to build first (MVP slice)
+5. What to build first (MVP slice) — the slice must be deployable on the chosen
+   target from day one (see the `deploy-steward` skill's execution obligation)
 
 ## Architecture Critic Checklist
 The full critic — seven dimensions, failure modes, severity scale — lives in

@@ -16,7 +16,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 A **plug-in infrastructure layer** you drop into any project to get:
 - A senior principal engineer mindset embedded in your AI assistant
-- 19 production-ready skill workflows (commit, PR, code review, architecture, code generation, decision-making, memory capture, etc.)
+- 21 production-ready skill workflows (commit, PR, code review, architecture, code generation, decision-making, deployment, memory capture, etc.)
 - Automatic knowledge capture across sessions — context that accumulates over time
 - Self-criticism and quality gates built into every workflow
 - A seeded knowledge base with architecture patterns, engineering principles, and common pitfalls
@@ -29,7 +29,7 @@ A **plug-in infrastructure layer** you drop into any project to get:
 ```bash
 ./install.sh /path/to/your-project
 ```
-Copies everything below in one step — rules, bridge, all 19 skills, hooks,
+Copies everything below in one step — rules, bridge, all 21 skills, hooks,
 validator, and CI — without overwriting anything that already exists, then
 prints the only steps that need a human: filling in your project's conventions
 and constraints, and the `/context` verification. Prefer to understand each
@@ -48,7 +48,7 @@ Code never loads the rules at all.
 ```bash
 cp -r .claude/ /path/to/your-project/.claude/
 ```
-This installs all 19 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
+This installs all 21 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
 
 ### 3. Memory needs no enabling
 Claude Code's auto memory is on by default: Claude keeps per-project notes at
@@ -92,7 +92,7 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── settings.json            ← Hook registration (SessionStart, PreCompact, SessionEnd)
-│   ├── skills/                  ← 19 reusable skill workflows
+│   ├── skills/                  ← 21 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
 │   │   ├── code-review/         ← Systematic code review
@@ -111,7 +111,9 @@ claude-code-generic-guide/
 │   │   ├── skillify/            ← Workflow capture as new skill
 │   │   ├── reconcile-docs/      ← One home per rule across documents
 │   │   ├── decide/              ← Structured decisions with debate and records
-│   │   └── product-brief/       ← Product/app idea evaluation
+│   │   ├── product-brief/       ← Product/app idea evaluation
+│   │   ├── git-steward/         ← Project bootstrap + automatic git lifecycle
+│   │   └── deploy-steward/      ← Deploy target (Railway) + execution obligation
 │   └── hooks/                   ← Session lifecycle hooks
 │
 ├── decisions/                   ← Durable decision records and product briefs
@@ -151,6 +153,8 @@ claude-code-generic-guide/
 | `reconcile-docs` | `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
 | `decide` | `/decide` | Structured decision: research, debate, durable record |
 | `product-brief` | `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
+| `git-steward` | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
+| `deploy-steward` | `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
 
 ---
 
