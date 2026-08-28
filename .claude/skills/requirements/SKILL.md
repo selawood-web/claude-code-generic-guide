@@ -49,6 +49,8 @@ Acceptance criteria:
 - Technical constraints (legacy systems, existing infra)
 - Business constraints (timeline, budget, regulatory)
 - Unknown risks (dependencies on third parties, unclear data)
+- Deployment target — where this will run is a constraint like any other; capture it
+  here (the `deploy-steward` skill provisions and enforces it, Railway by default)
 
 ### Step 6 — Output Document
 Produce a requirements spec:

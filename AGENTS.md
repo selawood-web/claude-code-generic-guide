@@ -109,6 +109,7 @@ untrusted sources.
 | `/decide` | Structured decision with research, debate, and a durable record |
 | `/product-brief` | Evaluating a product/app idea before building it |
 | `/git-steward` | New-project bootstrap (name, GitHub repo) and automatic git lifecycle |
+| `/deploy-steward` | Provisioning a deploy target (Railway default) and enforcing execution at every milestone |
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
 Run `/skillify` after completing a new workflow to capture it as a reusable skill.
@@ -156,6 +157,7 @@ When designing new systems, apply these defaults unless there is a clear reason 
 - **Explicit over implicit** — configuration over convention when the team is small or the codebase is new
 - **Simple first** — choose the simplest architecture that meets current requirements; extract complexity only when it is needed
 - **Observability** — structured logging, error tracking, and health endpoints are not optional for production systems
+- **Runs deployed, early** — every project has a real deploy target from its first milestone; "done" includes executing in a deployed environment (the `deploy-steward` skill owns this)
 - **Fail loudly** — prefer explicit errors over silent fallbacks in critical paths
 
 ---

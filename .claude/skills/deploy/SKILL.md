@@ -56,10 +56,10 @@ kubectl set image deployment/app app=app:v<version>
 kubectl rollout status deployment/app
 ```
 
-**Platform-as-a-Service (Heroku, Railway, Render):**
+**Platform-as-a-Service (Railway — the house default via the `deploy-steward` skill — or Heroku, Render):**
 ```bash
-git push heroku main
-heroku logs --tail
+railway up && railway status && railway logs   # Railway (see deploy-steward)
+git push heroku main && heroku logs --tail     # Heroku
 ```
 
 **SSH / Traditional:**

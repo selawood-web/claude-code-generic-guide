@@ -52,6 +52,8 @@ git push -u origin main
 - **Degraded path:** no GitHub access available → say so plainly, finish the local
   setup, and record the repo creation as an open thread — never fake or skip the
   report of what wasn't done.
+- Repo created → provision the deploy target next (the `deploy-steward` skill,
+  Railway by default): a bootstrapped project without somewhere to run is half-born.
 
 ### Step 5 — Standing stewardship (the automatic part)
 From this point on, the steward acts without being asked:

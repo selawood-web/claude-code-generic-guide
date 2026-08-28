@@ -62,6 +62,8 @@ If the verdict is contested (personas split, user disagrees), settle it with the
 Do not write a spec here. Run the `requirements` skill (Steps 1–4: problem, success
 criteria, Jobs-to-be-Done MVP scoping, user stories) and link the resulting spec from
 the brief. The brief holds the *why build*; the spec holds the *what to build*.
+An MVP that cannot be deployed is not an MVP — the Go verdict implies a deployable
+slice (the `deploy-steward` skill owns that obligation).
 
 ### Step 7 — Record
 Write `decisions/YYYY-MM-DD-<slug>.md` from the template in

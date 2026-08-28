@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 20 Skill workflows | Step-by-step procedures for every common dev task |
+| 21 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 20 skill workflows
+- All 21 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 20 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 21 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -624,6 +624,25 @@ evaluate this feature idea
 /git-steward a CLI that tracks my reading list
 set up git and a repo for this project
 handle git for me automatically
+```
+
+---
+
+### `/deploy-steward` — Deploy Target & Execution Obligation
+
+**Use when:** Setting up where a project runs (Railway by default), or when a project has working code but no deploy target.
+
+**What it does:**
+1. Provisions Railway: `railway init`, a staging environment, secrets via `railway variables` (never git), a required health endpoint — after confirming plan/cost
+2. Enforces the execution obligation: every milestone deploys to staging and must pass a health check and smoke test — "works on my machine" is not done
+3. Hooks into the whole lifecycle: deployability is checked at brainstorm (`/product-brief`), definition (`/requirements`), design (`/architecture`), bootstrap (`/git-steward`), and ship (`/deploy`)
+4. Production stays gated: explicit confirmation + the `/deploy` checklist; destructive acts (tearing down environments) always ask first
+
+**Examples:**
+```
+/deploy-steward
+set up deployment on railway
+make this run in the cloud from day one
 ```
 
 ---
