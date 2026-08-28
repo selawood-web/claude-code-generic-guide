@@ -55,5 +55,19 @@ Nothing is deleted — consolidation must be reversible. Archived logs remain se
 ### Step 6 — Report
 One short report: entries before → after, duplicates merged, contradictions flagged, entries marked for verification. If any `[VERIFY:]` marks were added, list them so the user can confirm or correct now.
 
+## Calibration (run with every dream)
+Consolidation is also when oversight gets tuned. Scan `decisions/` records and
+the session logs for two signals:
+- **Overridden recommendations** — the owner picked differently than proposed.
+  Extract what criterion or weight the recommendation got wrong.
+- **Unnecessary escalations** — confirmations asked where the owner's answer was
+  an obvious "yes, proceed". Extract what made them safe, so similar cases take
+  the cheap path next time.
+
+Write what's learned to memory as calibration entries
+(`remember: [adjustment] — reason: [the override/escalation that taught it]`).
+The inverse holds too: an escalation that *caught* something stays exactly as
+strict as it is.
+
 ## Cadence
 Weekly, or after five or more session logs accumulate. Running it too often wastes effort on nothing; never running it is how memory rots into noise.

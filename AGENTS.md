@@ -138,6 +138,7 @@ Run `/skillify` after completing a new workflow to capture it as a reusable skil
 - Answer "what exists now" from memory — versions, prices, APIs, model names get searched first.
 
 ### Escalate instead of proceeding
+- "Stop" from the owner is absolute: it immediately halts every automatic behavior — steward commits and pushes, deploys, PR watching, scheduled follow-ups — no argument, nothing finished beyond what safety requires.
 - Destructive operations (delete data, force-push, drop tables): pause and confirm explicitly first.
 - Contradictory or impossible requirements: state the conflict and ask for resolution.
 - A required third-party API or service is unavailable: state the blocker clearly.
