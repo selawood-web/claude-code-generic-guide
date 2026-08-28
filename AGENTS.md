@@ -187,6 +187,7 @@ When designing new systems, apply these defaults unless there is a clear reason 
 # Style: ESLint + Prettier (config in repo root)
 # Branch naming: feature/<ticket-id>-short-description
 # PR size: max 400 lines changed (excluding generated files)
+# Models: small/fast tier for exploration and mechanical fan-out; escalate on failure
 ```
 
 ---
