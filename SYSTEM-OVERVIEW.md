@@ -152,7 +152,7 @@ has to remember anything.
 
 | Hook | When it runs | What it does |
 |------|-------------|--------------|
-| **Session start** | The moment a session opens | Runs the validator and shows the repo's health, then points at the last session log so open threads get picked up. In a project without these tools, it stays silent |
+| **Session start** | The moment a session opens | Syncs CCGG-owned files from the guide clone when `CCGG_HOME` is set (so merged guide PRs reach every session), runs the validator and shows the repo's health, points at the last session log, and surfaces open decision records. In a project without these tools, it stays silent |
 | **Before compaction** | Just before the AI compresses its conversation history | Reminds it to run `/flush` first — so nothing important is lost in the compression |
 | **Session end** | The session closes | Leaves a timestamped marker that the next session's start hook reads back |
 

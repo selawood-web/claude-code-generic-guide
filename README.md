@@ -69,6 +69,20 @@ so this pre-loads engineering wisdom everywhere.
 ### 5. Use the session protocol
 Read `session-protocol.md` to understand how to start, manage, and end sessions to maximize knowledge retention.
 
+### Keeping installed projects current (live sync)
+Set `CCGG_HOME` to your local clone of this guide (e.g. in each project's
+`.claude/settings.json` under `"env"`, or your shell profile):
+```json
+{ "env": { "CCGG_HOME": "/path/to/claude-code-generic-guide" } }
+```
+The session-start hook then runs `update.sh` on every session start, resume, and
+compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
+files (skills, hooks, validator) in the project. Rules files you customized
+(`AGENTS.md`, `CLAUDE.md`, `WORKING-CHARTER.md`, `settings.json`) are never
+touched. Skill updates apply mid-session on the next invocation; behavior-rule
+updates load at the next session start. Customized a CCGG skill in place?
+Rename its directory (it becomes yours) or leave `CCGG_HOME` unset.
+
 ### 6. Adopt the working charter
 ```bash
 cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
@@ -83,6 +97,7 @@ cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
 claude-code-generic-guide/
 │
 ├── install.sh                   ← One-command install into another project
+├── update.sh                    ← Live sync: push merged guide changes into installed projects
 ├── SYSTEM-OVERVIEW.md           ← Plain-language visual map of the whole system
 ├── AGENTS.md                    ← Master AI behavior rules (copy to your project)
 ├── CLAUDE.md                    ← Import bridge: how Claude Code loads AGENTS.md
