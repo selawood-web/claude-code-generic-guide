@@ -21,3 +21,4 @@ the skills get their own `decisions/` folder created by `/decide` on first use.
 |------|-------|------|--------|
 | 2026-08-28 | [Adopt a decision-support system](2026-08-28-adopt-decision-support-system.md) | decision | decided |
 | 2026-08-28 | [SQLite vs Postgres for the next app](2026-08-28-sqlite-vs-postgres-next-app.md) | decision | decided |
+| 2026-08-28 | [PRD — CCGG AI-Efficiency Pack](2026-08-28-prd-ai-efficiency-pack.md) | PRD | proposed |
