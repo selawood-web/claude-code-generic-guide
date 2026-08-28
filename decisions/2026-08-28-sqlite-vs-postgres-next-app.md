@@ -1,7 +1,7 @@
 # SQLite vs Postgres for the next app
 
 - **Date:** 2026-08-28
-- **Status:** proposed
+- **Status:** decided
 - **Type:** decision
 - **Deciders:** repository owner
 - **Supersedes / superseded by:** —
