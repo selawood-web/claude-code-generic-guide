@@ -28,4 +28,14 @@ if [ -f "$MARKERS" ]; then
   echo "-- last session end: $(tail -1 "$MARKERS") --"
 fi
 
+# Open decisions: surface records still awaiting confirmation.
+DECISIONS_DIR="${CLAUDE_PROJECT_DIR:-.}/decisions"
+if [ -d "$DECISIONS_DIR" ]; then
+  OPEN=$(grep -l '\*\*Status:\*\* proposed' "$DECISIONS_DIR"/*.md 2>/dev/null || true)
+  if [ -n "${OPEN:-}" ]; then
+    echo "-- open decisions (status: proposed) --"
+    echo "$OPEN"
+  fi
+fi
+
 exit 0

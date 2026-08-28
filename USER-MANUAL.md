@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 17 Skill workflows | Step-by-step procedures for every common dev task |
+| 19 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 17 skill workflows
+- All 19 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 17 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 19 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -565,6 +565,46 @@ capture this workflow
 /reconcile-docs
 these two files disagree
 remove the duplication between the README and the manual
+```
+
+---
+
+### `/decide` — Structured Decision
+
+**Use when:** Choosing between tools, frameworks, or approaches; a go/no-go call; any "X vs Y" or "should we" question.
+
+**What it does:**
+1. Frames the decision (type, reversibility, stakes) and picks a light or full path
+2. Recalls prior decisions from `decisions/` and memory before re-litigating anything
+3. Elicits weighted criteria first, researches current options live (never from stale memory), then builds a trade-off table that always includes doing nothing
+4. Debates the options through five personas (Champion, Skeptic, Economist, User Advocate, Operator) and answers every strongest objection in the synthesis
+5. Writes a durable record to `decisions/` with a revisit trigger, and promotes the conclusion to memory
+
+**Examples:**
+```
+/decide SQLite vs Postgres for this project
+help me decide which auth provider to use
+should we rewrite this service in Go?
+```
+
+---
+
+### `/product-brief` — Product Idea Evaluation
+
+**Use when:** You have an app, tool, or feature idea and want to know if it is worth building — before any spec is written.
+
+**What it does:**
+1. Classifies the idea and digs for the trigger behind it (the real problem)
+2. Researches the market live: competitors, pricing, real differentiation
+3. Runs the five-persona viability debate, then delivers an explicit **Go / No-go / Pivot** verdict — "maybe later" is not allowed
+4. On Go, hands MVP definition to `/requirements` and links the spec
+5. Records the brief in `decisions/` so a returning idea meets its old objections
+
+**Examples:**
+```
+/product-brief a meal-planning app for shift workers
+I have an app idea — is it worth building?
+evaluate this feature idea
 ```
 
 ---

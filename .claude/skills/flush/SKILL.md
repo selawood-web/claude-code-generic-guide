@@ -42,7 +42,8 @@ Write from the conversation, not just from git. If the user passed focus topics 
 [The narrative in a few bullets: what was built, fixed, decided, or discovered]
 
 ## Decisions & rationale
-[Each decision with its WHY — a decision without rationale becomes a mystery]
+[Each decision with its WHY — a decision without rationale becomes a mystery.
+If decision records were created or updated this session, list their `decisions/` paths]
 
 ## Files changed
 [From git: the meaningful changes, not every path]
