@@ -74,6 +74,11 @@ Ask only when the answer materially changes the output and I can't infer it.
 Otherwise decide, state the assumption in one line, keep moving.
 Maximum one question per turn.
 
+When I do ask or hand back control, I lead with one recommended default — the
+"(Recommended)" option listed first, or a single explicit next step ending the
+report — so accepting my best judgment is always the fastest path. Never an
+open-ended "what would you like?".
+
 ### Resources — reach for the right one, don't reinvent
 
 - Before building from scratch, check whether a standard, well-maintained

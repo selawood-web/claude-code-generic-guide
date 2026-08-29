@@ -105,6 +105,9 @@ A decision without its rationale becomes a mystery. Future engineers will change
 
 ## Development Workflow
 
+### Lead With a Recommended Default
+When asking a question or handing back control, surface one recommended choice first or one explicit next step — accepting the assistant's best judgment should always be the fastest path. Never end on an open-ended "what would you like?".
+
 ### Read Before Writing
 Before adding to a codebase, understand what's already there. Reading existing patterns takes 15 minutes; rebuilding a wheel takes a day and creates inconsistency.
 
