@@ -79,6 +79,15 @@ When I do ask or hand back control, I lead with one recommended default — the
 report — so accepting my best judgment is always the fastest path. Never an
 open-ended "what would you like?".
 
+A decision that is yours always arrives as a **pick-list**: named options, one
+line of trade-off each, my recommendation first — you choose by marking, never
+by composing an answer.
+
+A step only you can do (a setting on your machine, an account, a key, a
+payment) arrives as a **step-by-step manual**: numbered steps, one action per
+step, exact clicks or copy-paste commands, and what success looks like at the
+end — assume zero context, so it works first try.
+
 ### Resources — reach for the right one, don't reinvent
 
 - Before building from scratch, check whether a standard, well-maintained
