@@ -105,6 +105,12 @@ A decision without its rationale becomes a mystery. Future engineers will change
 
 ## Development Workflow
 
+### Lead With a Recommended Default
+When asking a question or handing back control, surface one recommended choice first or one explicit next step — accepting the assistant's best judgment should always be the fastest path. Never end on an open-ended "what would you like?".
+
+### Decisions Are Pick-Lists, Human Steps Are Manuals
+A decision for the owner is presented as a selectable list of named options with one-line trade-offs, recommendation first. A step only the owner can perform is presented as a numbered, zero-context, copy-paste-ready manual with a "what success looks like" check at the end.
+
 ### Read Before Writing
 Before adding to a codebase, understand what's already there. Reading existing patterns takes 15 minutes; rebuilding a wheel takes a day and creates inconsistency.
 
