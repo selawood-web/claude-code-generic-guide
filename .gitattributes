@@ -1,0 +1,5 @@
+# install.sh, update.sh and the lifecycle hooks are shell scripts. Checked out
+# with CRLF endings they fail on macOS and Linux with
+# "bad interpreter: /bin/bash^M" — and the session-start hook fails silently,
+# because it is invoked with `|| true`. Pin them to LF on every platform.
+*.sh text eol=lf

@@ -89,6 +89,29 @@ touched. Skill updates apply mid-session on the next invocation; behavior-rule
 updates load at the next session start. Customized a CCGG skill in place?
 Rename its directory (it becomes yours) or leave `CCGG_HOME` unset.
 
+### Skills everywhere, without a project (personal install)
+Skills can also live in your personal Claude directory, where they load in every
+session whatever folder Claude opens — useful for the workflow skills you want
+on hand outside a wired repository:
+```bash
+./update.sh --user     # syncs into $CLAUDE_CONFIG_DIR, else ~/.claude/skills
+```
+This is a pull, not live sync: with no project there is no session-start hook to
+run, so re-run it after pulling the guide. It copies **skills only** — hooks need
+a `settings.json` to invoke them and installing project hooks globally would run
+them in unrelated repositories, while the validator and catalog need a repository
+to act on. A personal install therefore gives you the skills without the behavior
+rules; wire the project itself to get both.
+
+Neither mode ever deletes. A skill directory in the target that the guide does
+not ship — one of yours, or what an upstream rename left behind — is reported and
+left in place.
+
+**Names matter here.** A personal skill whose name matches a Claude Code built-in
+does not shadow it: the clash drops both, and takes the rest of the built-in set
+with it. CCGG's own review skills are named `ccgg-code-review` and
+`ccgg-security-review` for exactly this reason.
+
 ### 6. Adopt the working charter
 ```bash
 cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
