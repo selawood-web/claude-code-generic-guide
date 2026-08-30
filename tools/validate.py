@@ -43,14 +43,58 @@ def tracked(pattern: str) -> list[str]:
     return [line for line in out.splitlines() if line]
 
 
+def strip_code_blocks(lines: list[str]) -> list[str]:
+    """The lines outside fenced code blocks, blanked rather than dropped.
+
+    A fenced block is a transcript, not prose. A regex such as the one for
+    imperial measurements is also valid markdown link syntax, so a documented
+    pattern gets chased as a link to a file named after its capture group.
+    Blanking instead of removing keeps line numbers aligned with the file.
+    """
+    out: list[str] = []
+    fence: str | None = None
+    for line in lines:
+        marker = re.match(r"\s*(`{3,}|~{3,})", line)
+        if marker:
+            token = marker.group(1)[0]
+            if fence is None:
+                fence = token
+                out.append("")
+                continue
+            if token == fence:
+                fence = None
+                out.append("")
+                continue
+        out.append("" if fence is not None else line)
+    return out
+
+
+def slugify(heading: str) -> str:
+    """The anchor GitHub generates for a heading.
+
+    Two details decide whether a link resolves, and getting either wrong
+    reports correct links as broken:
+
+    * An inline link in a heading contributes only its text. Slugging the raw
+      line folds the URL in too, producing a slug nobody would write by hand.
+    * Each space becomes its own hyphen. Punctuation is deleted in place, so
+      "Registration + dispatch" leaves two spaces behind and renders as
+      "registration--dispatch". Collapsing runs of whitespace to a single
+      hyphen — the obvious reading — breaks every heading holding "&", "+"
+      or an em dash.
+    """
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    text = text.strip().lower()
+    text = re.sub(r"[^\w\s-]", "", text)
+    return re.sub(r"\s", "-", text)
+
+
 def heading_slugs(path: str) -> set[str]:
     slugs = set()
     with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
-        for line in fh:
+        for line in strip_code_blocks(fh.read().splitlines()):
             if line.startswith("#"):
-                text = line.lstrip("#").strip().lower()
-                text = re.sub(r"[^\w\s-]", "", text)
-                slugs.add(re.sub(r"\s+", "-", text))
+                slugs.add(slugify(line.lstrip("#")))
     return slugs
 
 
@@ -60,7 +104,8 @@ def check_markdown() -> None:
         if os.path.getsize(full) == 0:
             fail(f"{path}: file is empty")
             continue
-        content = open(full, encoding="utf-8", errors="replace").read()
+        raw = open(full, encoding="utf-8", errors="replace").read()
+        content = "\n".join(strip_code_blocks(raw.splitlines()))
         for match in LINK_RE.finditer(content):
             target = match.group(1)
             if target.startswith(("http://", "https://", "mailto:", "#")):

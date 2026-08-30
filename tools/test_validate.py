@@ -6,7 +6,12 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 
 import unittest
 
-from validate import frontmatter_scalar_problem, volatile_lines
+from validate import (
+    frontmatter_scalar_problem,
+    slugify,
+    strip_code_blocks,
+    volatile_lines,
+)
 
 
 class VolatileLinesTests(unittest.TestCase):
@@ -75,6 +80,58 @@ class FrontmatterScalarTests(unittest.TestCase):
     # edge: empty value
     def test_empty_value_ok(self):
         self.assertIsNone(frontmatter_scalar_problem("purpose: "))
+
+
+class SlugifyTests(unittest.TestCase):
+    # punctuation is deleted in place, leaving two spaces -> two hyphens
+    def test_plus_leaves_double_hyphen(self):
+        self.assertEqual(slugify("5.2 Registration + dispatch"), "52-registration--dispatch")
+
+    # an em dash behaves the same way, and the apostrophe simply disappears
+    def test_em_dash_and_apostrophe(self):
+        self.assertEqual(
+            slugify("Tier 3 — The moat ArchiWood can't touch"),
+            "tier-3--the-moat-archiwood-cant-touch",
+        )
+
+    # an inline link contributes its text, never its URL
+    def test_inline_link_contributes_text_only(self):
+        self.assertEqual(
+            slugify("7.3 The Intellisense ghost ([Pillar 2](../02-cabinetry-intellisense.md))"),
+            "73-the-intellisense-ghost-pillar-2",
+        )
+
+    # the ordinary case stays ordinary
+    def test_plain_heading(self):
+        self.assertEqual(slugify("Plain Heading"), "plain-heading")
+
+    # a single space is still a single hyphen
+    def test_single_space(self):
+        self.assertEqual(slugify("a b"), "a-b")
+
+
+class StripCodeBlocksTests(unittest.TestCase):
+    # link-like regex syntax inside a fence must not be scanned
+    def test_fenced_content_blanked(self):
+        lines = ["intro", "```", "FEET : /^(\\d+)[-\\s](\\d+)$/", "```", "outro"]
+        self.assertEqual(strip_code_blocks(lines), ["intro", "", "", "", "outro"])
+
+    # line count is preserved so positions stay meaningful
+    def test_line_count_preserved(self):
+        lines = ["a", "```", "x", "y", "```", "b"]
+        self.assertEqual(len(strip_code_blocks(lines)), len(lines))
+
+    # tildes open and close a fence too, and do not close a backtick fence
+    def test_tilde_fence(self):
+        self.assertEqual(strip_code_blocks(["~~~", "x", "~~~"]), ["", "", ""])
+
+    # prose is returned untouched
+    def test_no_fence(self):
+        self.assertEqual(strip_code_blocks(["a", "b"]), ["a", "b"])
+
+    # an unclosed fence blanks to end of file rather than leaking content
+    def test_unclosed_fence(self):
+        self.assertEqual(strip_code_blocks(["a", "```", "x"]), ["a", "", ""])
 
 
 if __name__ == "__main__":
