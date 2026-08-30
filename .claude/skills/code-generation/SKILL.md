@@ -50,7 +50,7 @@ back here. See `WORKING-CHARTER.md`, *Code Module*.
 6. **Write tests** — per function touched: one happy path, at least three edge cases (empty input,
    boundary value, unexpected type), and one failure mode. Run the full suite, not just the new tests;
    target 90 percent coverage on changed lines
-7. **Run critic** — apply the checklist in `../code-review/code-critic.md` before presenting
+7. **Run critic** — apply the checklist in `../ccgg-code-review/code-critic.md` before presenting
 
 ## Output Format
 - Use language-appropriate idiomatic patterns
@@ -59,5 +59,5 @@ back here. See `WORKING-CHARTER.md`, *Code Module*.
 - Explain non-obvious decisions inline with comments
 
 ## Critic Integration
-After generating significant code, run the `../code-review/code-critic.md` checklist.
+After generating significant code, run the `../ccgg-code-review/code-critic.md` checklist.
 Do not present code with BLOCKER-level issues unfixed.

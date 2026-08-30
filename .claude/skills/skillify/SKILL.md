@@ -27,7 +27,7 @@ From the session, write down:
 - What went wrong on the first try — the final skill should encode the corrected path, and warn about the trap
 
 ### Step 3 — Name it
-Kebab-case, verb-first or domain-first, matching the catalog style (`code-review`, `security-review`). The name is how it will be invoked: `/name`.
+Kebab-case, verb-first or domain-first, matching the catalog style (`ccgg-code-review`, `ccgg-security-review`). The name is how it will be invoked: `/name`.
 
 ### Step 4 — Write the skill file
 Create `.claude/skills/<name>/SKILL.md` with the house frontmatter — all five keys:

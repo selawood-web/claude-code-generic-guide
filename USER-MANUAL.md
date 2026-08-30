@@ -252,7 +252,7 @@ open a pull request
 
 ---
 
-### `/code-review` — Code Review
+### `/ccgg-code-review` — Code Review
 
 **Use when:** You want professional feedback on code.
 
@@ -270,7 +270,7 @@ Reviews code across 6 dimensions: correctness, security, performance, maintainab
 ```
 review my code
 review the last commit
-/code-review
+/ccgg-code-review
 review PR #42
 ```
 
@@ -444,7 +444,7 @@ ship this
 
 ---
 
-### `/security-review` — Security Audit
+### `/ccgg-security-review` — Security Audit
 
 **Use when:** You want to check code for security vulnerabilities.
 
@@ -466,7 +466,7 @@ Findings are rated CRITICAL / HIGH / MEDIUM / LOW.
 ```
 security review
 check for vulnerabilities
-/security-review
+/ccgg-security-review
 is this secure?
 ```
 
@@ -944,7 +944,7 @@ description; the operating agreement is `WORKING-CHARTER.md`.
 
 | File | Purpose |
 |------|---------|
-| `.claude/skills/code-review/code-critic.md` | Full code review rubric: 6 dimensions, severity scale |
+| `.claude/skills/ccgg-code-review/code-critic.md` | Full code review rubric: 6 dimensions, severity scale |
 | `.claude/skills/architecture/architecture-critic.md` | Full architecture rubric: 7 dimensions, checklist |
 | `.claude/skills/testing/strategy.md` | Test strategy by project phase, coverage targets by code type |
 | `.claude/skills/learn/extraction-rules.md` | What to capture to memory, what to skip, entry format |
@@ -983,7 +983,7 @@ The AI automatically selects a mode based on your request:
 | **Planner** | "I want to build", "help me", vague idea | `/requirements` skill |
 | **Architect** | "design", "structure", "how should I..." | `/architecture` skill + its critic file |
 | **Builder** | "implement", "write code", "add feature" | `/code-generation` skill + the code critic |
-| **Reviewer** | "review", "check my code" | `/code-review` skill + its critic file |
+| **Reviewer** | "review", "check my code" | `/ccgg-code-review` skill + its critic file |
 | **Debugger** | "bug", "error", "not working" | `/debug` skill |
 
 ---
@@ -1006,10 +1006,10 @@ I want to: [your goal today]               # state the goal
 /requirements    ← new feature idea
 /architecture    ← design a system
 /debug           ← something is broken
-/code-review     ← review changes
+/ccgg-code-review     ← review changes
 /refactor        ← clean up code
 /testing         ← write tests
-/security-review ← audit for vulnerabilities
+/ccgg-security-review ← audit for vulnerabilities
 ```
 
 ### Git workflow
@@ -1126,13 +1126,13 @@ ls ~/.claude/memory/*/sessions/           # session logs written by /flush
 | List skills | ask "what skills are available?" |
 | Commit | `/commit` |
 | Pull Request | `/pr` |
-| Code review | `/code-review` |
+| Code review | `/ccgg-code-review` |
 | Design system | `/architecture` |
 | Gather requirements | `/requirements` |
 | Write tests | `/testing` |
 | Debug | `/debug` |
 | Refactor | `/refactor` |
-| Security audit | `/security-review` |
+| Security audit | `/ccgg-security-review` |
 | Save knowledge | `/learn` or `remember: ...` |
 | Session summary | `/standup` |
 | Save session | `/flush` |

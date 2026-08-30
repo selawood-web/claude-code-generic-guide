@@ -209,10 +209,10 @@ Tests       6 passed
 
 **Developer:**
 ```
-/code-review
+/ccgg-code-review
 ```
 
-**AI (code-review skill):**
+**AI (ccgg-code-review skill):**
 ```
 Reviewing staged changes for AUTH-142.
 
@@ -351,7 +351,7 @@ KNOWLEDGE CAPTURED:
   - jsonwebtoken TTL gotcha (silent number/string ambiguity)
   - Recommendation to add TTL guard to key rotation runbook
 
-SKILLS USED: debug, code-review, commit, learn
+SKILLS USED: debug, ccgg-code-review, commit, learn
 DURATION: ~25 minutes
 
 ─────────────────────────────────────────────────
@@ -368,7 +368,7 @@ Session log saved. See you next session.
 | Session start | 10s | Memory injected automatically — AI knew the stack, last session's work, and git state |
 | `/debug` | 8 min | Systematic root cause analysis led straight to the commit that introduced the bug |
 | Fix + regression test | 5 min | One-line fix + guard test preventing recurrence |
-| `/code-review` | 2 min | Caught a minor naming improvement before commit |
+| `/ccgg-code-review` | 2 min | Caught a minor naming improvement before commit |
 | `/commit` | 1 min | Properly formatted conventional commit with ticket reference |
 | `/learn` | 1 min | jsonwebtoken TTL gotcha saved to memory — next session won't re-discover this |
 | `/flush` | 10s | Full session summary indexed for future search |
@@ -407,7 +407,7 @@ claude          # Claude Code
 # or open VS Code with GitHub Copilot Chat
 
 # 4. Describe your problem — skills invoke automatically
-# Or use explicit slash commands: /debug, /commit, /code-review, /learn
+# Or use explicit slash commands: /debug, /commit, /ccgg-code-review, /learn
 ```
 
 See [session-protocol.md](../session-protocol.md) for the full session management guide.

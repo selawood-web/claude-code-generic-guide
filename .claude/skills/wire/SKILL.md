@@ -4,7 +4,7 @@ description: Roll CCGG into another repository in one command — clone it, run 
 when-to-use: wire, install ccgg into, roll out ccgg, set up ccgg in, add ccgg to project, connect project to ccgg
 allowed-tools: powershell, bash
 argument-hint: "[repo name or path to wire]"
-purpose: Roll CCGG into another repo: install, live-sync config, validated PR
+purpose: "Roll CCGG into another repo: install, live-sync config, validated PR"
 ---
 
 # Wire Skill — One-Command CCGG Rollout

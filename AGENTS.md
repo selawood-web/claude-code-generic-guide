@@ -92,11 +92,12 @@ untrusted sources.
 | Skill | Purpose |
 |-------|---------|
 | `/architecture` | System design with trade-off analysis |
+| `/ccgg-code-review` | Multi-dimension review with severity levels |
+| `/ccgg-security-review` | OWASP-based security audit |
 | `/code-generation` | Production-ready implementation with critic pass |
-| `/code-review` | Multi-dimension review with severity levels |
 | `/commit` | Conventional commits with staged diff review |
 | `/debug` | Systematic root cause analysis |
-| `/decide` | Structured decision: research, debate, durable record |
+| `/decide` | "Structured decision: research, debate, durable record" |
 | `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
 | `/deploy` | Deployment with pre-flight checklist |
 | `/dream` | Consolidate session logs into the knowledge base |
@@ -105,16 +106,15 @@ untrusted sources.
 | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `/learn` | Explicit knowledge capture to memory |
 | `/pr` | PR creation with structured description |
-| `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
-| `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
+| `/product-brief` | "Evaluate a product/app idea: market research, Go/No-go/Pivot" |
+| `/reconcile-docs` | "One home per rule: merge duplicated statements across docs" |
 | `/refactor` | Safe refactoring with regression safety |
 | `/requirements` | Vague idea → actionable spec |
-| `/security-review` | OWASP-based security audit |
-| `/ship` | The whole finish line in one command: commit, push, PR, green CI, merge |
+| `/ship` | "The whole finish line in one command: commit, push, PR, green CI, merge" |
 | `/skillify` | Capture a completed workflow as a new skill |
 | `/standup` | Session summary / daily report |
 | `/testing` | Test suite generation (unit/integration/E2E) |
-| `/wire` | Roll CCGG into another repo: install, live-sync config, validated PR |
+| `/wire` | "Roll CCGG into another repo: install, live-sync config, validated PR" |
 <!-- ccgg:skills:end -->
 
 Ask "what skills are available?" to list the catalog (`/context` shows what loaded).
