@@ -19,11 +19,12 @@ Stdlib only — no dependencies to install.
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
 ROOT = subprocess.check_output(
-    ["git", "rev-parse", "--show-toplevel"], text=True
+    ["git", "rev-parse", "--show-toplevel"], text=True, encoding="utf-8"
 ).strip()
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 SKILL_KEYS = ("name", "description", "when-to-use", "allowed-tools", "argument-hint", "purpose")
@@ -36,7 +37,9 @@ def fail(msg: str) -> None:
 
 
 def tracked(pattern: str) -> list[str]:
-    out = subprocess.check_output(["git", "ls-files", pattern], cwd=ROOT, text=True)
+    out = subprocess.check_output(
+        ["git", "ls-files", pattern], cwd=ROOT, text=True, encoding="utf-8"
+    )
     return [line for line in out.splitlines() if line]
 
 
@@ -214,17 +217,49 @@ def check_claude_md_bridge() -> None:
         fail("CLAUDE.md: does not import @AGENTS.md — the behavior rules never load")
 
 
+def usable_bash() -> str | None:
+    """The path to a bash that can actually run, or None.
+
+    Resolving the interpreter rather than invoking the bare name matters on
+    Windows, where `bash` hits an App Execution Alias for WSL that cannot
+    launch Git Bash scripts and reports a relay error instead of a syntax
+    error — every hook would come back "broken". The resolved path runs the
+    real interpreter; the probe then confirms it before we trust its verdict.
+    """
+    path = shutil.which("bash")
+    if path is None:
+        return None
+    try:
+        probe = subprocess.run(
+            [path, "-c", "exit 0"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return None
+    return path if probe.returncode == 0 else None
+
+
 def check_hooks() -> None:
     index = subprocess.check_output(
-        ["git", "ls-files", "-s", ".claude/hooks/"], cwd=ROOT, text=True
+        ["git", "ls-files", "-s", ".claude/hooks/"], cwd=ROOT, text=True, encoding="utf-8"
     )
+    bash = usable_bash()
     for line in index.splitlines():
         mode, _, _, path = line.split(None, 3)
         if path.endswith(".sh"):
             if mode != "100755":
                 fail(f"{path}: not executable in the git index (mode {mode})")
+            if bash is None:
+                continue
             probe = subprocess.run(
-                ["bash", "-n", os.path.join(ROOT, path)], capture_output=True, text=True
+                [bash, "-n", os.path.join(ROOT, path)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if probe.returncode != 0:
                 fail(f"{path}: bash syntax error — {probe.stderr.strip()}")
