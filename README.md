@@ -8,7 +8,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 → **[SYSTEM-OVERVIEW.md](SYSTEM-OVERVIEW.md)** — How it all fits together: a plain-language visual map of every skill, hook, and guard, the flows connecting them, and the idea behind the system.
 
-→ **[demo/WALKTHROUGH.md](demo/WALKTHROUGH.md)** — A full session walkthrough: debugging a JWT auth bug using `/debug`, `/code-review`, `/commit`, and `/learn`, from bug report to committed fix in ~17 minutes.
+→ **[demo/WALKTHROUGH.md](demo/WALKTHROUGH.md)** — A full session walkthrough: debugging a JWT auth bug using `/debug`, `/ccgg-code-review`, `/commit`, and `/learn`, from bug report to committed fix in ~17 minutes.
 
 ---
 
@@ -116,7 +116,7 @@ claude-code-generic-guide/
 │   ├── skills/                  ← 24 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
-│   │   ├── code-review/         ← Systematic code review
+│   │   ├── ccgg-code-review/         ← Systematic code review
 │   │   ├── architecture/        ← System architecture design
 │   │   ├── requirements/        ← Requirements gathering
 │   │   ├── testing/             ← Test suite generation
@@ -125,7 +125,7 @@ claude-code-generic-guide/
 │   │   ├── learn/               ← Knowledge capture
 │   │   ├── standup/             ← Session summaries
 │   │   ├── deploy/              ← Deployment workflow
-│   │   ├── security-review/     ← Security audit
+│   │   ├── ccgg-security-review/     ← Security audit
 │   │   ├── code-generation/     ← Production-ready code generation
 │   │   ├── flush/               ← Session summary to memory log
 │   │   ├── dream/               ← Memory consolidation
@@ -158,11 +158,12 @@ claude-code-generic-guide/
 | Skill | Invoke | Purpose |
 |-------|--------|---------|
 | `architecture` | `/architecture` | System design with trade-off analysis |
+| `ccgg-code-review` | `/ccgg-code-review` | Multi-dimension review with severity levels |
+| `ccgg-security-review` | `/ccgg-security-review` | OWASP-based security audit |
 | `code-generation` | `/code-generation` | Production-ready implementation with critic pass |
-| `code-review` | `/code-review` | Multi-dimension review with severity levels |
 | `commit` | `/commit` | Conventional commits with staged diff review |
 | `debug` | `/debug` | Systematic root cause analysis |
-| `decide` | `/decide` | Structured decision: research, debate, durable record |
+| `decide` | `/decide` | "Structured decision: research, debate, durable record" |
 | `deploy-steward` | `/deploy-steward` | Provision Railway, enforce "done = executing deployed" at every milestone |
 | `deploy` | `/deploy` | Deployment with pre-flight checklist |
 | `dream` | `/dream` | Consolidate session logs into the knowledge base |
@@ -171,16 +172,15 @@ claude-code-generic-guide/
 | `git-steward` | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `learn` | `/learn` | Explicit knowledge capture to memory |
 | `pr` | `/pr` | PR creation with structured description |
-| `product-brief` | `/product-brief` | Evaluate a product/app idea: market research, Go/No-go/Pivot |
-| `reconcile-docs` | `/reconcile-docs` | One home per rule: merge duplicated statements across docs |
+| `product-brief` | `/product-brief` | "Evaluate a product/app idea: market research, Go/No-go/Pivot" |
+| `reconcile-docs` | `/reconcile-docs` | "One home per rule: merge duplicated statements across docs" |
 | `refactor` | `/refactor` | Safe refactoring with regression safety |
 | `requirements` | `/requirements` | Vague idea → actionable spec |
-| `security-review` | `/security-review` | OWASP-based security audit |
-| `ship` | `/ship` | The whole finish line in one command: commit, push, PR, green CI, merge |
+| `ship` | `/ship` | "The whole finish line in one command: commit, push, PR, green CI, merge" |
 | `skillify` | `/skillify` | Capture a completed workflow as a new skill |
 | `standup` | `/standup` | Session summary / daily report |
 | `testing` | `/testing` | Test suite generation (unit/integration/E2E) |
-| `wire` | `/wire` | Roll CCGG into another repo: install, live-sync config, validated PR |
+| `wire` | `/wire` | "Roll CCGG into another repo: install, live-sync config, validated PR" |
 <!-- ccgg:skills:end -->
 
 ---

@@ -4,7 +4,7 @@ description: Find every place a rule or fact is restated across the repository's
 when-to-use: reconcile docs, docs disagree, duplicate rules, doc drift, single source of truth, align documents
 allowed-tools: powershell, bash
 argument-hint: "[the rule, topic, or pair of files that disagree]"
-purpose: One home per rule: merge duplicated statements across docs
+purpose: "One home per rule: merge duplicated statements across docs"
 ---
 
 # Reconcile Docs Skill — One Home Per Rule

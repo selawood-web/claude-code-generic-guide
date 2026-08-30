@@ -121,8 +121,8 @@ one line of explanation.
 |-------|------|----------|
 | `/commit` | Clean, meaningful commits | Inspects the diff, writes a conventional message where the body explains *why* |
 | `/pr` | A reviewable proposal | Pushes the branch, writes a structured description of what changed and why |
-| `/code-review` | Catch problems before merge | Six dimensions in priority order; findings rated blocker / important / suggestion — and calls out what's done well |
-| `/security-review` | Find exploitable weaknesses | OWASP-based audit; flags only what it is confident about, rated by severity |
+| `/ccgg-code-review` | Catch problems before merge | Six dimensions in priority order; findings rated blocker / important / suggestion — and calls out what's done well |
+| `/ccgg-security-review` | Find exploitable weaknesses | OWASP-based audit; flags only what it is confident about, rated by severity |
 | `/deploy` | Ship safely | Pre-flight checklist, a known rollback plan before anything moves, verification after |
 | `/git-steward` | Git handled automatically | Names a new project, creates its GitHub repo, then commits at verified milestones and pushes — destructive acts always ask first |
 | `/deploy-steward` | Every milestone runs deployed | Provisions Railway at bootstrap, then deploys each milestone to staging and health-checks it — "works on my machine" is not done |

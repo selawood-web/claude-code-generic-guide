@@ -4,7 +4,7 @@ description: Evaluate a product, app, or feature idea before committing to build
 when-to-use: app idea, product idea, is this worth building, evaluate this idea, should I build, validate my idea, market fit
 allowed-tools: powershell, bash
 argument-hint: "[the product or feature idea]"
-purpose: Evaluate a product/app idea: market research, Go/No-go/Pivot
+purpose: "Evaluate a product/app idea: market research, Go/No-go/Pivot"
 ---
 
 # Product Brief Skill

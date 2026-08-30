@@ -4,7 +4,7 @@ description: Make a structured decision — tool selection, go/no-go, trade-off,
 when-to-use: help me decide, which should I use, X vs Y, should we, compare options, trade-off, go or no-go, pick between
 allowed-tools: powershell, bash
 argument-hint: "[the decision to make]"
-purpose: Structured decision: research, debate, durable record
+purpose: "Structured decision: research, debate, durable record"
 ---
 
 # Decision Skill

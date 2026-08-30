@@ -75,6 +75,26 @@ def check_markdown() -> None:
                 fail(f"{path}: missing anchor -> {target}")
 
 
+def frontmatter_scalar_problem(line: str) -> str | None:
+    """Why this frontmatter line fails to parse as YAML, or None.
+
+    An unquoted scalar containing ": " ends the key at the *first* colon and
+    leaves a second mapping-looking fragment behind, so the whole block is
+    invalid and every key in it — description included — is lost. Skills stay
+    listed but lose the description the model matches on, which silently
+    disables auto-invocation. Stdlib only, so this checks the one construct
+    that actually bit us rather than parsing YAML in full.
+    """
+    if ": " not in line:
+        return None
+    value = line.split(": ", 1)[1].strip()
+    if value[:1] in ('"', "'") or not value:
+        return None
+    if ": " in value:
+        return f"unquoted value contains ': ' — wrap it in double quotes: {line.strip()}"
+    return None
+
+
 def check_skills() -> None:
     for path in tracked(".claude/skills/*/SKILL.md"):
         lines = open(os.path.join(ROOT, path), encoding="utf-8").read().splitlines()
@@ -86,6 +106,10 @@ def check_skills() -> None:
         except ValueError:
             fail(f"{path}: frontmatter never closed with ---")
             continue
+        for ln in lines[1:end]:
+            problem = frontmatter_scalar_problem(ln)
+            if problem:
+                fail(f"{path}: {problem}")
         keys = {ln.split(":", 1)[0].strip() for ln in lines[1:end] if ":" in ln}
         for key in SKILL_KEYS:
             if key not in keys:

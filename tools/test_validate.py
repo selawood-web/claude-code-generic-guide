@@ -6,7 +6,7 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 
 import unittest
 
-from validate import volatile_lines
+from validate import frontmatter_scalar_problem, volatile_lines
 
 
 class VolatileLinesTests(unittest.TestCase):
@@ -39,6 +39,42 @@ class VolatileLinesTests(unittest.TestCase):
     def test_case_insensitive_marker(self):
         hits = volatile_lines("LAST SYNCED by the hook\n")
         self.assertEqual(len(hits), 1)
+
+
+class FrontmatterScalarTests(unittest.TestCase):
+    # the real bug: an unquoted purpose with an inner ": " invalidated the block
+    def test_unquoted_inner_colon_flagged(self):
+        line = "purpose: Structured decision: research, debate, durable record"
+        self.assertIsNotNone(frontmatter_scalar_problem(line))
+
+    # quoting it is the fix, and must come back clean
+    def test_quoted_inner_colon_ok(self):
+        line = 'purpose: "Structured decision: research, debate, durable record"'
+        self.assertIsNone(frontmatter_scalar_problem(line))
+
+    # single quotes are valid YAML too
+    def test_single_quoted_ok(self):
+        self.assertIsNone(frontmatter_scalar_problem("purpose: 'a: b'"))
+
+    # ordinary values must not be flagged
+    def test_plain_value_ok(self):
+        self.assertIsNone(frontmatter_scalar_problem("name: ship"))
+
+    # a colon with no space is legal in an unquoted scalar
+    def test_colon_without_space_ok(self):
+        self.assertIsNone(frontmatter_scalar_problem("argument-hint: a:b"))
+
+    # already-quoted hints that themselves contain ": " stay clean
+    def test_quoted_argument_hint_ok(self):
+        self.assertIsNone(frontmatter_scalar_problem('argument-hint: "[optional: no-merge]"'))
+
+    # edge: line with no mapping at all
+    def test_no_colon_ok(self):
+        self.assertIsNone(frontmatter_scalar_problem("just text"))
+
+    # edge: empty value
+    def test_empty_value_ok(self):
+        self.assertIsNone(frontmatter_scalar_problem("purpose: "))
 
 
 if __name__ == "__main__":

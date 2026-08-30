@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: ccgg-code-review
 description: Perform a thorough professional code review of staged changes, unstaged changes, or a specific PR. Use when the user asks to "review code", "check my code", "review PR", or "give feedback on changes".
 when-to-use: review code, code review, review PR, check changes, review diff
 allowed-tools: powershell, bash
