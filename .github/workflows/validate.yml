@@ -18,5 +18,14 @@ jobs:
           python-version: "3.12"
       - name: Validate links, skills, configs, and hooks
         run: python tools/validate.py
+      # Installed projects get `tools/validate.py` and this workflow, but not the
+      # validator's own tests — `unittest discover` then exits 5 ("NO TESTS RAN")
+      # and every wired project's first PR goes red. Skip when there is nothing
+      # to run; never weaken the run itself.
       - name: Unit tests for the validator
-        run: python -m unittest discover -s tools -p "test_*.py" -v
+        run: |
+          if ls tools/test_*.py >/dev/null 2>&1; then
+            python -m unittest discover -s tools -p "test_*.py" -v
+          else
+            echo "No validator unit tests in this repo — skipping."
+          fi
