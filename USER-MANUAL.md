@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 24 Skill workflows | Step-by-step procedures for every common dev task |
+| 25 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 24 skill workflows
+- All 25 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 24 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 25 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -702,6 +702,26 @@ roll ccgg out to psychexpert
 
 ---
 
+### `/momentum` — Drive a Task to Done
+
+**Use when:** A task will span more than one turn, or a reply came back without a clear next step.
+
+**What it does:**
+1. Names the finish line first — `DONE = <observable end state>`
+2. Lays a numbered ladder to it, each step marked `[me]` or `[you]`, `[you]` steps reordered around so they never block independent work
+3. Runs every `[me]` step back to back — only four stops are legal (done, a decision that is genuinely yours, a `[you]` step everything now depends on, an unauthorized irreversible action)
+4. Ends every reply with `NEXT →` / `THEN →` so the cheapest reply is "go"
+5. Turns a real blocker into one precise form — BLOCKED / WHY / FORMAT / ON ARRIVAL / MEANWHILE — answered by pasting or clicking, never by composing prose
+
+**Examples:**
+```
+/momentum
+keep going
+don't stop until it's done
+what's the next step
+```
+
+**Note:** It layers on the charter's handoff rules and never overrides a boundary — branch scope, the code-module gate, and approval-gated deploys still stop the work, but the stop still ends with `NEXT →` naming what unblocks it.
 ## 7. Memory System
 
 Memory is the most powerful feature of this infrastructure. It is what makes sessions accumulate knowledge instead of resetting.
