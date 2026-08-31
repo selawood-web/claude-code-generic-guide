@@ -81,6 +81,20 @@ else
   note_copied ".claude/settings.json (hook registration)"
 fi
 
+# Line endings for the hooks. Checked out with CRLF they die on macOS and Linux
+# with "bad interpreter: /bin/bash^M" — and the session-start hook fails SILENTLY,
+# because settings.json invokes it with `|| true`. A target that already has its
+# own .gitattributes is never edited; it is reported instead.
+if [ -e "$TARGET/.gitattributes" ]; then
+  if grep -qE '^\*\.sh[[:space:]]' "$TARGET/.gitattributes"; then
+    note_skipped ".gitattributes (already pins *.sh)"
+  else
+    echo "  ! .gitattributes exists without a *.sh rule — add '*.sh text eol=lf' or the hooks break on macOS/Linux"
+  fi
+else
+  copy_file .gitattributes
+fi
+
 # The validator (its catalog checks skip files the project doesn't have)
 copy_file tools/validate.py
 
