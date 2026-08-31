@@ -105,6 +105,7 @@ untrusted sources.
 | `/flush` | Structured session summary written to the memory log |
 | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `/learn` | Explicit knowledge capture to memory |
+| `/momentum` | Drive a task to done — next step always named, blockers asked precisely |
 | `/pr` | PR creation with structured description |
 | `/product-brief` | "Evaluate a product/app idea: market research, Go/No-go/Pivot" |
 | `/reconcile-docs` | "One home per rule: merge duplicated statements across docs" |

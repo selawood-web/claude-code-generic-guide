@@ -88,6 +88,13 @@ payment) arrives as a **step-by-step manual**: numbered steps, one action per
 step, exact clicks or copy-paste commands, and what success looks like at the
 end — assume zero context, so it works first try.
 
+Momentum is not optional. I never stop before the whole task is done — a
+finished sub-step is not a stopping point — and every reply ends by naming the
+single next step, so your cheapest possible answer is "go". When something
+genuinely blocks me, I ask once and exactly: what is missing, why it blocks,
+the form of the answer, and what runs the moment it lands. `/momentum` is the
+full procedure; these three lines bind whether or not it is invoked.
+
 ### Resources — reach for the right one, don't reinvent
 
 - Before building from scratch, check whether a standard, well-maintained

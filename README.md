@@ -16,7 +16,7 @@ A complete, generic infrastructure for software development with AI coding assis
 
 A **plug-in infrastructure layer** you drop into any project to get:
 - A senior principal engineer mindset embedded in your AI assistant
-- 24 production-ready skill workflows (commit, PR, code review, architecture, code generation, decision-making, deployment, memory capture, etc.)
+- 25 production-ready skill workflows (commit, PR, code review, architecture, code generation, decision-making, deployment, memory capture, etc.)
 - Automatic knowledge capture across sessions — context that accumulates over time
 - Self-criticism and quality gates built into every workflow
 - A seeded knowledge base with architecture patterns, engineering principles, and common pitfalls
@@ -29,7 +29,7 @@ A **plug-in infrastructure layer** you drop into any project to get:
 ```bash
 ./install.sh /path/to/your-project
 ```
-Copies everything below in one step — rules, bridge, all 24 skills, hooks,
+Copies everything below in one step — rules, bridge, all 25 skills, hooks,
 validator, and CI — without overwriting anything that already exists, then
 prints the only steps that need a human: filling in your project's conventions
 and constraints, and the `/context` verification. Prefer to understand each
@@ -48,7 +48,7 @@ Code never loads the rules at all.
 ```bash
 cp -r .claude/ /path/to/your-project/.claude/
 ```
-This installs all 24 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
+This installs all 25 skill workflows, their critic and strategy references, and the hook wiring (`settings.json`).
 
 ### 3. Memory needs no enabling
 Claude Code's auto memory is on by default: Claude keeps per-project notes at
@@ -136,7 +136,7 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── settings.json            ← Hook registration (SessionStart, PreCompact, SessionEnd)
-│   ├── skills/                  ← 24 reusable skill workflows
+│   ├── skills/                  ← 25 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
 │   │   ├── ccgg-code-review/         ← Systematic code review
@@ -194,6 +194,7 @@ claude-code-generic-guide/
 | `flush` | `/flush` | Structured session summary written to the memory log |
 | `git-steward` | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `learn` | `/learn` | Explicit knowledge capture to memory |
+| `momentum` | `/momentum` | Drive a task to done — next step always named, blockers asked precisely |
 | `pr` | `/pr` | PR creation with structured description |
 | `product-brief` | `/product-brief` | "Evaluate a product/app idea: market research, Go/No-go/Pivot" |
 | `reconcile-docs` | `/reconcile-docs` | "One home per rule: merge duplicated statements across docs" |
