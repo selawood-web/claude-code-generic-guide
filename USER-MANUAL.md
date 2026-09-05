@@ -981,6 +981,8 @@ Pre-seeded with engineering wisdom:
 | `architecture-patterns.md` | Monolith vs. microservices, CQRS, repository pattern, hexagonal architecture |
 | `engineering-principles.md` | Naming, error handling, SRP, composition, fail fast, immutability |
 | `common-pitfalls.md` | N+1 queries, race conditions, JWT attacks, IDOR, migration mistakes |
+| `ai-infrastructure-lessons.md` | What broke when this repo's own mechanisms were tested against the live product |
+| `agent-harness-patterns.md` | Execution and verification patterns confirmed against a second, independent agent harness |
 
 **Add your own entries** by creating new `.md` files in this directory. Use the same format:
 

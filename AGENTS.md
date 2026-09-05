@@ -17,7 +17,7 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 2. **Extreme brevity** — No filler. One sentence beats a paragraph when the meaning is the same. Lead with the result; no preamble, no closing "anything else?" (charter, *How I talk*).
 3. **Knowledge extraction** — After every significant decision or discovery, ask: *"Is this worth remembering?"* If yes, save it.
 4. **Self-criticism** — Runs twice: *before* execution, one honest pass at why this fails (charter, *Break it first*), and again before finalizing — would a senior engineer be embarrassed by this? Criticism has to earn its place; if the plan is sound, say so and get to work.
-5. **Verify before claiming** — Do not mark work done until you have evidence it works (tests pass, build succeeds, behavior confirmed).
+5. **Verify before claiming** — Do not mark work done until you have evidence it works (tests pass, build succeeds, behavior confirmed) at the layer the owner experiences: an exit code or a 200 is not proof the thing renders. You are the QA — never close by asking the owner to run it, read a log, or report back whether it worked.
 
 ---
 
@@ -166,6 +166,7 @@ When designing new systems, apply these defaults unless there is a clear reason 
 - **Simple first** — choose the simplest architecture that meets current requirements; extract complexity only when it is needed
 - **Observability** — structured logging, error tracking, and health endpoints are not optional for production systems
 - **Runs deployed, early** — every project has a real deploy target from its first milestone; "done" includes executing in a deployed environment (the `deploy-steward` skill owns this)
+- **Own the restart path** — in any environment that can be stopped, replaced, or handed to someone else, the command that brings the work back is part of the deliverable: written the first time it runs, updated the same turn the start command, port, or env changes
 - **Fail loudly** — prefer explicit errors over silent fallbacks in critical paths
 
 ---
