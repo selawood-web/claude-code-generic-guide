@@ -479,7 +479,7 @@ is this secure?
 **What it does:**
 1. Reads existing patterns in the codebase first
 2. Writes interface, happy path, edge cases, and explicit error handling in that order
-3. Writes tests to the charter's bar (happy path, three edge cases, one failure mode)
+3. Writes tests to the gate's stage-3 bar ([`.claude/references/code-gate.md`](.claude/references/code-gate.md))
 4. Runs the code critic checklist before presenting — no unfixed BLOCKERs
 
 **Examples:**

@@ -1,9 +1,9 @@
 # Test Strategy Reference
 
 Companion to `SKILL.md` — strategy by project phase and coverage targets.
-The per-change bar (happy path, three edge cases, failure mode, 90 percent on
-changed lines) is set by `WORKING-CHARTER.md` gate stage 3; the targets below
-are per-codebase guidelines that sit alongside it.
+The per-change bar is the gate's stage 3, stated in
+`../../references/code-gate.md`; the targets below are per-codebase guidelines
+that sit alongside it.
 
 ## Strategy by Project Phase
 
