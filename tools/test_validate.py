@@ -8,6 +8,7 @@ import unittest
 
 from validate import (
     frontmatter_scalar_problem,
+    link_leaves_install_set,
     slugify,
     strip_code_blocks,
     volatile_lines,
@@ -80,6 +81,55 @@ class FrontmatterScalarTests(unittest.TestCase):
     # edge: empty value
     def test_empty_value_ok(self):
         self.assertIsNone(frontmatter_scalar_problem("purpose: "))
+
+
+
+class LinkInstallSetTests(unittest.TestCase):
+    # happy path — the links rule files actually carry today
+    def test_sibling_rule_file_ok(self):
+        self.assertFalse(link_leaves_install_set("WORKING-CHARTER.md"))
+
+    def test_reference_companion_ok(self):
+        self.assertFalse(link_leaves_install_set(".claude/references/code-gate.md"))
+
+    # edge: empty input — a bare anchor never leaves its own file
+    def test_bare_anchor_ok(self):
+        self.assertFalse(link_leaves_install_set("#skill-checker"))
+        self.assertFalse(link_leaves_install_set(""))
+
+    # edge: boundary — an anchor on an installed file is still installed,
+    # and "./" is the same path written differently
+    def test_anchor_and_dot_slash_ok(self):
+        self.assertFalse(link_leaves_install_set("AGENTS.md#skill-system"))
+        self.assertFalse(link_leaves_install_set("./.claude/skills/commit/SKILL.md"))
+
+    # edge: a prefix that only looks installed must not slip through
+    def test_lookalike_prefix_flagged(self):
+        self.assertTrue(link_leaves_install_set(".claudex/notes.md"))
+        self.assertTrue(link_leaves_install_set("AGENTS.md.bak"))
+
+    # edge: unexpected type fails loudly, not silently
+    def test_non_string_raises(self):
+        with self.assertRaises(AttributeError):
+            link_leaves_install_set(None)
+
+    # failure mode — the real cases: targets install.sh does not copy
+    def test_uninstalled_targets_flagged(self):
+        for link in (
+            "MEMORY.md",
+            "decisions/README.md",
+            "knowledge-base/entries/common-pitfalls.md",
+            "docs/08-skills.md",
+            "tools/catalog.py",
+            "../outside-the-repo.md",
+        ):
+            with self.subTest(link=link):
+                self.assertTrue(link_leaves_install_set(link))
+
+    # external links are somebody else's problem, not a broken install
+    def test_external_links_ignored(self):
+        self.assertFalse(link_leaves_install_set("https://code.claude.com/docs"))
+        self.assertFalse(link_leaves_install_set("mailto:someone@example.com"))
 
 
 class SlugifyTests(unittest.TestCase):

@@ -4,8 +4,8 @@
 #
 #     ./install.sh /path/to/your-project
 #
-# Copies the behavior rules, the 25 skills, the lifecycle hooks, the validator,
-# and the CI workflow. Never overwrites anything that already exists — existing
+# Copies the behavior rules, their on-demand companions, the 25 skills, the
+# lifecycle hooks, the validator, and the CI workflow. Never overwrites anything that already exists — existing
 # files are reported and left alone. Safe to run twice.
 #
 # What it cannot do for you (printed again at the end):
@@ -70,6 +70,16 @@ else
   note_copied ".claude/hooks/ (3 lifecycle hooks)"
 fi
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
+
+# Rule-file companions. AGENTS.md and the charter link into this directory, so a
+# target without it fails the validator's link check on its very first run.
+if [ -e "$TARGET/.claude/references" ]; then
+  note_skipped ".claude/references/"
+else
+  mkdir -p "$TARGET/.claude"
+  cp -r "$SRC/.claude/references" "$TARGET/.claude/references"
+  note_copied ".claude/references/ (rule-file companions)"
+fi
 
 # Hook registration — hooks only run if settings.json registers them
 if [ -e "$TARGET/.claude/settings.json" ]; then

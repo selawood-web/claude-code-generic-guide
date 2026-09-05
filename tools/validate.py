@@ -11,6 +11,7 @@ Checks, in order:
   7. The root CLAUDE.md exists and imports @AGENTS.md (the bridge).
   8. Hook scripts pass bash -n and carry the executable bit in the git index.
   9. Always-loaded files carry no session-volatile content (cache stability).
+ 10. Always-loaded files link only into install.sh's copy set (drop-in contract).
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -277,6 +278,60 @@ def check_volatile_content() -> None:
             )
 
 
+INSTALLED_LINK_ROOTS = (
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "CLAUDE.md",
+    ".claude",
+    ".gitattributes",
+    "tools/validate.py",
+    ".github/workflows/validate.yml",
+)
+
+
+def link_leaves_install_set(link: str) -> bool:
+    """True when a link from an always-loaded file points outside install.sh's copies.
+
+    The drop-in contract (charter, *Must never break*) bounds where a rule file
+    may point. A link to something install.sh does not copy — a decision record,
+    knowledge-base entry, or docs page — resolves here and breaks the link check
+    in every installed project, where the target was never delivered. The repo
+    that ships the validator is the one place this cannot be caught by running it.
+
+    External links, bare anchors, and links this repo alone can resolve are the
+    three cases people actually write, so each is decided explicitly rather than
+    by a catch-all.
+    """
+    if link.startswith(("http://", "https://", "mailto:", "#")):
+        return False
+    file_part = link.partition("#")[0]
+    if not file_part:
+        return False  # a bare anchor stays inside its own file
+    if file_part.startswith("./"):
+        file_part = file_part[2:]
+    return not any(
+        file_part == root or file_part.startswith(root + "/")
+        for root in INSTALLED_LINK_ROOTS
+    )
+
+
+def check_rule_file_links() -> None:
+    for name in ALWAYS_LOADED:
+        path = os.path.join(ROOT, name)
+        if not os.path.exists(path):
+            continue
+        raw = open(path, encoding="utf-8", errors="replace").read()
+        content = "\n".join(strip_code_blocks(raw.splitlines()))
+        for match in LINK_RE.finditer(content):
+            target = match.group(1)
+            if link_leaves_install_set(target):
+                fail(
+                    f"{name}: links to {target}, which install.sh does not copy — "
+                    f"the link breaks in every installed project; move the target "
+                    f"under .claude/references/ or drop the link"
+                )
+
+
 def check_claude_md_bridge() -> None:
     """AGENTS.md only loads into Claude Code via the CLAUDE.md import bridge."""
     path = os.path.join(ROOT, "CLAUDE.md")
@@ -340,6 +395,7 @@ def main() -> int:
     check_catalogs()
     check_context_budget()
     check_volatile_content()
+    check_rule_file_links()
     check_configs()
     check_claude_md_bridge()
     check_hooks()

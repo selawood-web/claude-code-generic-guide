@@ -968,9 +968,12 @@ description; the operating agreement is `WORKING-CHARTER.md`.
 | `.claude/skills/architecture/architecture-critic.md` | Full architecture rubric: 7 dimensions, checklist |
 | `.claude/skills/testing/strategy.md` | Test strategy by project phase, coverage targets by code type |
 | `.claude/skills/learn/extraction-rules.md` | What to capture to memory, what to skip, entry format |
+| `.claude/references/code-gate.md` | The code gate in full: what each stage runs, the failure loop, scaling |
 
-Each is referenced from its skill's `SKILL.md` and travels with the skill when
-you copy `.claude/` into a project.
+Each is referenced from the file that uses it — a `SKILL.md`, or the charter
+for `.claude/references/` — and travels with it when you copy `.claude/` into a
+project. Rule files may link only at targets `install.sh` copies; the validator
+enforces it, because a link to anything else breaks in every installed project.
 
 ### Knowledge base (`knowledge-base/entries/`)
 
