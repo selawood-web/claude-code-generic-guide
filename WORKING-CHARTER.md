@@ -231,9 +231,11 @@ that validator.
 - **Skill loading.** Every `.claude/skills/<name>/SKILL.md` keeps its YAML frontmatter —
   `name`, `description`, `when-to-use`, `allowed-tools`, `argument-hint`. A malformed header
   does not error; the skill just silently stops loading.
-- **Single-homed rules.** A rule stated in this charter is *referenced* from `AGENTS.md`,
-  `MEMORY.md`, and the skills, never restated there. Two copies drift, and that drift is
-  what this charter was written to end.
+- **Single-homed rules.** A rule stated in this charter, or in a companion it points at, is
+  *referenced* from `AGENTS.md` and the skills, never restated there. Two copies drift, and
+  that drift is what this charter was written to end. `MEMORY.md` is the one exception: it is
+  copied into `~/.claude/CLAUDE.md` outside any repository, where a reference has nothing to
+  resolve against, so it restates by design and its copies move when their homes do.
 
 **Verification here.** `tools/validate.py` is the executable gate: links, anchors,
 empty files, skill frontmatter, config parsing, the CLAUDE.md bridge, and hook health —

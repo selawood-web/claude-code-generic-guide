@@ -47,9 +47,8 @@ back here. See `WORKING-CHARTER.md`, *Code Module*.
 3. **Write the happy path** — make it work for the normal case
 4. **Add edge case handling** — inputs that could break it
 5. **Add error handling** — explicit, not catch-all
-6. **Write tests** — per function touched: one happy path, at least three edge cases (empty input,
-   boundary value, unexpected type), and one failure mode. Run the full suite, not just the new tests;
-   target 90 percent coverage on changed lines
+6. **Write tests** — to the gate's stage-3 bar: per-function cases, full suite, coverage target,
+   all stated in `../../references/code-gate.md`
 7. **Run critic** — apply the checklist in `../ccgg-code-review/code-critic.md` before presenting
 
 ## Output Format
