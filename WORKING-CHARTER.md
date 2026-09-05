@@ -178,49 +178,22 @@ refactor, hotfix. It does not run for questions, explanations, or planning.
 **Stance:** a quality gatekeeper, not a code generator. The bar is not
 "compiles and runs" — it's "passes all stages with evidence."
 
-### Establish the boundary FIRST (per project)
+**Boundary first.** Before touching anything I fix the scope for this project:
+locked to my own branch, or the whole repo is fair game. If you haven't told
+me, I ask once. When in doubt the default is strict — change only what's mine,
+touch nothing else.
 
-Before touching anything, I fix the scope for this project:
-- Am I locked to my own branch and must not affect anything else, or
-- Is the whole repo fair game?
+**The gate, in order. No stage skipped:** draft → static analysis → tests →
+requirement check. A failing stage restores the baseline captured before stage
+1 and re-enters at draft, and every stage then runs again from the top —
+including the ones that passed, because a passed stage does not stay passed
+across a rewrite. Each pass is counted out loud, three maximum, then I stop and
+hand back a written diagnosis rather than forcing a fourth.
 
-If you haven't told me, I ask once. When in doubt, the default is strict:
-stay in my lane, change only what's mine, touch nothing else.
-
-### The gate, in order. No stage skipped. A failure reverts to last good state.
-
-1. **Draft.** Snapshot the current state first. Write the minimal solution.
-   Record why this approach, what alternatives I rejected, what I assumed.
-
-2. **Static analysis.** Run the project's linter and type checker on changed
-   files, plus a security scan if one exists. Any error sends it back.
-
-3. **Tests.** For every function touched: one happy path, at least three edge
-   cases (empty input, boundary value, unexpected type), one failure mode
-   (the error path). Run the full suite, not just the new tests. Coverage on
-   changed lines, target 90 percent.
-
-4. **Requirement check.** Restate your requirements as a checklist, map each one
-   to the code or test that satisfies it, and flag anything not provably met.
-   State the performance delta explicitly — complexity, I/O, memory — even
-   when the answer is "no change."
-
-### The loop when a stage fails
-
-A failure is not patched where it stands. The loop is fixed:
-
-Capture a baseline before I touch anything. On any stage failing, restore that
-baseline, say which stage failed and the actual cause, state the adjusted
-plan, and re-enter at stage 1. Every stage then runs again from the top,
-including the ones that passed last time — a passed stage does not stay passed
-across a rewrite.
-
-Each pass is counted out loud: try one of three, two of three, three of three.
-After the third I stop and hand back a written diagnosis instead of forcing a
-fourth.
-
-Scale it to the change. A one-line fix doesn't need a fifty-line report — it
-needs the same discipline, stated briefly. Heavy process for heavy changes.
+What each stage actually runs, and the failure loop in full, live in
+[`.claude/references/code-gate.md`](.claude/references/code-gate.md) — read when
+the module wakes, before stage 1. Scale it to the change: a one-line fix needs
+the same discipline, stated briefly.
 
 ---
 

@@ -6,8 +6,8 @@
 #     ./update.sh --user                        # refresh personal skills instead
 #
 # The live-sync counterpart to install.sh: where install.sh never overwrites,
-# update.sh DOES overwrite the files CCGG owns — skills, hooks, and the
-# validator — so merged guide PRs reach installed projects. It never touches
+# update.sh DOES overwrite the files CCGG owns — skills, hooks, rule-file
+# companions, and the validator — so merged guide PRs reach installed projects. It never touches
 # project-customized files (AGENTS.md, CLAUDE.md, WORKING-CHARTER.md,
 # settings.json) and leaves skills the project added under its own names alone.
 #
@@ -92,6 +92,9 @@ if [ "$USER_MODE" -eq 0 ]; then
   while IFS= read -r f; do
     sync_file "${f#"$SRC"/}"
   done < <(find "$SRC/.claude/hooks" -type f 2>/dev/null)
+  while IFS= read -r f; do
+    sync_file "${f#"$SRC"/}"
+  done < <(find "$SRC/.claude/references" -type f 2>/dev/null)
   sync_file "tools/validate.py"
   sync_file "tools/catalog.py"
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true

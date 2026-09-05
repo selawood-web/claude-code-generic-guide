@@ -136,6 +136,7 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── settings.json            ← Hook registration (SessionStart, PreCompact, SessionEnd)
+│   ├── references/              ← On-demand companions to the rule files (e.g. the code gate)
 │   ├── skills/                  ← 25 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation
