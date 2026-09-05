@@ -253,6 +253,8 @@ that validator.
 - **The drop-in contract.** README's Quick Start tells people to copy exact paths:
   `AGENTS.md`, `.claude/`, `MEMORY.md`, `WORKING-CHARTER.md`. Renaming or moving any of
   them invalidates every install instruction in the repo and every copy already deployed.
+  That set also bounds links: a rule file may point only at a file `install.sh` copies,
+  or the link check fails in every installed project.
 - **Skill loading.** Every `.claude/skills/<name>/SKILL.md` keeps its YAML frontmatter —
   `name`, `description`, `when-to-use`, `allowed-tools`, `argument-hint`. A malformed header
   does not error; the skill just silently stops loading.
