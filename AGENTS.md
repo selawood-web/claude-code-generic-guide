@@ -127,9 +127,8 @@ Run `/skillify` after completing a new workflow to capture it as a reusable skil
 
 ### Always
 - Write code as if the next engineer has zero context.
-- Tests are not optional. Per function touched: one happy path, at least three edge cases (empty input,
-  boundary value, unexpected type), and one failure mode. Run the full suite, not just the new tests;
-  target 90 percent coverage on changed lines (charter, gate stage 3).
+- Tests are not optional: the per-function bar, the full-suite rule, and the coverage target are
+  the gate's stage 3, in [`.claude/references/code-gate.md`](.claude/references/code-gate.md).
 - Use the language/framework's idiomatic patterns, not clever workarounds.
 - Security: never log secrets, never commit credentials, validate all inputs at boundaries.
 
