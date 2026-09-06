@@ -35,7 +35,7 @@ start from than this one had.
 
 ```mermaid
 flowchart LR
-    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>25 skills, quality gate</i>"]
+    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>26 skills, quality gate</i>"]
     B --> C["Save knowledge<br/><i>learn · flush</i>"]
     C --> D["Session ends<br/><i>hook leaves a marker</i>"]
     D -. "the next session starts<br/>already knowing what this one learned" .-> A
@@ -88,7 +88,7 @@ through a pull request that the owner merges**. The AI proposes; the human decid
 
 ---
 
-## The workers: 25 skills
+## The workers: 26 skills
 
 A skill is a written procedure the AI follows instead of improvising — like a
 checklist an experienced engineer would use. Each triggers when you type its command
@@ -108,6 +108,7 @@ one line of explanation.
 
 | Skill | Goal | Behavior |
 |-------|------|----------|
+| `/feature` | Pin down what is being built, and when it is done | Writes the definition into `features/`, then a linter checks it — missing sections fail, and gaps are allowed only while it is a draft |
 | `/requirements` | Turn a vague idea into a precise spec | Digs for the real problem first — users describe solutions, not problems |
 | `/architecture` | Design the system | Extracts requirements, weighs trade-offs, prefers the simplest design that works, then runs its critic checklist |
 | `/code-generation` | Production-ready code, not just "it runs" | Interface first, then happy path, edge cases, errors, tests — then the critic |
@@ -191,7 +192,7 @@ while any check fails.
 It checks: no empty documents · every link goes somewhere real · every anchor
 exists · every skill's header parses · every skill is in every catalog · stated
 counts match reality · settings files parse · the `CLAUDE.md` bridge exists · hooks
-are executable and valid.
+are executable and valid · every feature definition meets its schema.
 
 The list itself has a story: several checks exist because that exact failure
 happened once and was caught by hand. The system's rule is that **a problem found
@@ -205,9 +206,9 @@ twice by a human becomes a check run forever by the machine**.
 |------|----------------|
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks at most one question at a time, escalates instead of proceeding on anything destructive |
-| **The 25 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
+| **The 26 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
 | **The 3 hooks** | Run automatically at session start, before compaction, and at session end — the part of the memory system that needs no one to remember it |
-| **The validator + CI** | Check every proposed change against nine rules and block anything broken from reaching the main branch |
+| **The validator + CI** | Check every proposed change against eleven rules and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |
 
 ---

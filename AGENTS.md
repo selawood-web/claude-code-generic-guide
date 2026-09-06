@@ -57,6 +57,7 @@ Memory lives in four places; the first two load automatically every session.
 | `~/.claude/projects/<project>/memory/` | Auto memory: notes Claude writes itself; the `MEMORY.md` index loads each session, topic files on demand |
 | `~/.claude/memory/<project>/sessions/` | Session logs written by `/flush`, consolidated by `/dream` (read on demand) |
 | `decisions/` (in the repo) | Durable decision records and product briefs written by `/decide` and `/product-brief` — recall before re-deciding |
+| `features/` (in the repo) | Feature definitions written by `/feature` — what is being built and when it is done, checked by `tools/feature_lint.py` |
 
 **When to write to memory:**
 - A non-obvious architecture decision was made and why
@@ -102,6 +103,7 @@ untrusted sources.
 | `/deploy` | Deployment with pre-flight checklist |
 | `/dream` | Consolidate session logs into the knowledge base |
 | `/efficiency` | Audit the project against the charter's token-efficiency rules |
+| `/feature` | Feature idea into a checked, tracked definition |
 | `/flush` | Structured session summary written to the memory log |
 | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `/learn` | Explicit knowledge capture to memory |

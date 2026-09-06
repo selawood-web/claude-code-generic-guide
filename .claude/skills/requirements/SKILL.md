@@ -12,6 +12,10 @@ purpose: Vague idea → actionable spec
 ## Goal
 Transform a vague idea into a specification precise enough to implement without ambiguity.
 
+Where the output lands: when the work needs a durable, checked record, this interview feeds
+the `/feature` skill, which files it as `features/<id>-<slug>.md` and lints it. Run standalone
+only for a spec nobody needs to find again.
+
 ## Process
 
 ### Step 1 — Understand the Problem (not the solution)
