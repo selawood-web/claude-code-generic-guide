@@ -31,6 +31,12 @@ detail is missing. It asks; this skill files the answers, checks them, and keeps
 
 ## Process
 
+### Step 0 — Resuming work on a feature that already has a definition
+Read the file first, then say in one line what is still open — blocking questions, and
+ideas tagged `[open]`. Do this at the start of every session that touches a feature with a
+definition, not only when `/feature` is typed by name. A definition nobody re-reads is a
+kickoff document; a definition read at each resume is a working ledger.
+
 ### Step 1 — Size it first (the cheap path)
 State in one line whether this needs a definition at all. One-liners, copy fixes,
 dependency bumps, and bugs with an obvious correct behaviour do not — say so and go do
@@ -65,7 +71,8 @@ first, and never a question whose answer the codebase already holds.
 python3 tools/feature_lint.py features/<id>-<slug>.md
 ```
 Errors are structural and always fail. Gaps are readiness findings, tolerated while the
-status is `draft` and fatal after it. Fix and re-run until clean — a definition reported
+status is `draft` and fatal after it. An idea still tagged `[open]` is an error at `shipped`
+only — open ideas are expected while the work is live. Fix and re-run until clean — a definition reported
 as ready without a clean run is exactly the failure this skill exists to prevent.
 
 ### Step 6 — Readiness verdict
@@ -81,7 +88,23 @@ Produce the paste-ready view from [`tracker-views.md`](tracker-views.md). Render
 posted — this system does not hand off to external applications, and no tracker
 credentials are used.
 
-### Step 8 — Keep it true
+### Step 8 — Capture every idea in the turn it is raised
+This is the step that stops work from leaking. An idea, scope change, or cut raised mid-build
+— by the owner, by a reviewer, or by me — is appended to `## Ideas and changes` **in the same
+turn it is raised**, with a disposition tag. Acknowledging it in conversation is not capture:
+the conversation is compacted, the session ends, and the container is recycled; the file is
+the only part that survives all three.
+
+Capture is not deciding. `[open]` costs one line and never interrupts the build; the decision
+happens at the next natural pause, and the tag changes to `[in]`, `[deferred]` or `[dropped]`
+with its reason. Tags and their rules live in
+[`feature-template.md`](feature-template.md), *The ledger*.
+
+At close-out, no idea may still read `[open]` — the linter refuses `shipped` while one does.
+That is the whole mechanism: forgetting an idea now requires someone to actively write
+`[dropped]` next to it and say why.
+
+### Step 9 — Keep it true
 The definition is live, not an artifact of the kickoff:
 - Scope changes during the build are edits to this file, in the same commit as the code.
 - `shipped` requires the acceptance criteria verified in a deployed environment
@@ -89,7 +112,7 @@ The definition is live, not an artifact of the kickoff:
 - Once shipped, record what the outcome metric actually did. A definition whose outcome
   is never measured taught nobody anything.
 
-### Step 9 — Extract what generalizes
+### Step 10 — Extract what generalizes
 ```
 remember: [domain rule discovered while defining] — reason: [why it constrains future work]
 ```
@@ -116,6 +139,8 @@ Definitions of what we are building, written by the `/feature` skill and checked
 | Acceptance criteria as a feature list | Given / When / Then, testable as written |
 | Open questions left implicit in prose | One bullet each, with an owner and a `blocks` marker |
 | Definition written once and abandoned | It is edited in the same commit as the code that changes its scope |
+| "Good idea, noted" — and it lives only in the chat | Append it to the ledger in that turn, tagged `[open]` if the decision has to wait |
+| Quietly not building something | `[dropped]` with a reason — the record of a cut is worth as much as the cut |
 | Marking ready without running the linter | The linter is the evidence — verify before claiming |
 
 ## The quality bar

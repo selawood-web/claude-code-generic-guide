@@ -39,6 +39,10 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 - Run `/compact` proactively when context is getting large — before it forces you.
   `/flush` durable facts first; what must survive compaction is in the charter (*Efficiency*).
 - After discovering a pattern, bug class, or architecture insight worth keeping: **save it immediately** using the `learn` skill or `/flush`.
+- An idea, scope change, or cut raised mid-build goes into the feature's definition in the
+  same turn it is raised ([`.claude/skills/feature/SKILL.md`](.claude/skills/feature/SKILL.md),
+  *Capture*). Acknowledging it in conversation is not capture — the conversation is the one
+  part of this system that does not survive compaction.
 
 ### On session END (or before compaction)
 - Run `/flush` to save a structured summary of what happened.

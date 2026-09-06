@@ -108,7 +108,7 @@ one line of explanation.
 
 | Skill | Goal | Behavior |
 |-------|------|----------|
-| `/feature` | Pin down what is being built, and when it is done | Writes the definition into `features/`, then a linter checks it — missing sections fail, and gaps are allowed only while it is a draft |
+| `/feature` | Pin down what is being built, and when it is done | Writes the definition into `features/`, then a linter checks it — missing sections fail, gaps are allowed only while it is a draft, and an idea raised mid-build is appended to the file's ledger rather than left in the chat |
 | `/requirements` | Turn a vague idea into a precise spec | Digs for the real problem first — users describe solutions, not problems |
 | `/architecture` | Design the system | Extracts requirements, weighs trade-offs, prefers the simplest design that works, then runs its critic checklist |
 | `/code-generation` | Production-ready code, not just "it runs" | Interface first, then happy path, edge cases, errors, tests — then the critic |

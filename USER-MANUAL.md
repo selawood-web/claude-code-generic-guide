@@ -311,6 +311,8 @@ Then it checks itself. `tools/feature_lint.py` separates *errors* (a missing or 
 
 It calls `/requirements` for the interview when detail is missing rather than asking the same questions twice, and renders paste-ready tracker views — a project overview, or one issue per scope bullet. Views are rendered, never posted: no tracker credentials, no API calls.
 
+**The ledger — where mid-build ideas go.** The ninth section, `## Ideas and changes`, is append-only. Every idea, scope change, or cut raised while the work is in flight is written there in the turn it is raised, tagged `[open]`, `[in]`, `[deferred]` (with what it waits on) or `[dropped]` (with why). Capture is not deciding — `[open]` costs one line and never interrupts the build. At close-out the linter refuses `shipped` while any idea still reads `[open]`, which is what separates an idea consciously cut from one quietly forgotten. It exists because the conversation is the one part of this system that does not survive: it gets compacted, the session ends, the machine is recycled. The file survives all three.
+
 Small changes are told to skip it: if two reasonable engineers would build the same thing from the request, no definition is written.
 
 **Examples:**

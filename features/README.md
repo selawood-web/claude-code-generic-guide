@@ -12,6 +12,11 @@ Tracker renderings live in
 Lifecycle in one line: `draft → ready → building → shipped`, or `dropped` with the reason
 kept in the file. Gaps are tolerated in `draft` and fatal after it.
 
+Each definition ends with an append-only ledger, `## Ideas and changes`. Anything raised
+while the work is in flight is written there in the turn it is raised and tagged `[open]`,
+`[in]`, `[deferred]` or `[dropped]`; nothing reaches `shipped` while an idea still reads
+`[open]`.
+
 Downstream note: this folder is *not* copied by `install.sh`. Projects that adopt the
 skills get their own `features/` folder created by `/feature` on first use.
 
