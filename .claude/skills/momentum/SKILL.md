@@ -48,14 +48,15 @@ Success: a numbered ladder where the next `[me]` step is unambiguous.
 Execute `[me]` steps back to back. Do not report between them, do not ask
 permission to continue, do not narrate options being skipped.
 
-Only four stops are legal:
+Only four stops are legal — they are the charter's four endings (*How a turn ends*),
+applied to a running ladder:
 1. **DONE is reached and verified.**
 2. **A decision that is genuinely the user's** and materially changes the
    output — arrives as a pick-list, recommendation first.
 3. **A `[you]` step everything else now depends on** — arrives as a numbered
    manual (Step 5).
-4. **An irreversible or outward-facing action** not yet authorized (push, deploy,
-   send, delete, publish, pay).
+4. **An owner gate** — an irreversible or outward-facing action not yet authorized
+   (push, deploy, send, delete, publish, pay).
 
 Anything else — an ambiguity, a missing preference, a close call — is decided,
 stated in one line as an assumption, and left behind. Keep moving.
