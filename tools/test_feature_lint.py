@@ -50,6 +50,10 @@ Depends on the invoice service staying available during the export.
 
 ## Open questions
 - Which timezone bounds the range? — owner: finance lead, blocks: no
+
+## Ideas and changes
+- 2026-09-04 — Also export the credit notes — [in]
+- 2026-09-04 — Schedule the export monthly — [deferred] after the manual export ships
 """
 
 
@@ -186,6 +190,62 @@ class LintTests(unittest.TestCase):
     def test_garbage_does_not_raise(self):
         self.assertTrue(lint_text("", "x.md"))
         self.assertTrue(lint_text("just some prose", "x.md"))
+
+
+class LedgerTests(unittest.TestCase):
+    """The ninth section — capture in flight, close out at ship."""
+
+    # every idea carries a decision, so nothing sits in the file undecided by accident
+    def test_untagged_idea_is_a_gap(self):
+        text = COMPLETE.replace("Also export the credit notes — [in]", "Also export the credit notes")
+        self.assertTrue(any("no [open|in|deferred|dropped] tag" in m for m in messages(text)))
+
+    # a cut without a reason is the same as a forgotten one, six months later
+    def test_dropped_without_reason_is_a_gap(self):
+        text = COMPLETE.replace(
+            "- 2026-09-04 — Schedule the export monthly — [deferred] after the manual export ships",
+            "- 2026-09-04 — Schedule the export monthly — [dropped]",
+        )
+        self.assertTrue(any("gives no reason" in m for m in messages(text)))
+
+    def test_deferred_with_reason_is_clean(self):
+        self.assertEqual(lint_text(COMPLETE, "F009-bulk-invoice-export.md"), [])
+
+    # an undecided idea is expected while the work is live ...
+    def test_open_idea_allowed_while_building(self):
+        text = COMPLETE.replace("status: ready", "status: building").replace("[in]", "[open]")
+        findings = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertFalse(any(f.level == "error" for f in findings))
+
+    # ... and is the close-out failure at ship: this is the whole point of the ledger
+    def test_open_idea_blocks_shipped(self):
+        text = COMPLETE.replace("status: ready", "status: shipped").replace("[in]", "[open]")
+        findings = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertTrue(
+            any(f.level == "error" and "undecided idea" in f.message for f in findings)
+        )
+
+    def test_none_yet_is_a_valid_empty_ledger(self):
+        text = COMPLETE.replace(
+            "- 2026-09-04 — Also export the credit notes — [in]\n"
+            "- 2026-09-04 — Schedule the export monthly — [deferred] after the manual export ships",
+            "None yet.",
+        )
+        self.assertEqual(lint_text(text, "F009-bulk-invoice-export.md"), [])
+
+    # edge: a tag in the middle of the sentence still counts, and prose "in" does not
+    def test_bare_word_in_is_not_a_tag(self):
+        text = COMPLETE.replace(
+            "Also export the credit notes — [in]", "Also export the credit notes, in the same file"
+        )
+        self.assertTrue(any("no [open|in|deferred|dropped] tag" in m for m in messages(text)))
+
+    def test_missing_ledger_section_is_an_error(self):
+        text = COMPLETE.split("## Ideas and changes")[0]
+        findings = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertTrue(
+            any(f.level == "error" and "Ideas and changes" in f.message for f in findings)
+        )
 
 
 class SeverityPolicyTests(unittest.TestCase):

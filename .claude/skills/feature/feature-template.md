@@ -61,6 +61,15 @@ Every unknown, each with an owner and a blocking marker. `blocks: yes` on any qu
 holds the definition in `draft` — the linter enforces that.
 
 - [Question]? — owner: [who], blocks: no
+
+## Ideas and changes
+Append-only. Every idea, scope change, or cut raised while the work is in flight, written
+here in the turn it is raised, each carrying a bracketed disposition.
+
+- [date] — [the idea, in one line] — [in]
+- [date] — [the idea] — [deferred] until [what has to happen first]
+- [date] — [the idea] — [dropped] [why]
+- [date] — [the idea] — [open]
 ```
 
 ## Field rules
@@ -73,6 +82,26 @@ holds the definition in `draft` — the linter enforces that.
 | `owner` | A person or role accountable for the outcome, not the author of the document. |
 | `target` | A date, a quarter, or the literal `unscheduled`. An empty target is a decision nobody made. |
 
+## The ledger — why the ninth box exists
+
+The first eight boxes describe the work at the moment it was defined. The ninth keeps it
+true afterwards. An idea raised at turn 40 of a build session lives only in that
+conversation, and a conversation is the one part of this system that does not persist:
+it gets compressed, the session ends, the machine is recycled. Written into the file, the
+idea survives all three.
+
+| Tag | Means | Rule |
+|-----|-------|------|
+| `[open]` | Captured, not yet decided | Costs nothing to write — capture first, decide later. Blocks `shipped`. |
+| `[in]` | Folded into the work | The Scope and Acceptance criteria above should now reflect it. |
+| `[deferred]` | Real, but not now | Must say what it waits on, so it can be found again. |
+| `[dropped]` | Not doing it | Must say why — that reason is the answer when the idea returns. |
+
+Capture is not a decision. Writing `[open]` in the turn an idea is raised takes seconds
+and never interrupts the build; the deciding happens at the next natural pause. What is
+not allowed is the third option people actually take — nodding at the idea in
+conversation and moving on, which is indistinguishable from forgetting it.
+
 ## Status lifecycle
 
 | Status | Means | Entry condition |
@@ -80,7 +109,7 @@ holds the definition in `draft` — the linter enforces that.
 | `draft` | Being written; gaps expected | Created |
 | `ready` | Buildable as written | Linter clean and no `blocks: yes` question remains |
 | `building` | Implementation in progress | Work started; scope changes are edits to this file, in the same commit |
-| `shipped` | Live, outcome being measured | Acceptance criteria all verified in a deployed environment |
+| `shipped` | Live, outcome being measured | Acceptance criteria all verified in a deployed environment, and no idea left `[open]` — the close-out the linter enforces |
 | `dropped` | Not being built | Reason recorded in Summary; the file stays as the record |
 
 ## Sizing — when a definition is not warranted

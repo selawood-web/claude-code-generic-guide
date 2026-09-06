@@ -14,8 +14,15 @@ to the same bar:
           (frontmatter broken, a required section absent or empty).
           Always fails.
   gap   — readiness. The file is well-formed but not decided yet
-          (a TBD left in, no measurable outcome, a blocking open question).
-          Fails once `status:` has moved past `draft`, or under --strict.
+          (a TBD left in, no measurable outcome, a blocking open question,
+          an idea in the ledger with no disposition). Fails once `status:`
+          has moved past `draft`, or under --strict.
+
+The ledger ("## Ideas and changes") is the close-out: every idea raised while
+the work is in flight is appended there with a bracketed disposition tag, and
+a definition cannot reach `shipped` while any of them still reads [open]. That
+is the difference between an idea consciously cut and one quietly forgotten —
+after the fact, the two are indistinguishable without this.
 
 Usage:
   python3 tools/feature_lint.py                    # every features/*.md
@@ -44,6 +51,7 @@ REQUIRED_SECTIONS = (
     "Acceptance criteria",
     "Dependencies and risks",
     "Open questions",
+    "Ideas and changes",
 )
 
 SUMMARY_WORD_CAP = 60
@@ -56,7 +64,13 @@ PLACEHOLDER_RE = re.compile(
 # "at least one number with a unit" — 40%, 2 seconds, 500 users, 3x, $10k.
 MEASURABLE_RE = re.compile(r"\d+\s*(%|x\b|[a-z$€£]+)|[$€£]\s*\d", re.I)
 BLOCKS_RE = re.compile(r"\bblocks:\s*(yes|no)\b", re.I)
-EMPTY_ANSWER_RE = re.compile(r"^(none|n/a|nothing)\.?$", re.I)
+EMPTY_ANSWER_RE = re.compile(r"^(none|none yet|n/a|nothing)\.?$", re.I)
+
+# The ledger's disposition tag. Bracketed on purpose: "in" as a bare word
+# appears in half the sentences people write, and a tag that can be confused
+# with prose is a tag that silently passes when it should fail.
+DISPOSITION_RE = re.compile(r"\[(open|in|deferred|dropped)\]", re.I)
+NEEDS_REASON = ("deferred", "dropped")
 
 
 class Finding(NamedTuple):
@@ -222,6 +236,32 @@ def lint_text(text: str, filename: str = "") -> list[Finding]:
             elif marker.group(1).lower() == "yes" and status not in ("", "draft", "dropped"):
                 findings.append(
                     Finding("error", no, f"status '{status}' with a blocking open question: {item[:50]}")
+                )
+
+    if "ideas and changes" in sections:
+        no, body = sections["ideas and changes"]
+        items = bullets(body)
+        if not items and not EMPTY_ANSWER_RE.match(prose(body)):
+            findings.append(
+                Finding("gap", no, "ideas and changes is neither a list nor 'None yet.'")
+            )
+        for item in items:
+            tag = DISPOSITION_RE.search(item)
+            if not tag:
+                findings.append(
+                    Finding("gap", no, f"idea has no [open|in|deferred|dropped] tag: {item[:50]}")
+                )
+                continue
+            disposition = tag.group(1).lower()
+            if disposition in NEEDS_REASON and not item[tag.end():].strip(" .—-–:"):
+                findings.append(
+                    Finding("gap", no, f"[{disposition}] idea gives no reason: {item[:50]}")
+                )
+            # The close-out. An idea nobody decided on is the failure this
+            # ledger exists to catch, so shipping over one is an error, not a gap.
+            if disposition == "open" and status == "shipped":
+                findings.append(
+                    Finding("error", no, f"status 'shipped' with an undecided idea: {item[:50]}")
                 )
 
     return sorted(findings, key=lambda f: (f.line, f.level))
