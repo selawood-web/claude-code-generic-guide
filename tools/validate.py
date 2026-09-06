@@ -12,6 +12,7 @@ Checks, in order:
   8. Hook scripts pass bash -n and carry the executable bit in the git index.
   9. Always-loaded files carry no session-volatile content (cache stability).
  10. Always-loaded files link only into install.sh's copy set (drop-in contract).
+ 11. Feature definitions in features/ meet the schema (via tools/feature_lint.py).
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -389,6 +390,30 @@ def check_hooks() -> None:
                 fail(f"{path}: bash syntax error — {probe.stderr.strip()}")
 
 
+def check_features() -> None:
+    """Feature definitions, when a project has any, meet the house schema.
+
+    Delegates to tools/feature_lint.py so the rules have one home. Both the
+    directory and the linter are optional: a project that adopted the validator
+    without them is not broken by this check, it simply has nothing to lint.
+    """
+    paths = tracked("features/*.md")
+    paths = [p for p in paths if os.path.basename(p).lower() != "readme.md"]
+    if not paths:
+        return
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import feature_lint
+    except ImportError:
+        return  # linter not installed in this project — nothing to enforce
+    for path in paths:
+        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        status = feature_lint.parse_frontmatter(text)[0].get("status", "").lower()
+        for finding in feature_lint.lint_text(text, path):
+            if feature_lint.counts_as_failure(finding, status, strict=False):
+                fail(f"{path}:{finding.line}: {finding.message}")
+
+
 def main() -> int:
     check_markdown()
     check_skills()
@@ -399,6 +424,7 @@ def main() -> int:
     check_configs()
     check_claude_md_bridge()
     check_hooks()
+    check_features()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

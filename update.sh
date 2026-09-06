@@ -96,6 +96,7 @@ if [ "$USER_MODE" -eq 0 ]; then
     sync_file "${f#"$SRC"/}"
   done < <(find "$SRC/.claude/references" -type f 2>/dev/null)
   sync_file "tools/validate.py"
+  sync_file "tools/feature_lint.py"
   sync_file "tools/catalog.py"
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 fi

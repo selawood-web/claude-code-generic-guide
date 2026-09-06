@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 25 Skill workflows | Step-by-step procedures for every common dev task |
+| 26 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 25 skill workflows
+- All 26 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 25 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 26 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -296,6 +296,29 @@ The architecture critic runs automatically — any critical issues are addressed
 design an architecture for a real-time chat app
 how should I structure a multi-tenant SaaS backend?
 /architecture
+```
+
+---
+
+### `/feature` — Feature Definition
+
+**Use when:** You need to pin down what is being built and when it is done — before design, and before anyone opens an editor.
+
+**What it does:**
+Writes a definition into `features/<id>-<slug>.md` in one house schema: summary, problem, measurable outcome, scope, non-goals, Given/When/Then acceptance criteria, dependencies and risks, and open questions each carrying an owner and a blocking marker.
+
+Then it checks itself. `tools/feature_lint.py` separates *errors* (a missing or empty required section — always fatal) from *gaps* (a placeholder left in, an outcome with no number, one acceptance criterion where two are needed — tolerated while the status is `draft`, fatal after it). CI runs the same check on every pull request, so a definition marked ready is a definition that passed.
+
+It calls `/requirements` for the interview when detail is missing rather than asking the same questions twice, and renders paste-ready tracker views — a project overview, or one issue per scope bullet. Views are rendered, never posted: no tracker credentials, no API calls.
+
+Small changes are told to skip it: if two reasonable engineers would build the same thing from the request, no definition is written.
+
+**Examples:**
+```
+/feature bulk invoice export
+define this feature before we build it
+what exactly are we building here?
+/feature F001            (open, update, or re-check an existing definition)
 ```
 
 ---
