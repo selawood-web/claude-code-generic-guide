@@ -87,11 +87,9 @@ search memory for [keyword]
 
 Skills are loaded from `.claude/skills/`. Use them with `/skill-name` or they auto-invoke.
 
-Run the charter's **Skill Checker** before relying on any skill, every time, including the ones listed
-below: does it fit this task, does it work on our real input, does it stay inside the branch boundary.
-Fails any of the three — drop it, do the job directly, and say in one line why. Trusted source means
-safe to run, not good enough for this job. Skills and code are never pulled from GitHub or other
-untrusted sources.
+Run the charter's **Skill Checker** before relying on any skill, every time, including the ones
+listed below — the three questions and the verdict live there, with the procedure in
+[`.claude/references/tool-choice.md`](.claude/references/tool-choice.md).
 
 <!-- ccgg:skills:start -->
 | Skill | Purpose |
