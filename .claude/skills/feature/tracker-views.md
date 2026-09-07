@@ -4,10 +4,17 @@ The definition file is the source of truth. A tracker item is a *view* of it: th
 content, arranged the way that tool expects. Nothing here is a second home for a rule —
 every view is rendered from the file, and the file is what gets edited.
 
-**Rendered, never posted.** These views are produced as paste-ready text in the
-conversation or written to a file. This system does not hand work off to external
-applications (charter, *Standing Constraints*) — no tracker API calls, no browser
-automation, no credentials. The owner pastes.
+**Rendered, not posted — except where the charter names an exception.** By default
+these views are produced as paste-ready text in the conversation or written to a
+file, and the owner pastes: this system does not hand work off to external
+applications — no tracker API calls, no browser automation, no credentials.
+
+The charter's *Standing Constraints* is where that rule lives and where any
+exception is named. Where a project's charter names a tracker as an agreed review
+channel, render the view and post it there; everywhere else, render and hand it to
+the owner. Check the charter rather than assuming either way — and a posted item is
+still a view, so the definition file remains the source of truth and wins whenever
+the two disagree.
 
 Include the definition's path and id in every view, so a tracker item can always be
 walked back to the file that owns it.
