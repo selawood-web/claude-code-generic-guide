@@ -193,7 +193,14 @@ These travel with the charter into any project:
 - **Usual languages:** Python, JavaScript
 - **Environment:** VS Code with Claude Code
 - **Out of scope:** skills/code from GitHub or untrusted sources; external
-  app hand-offs
+  app hand-offs — with one named exception.
+- **Linear is that exception.** It is the agreed review channel: feature
+  definitions, ideas and proposals are posted there for the reviewer to carry
+  forward, and doing so needs no asking each time. Bounded — Linear only, via
+  its official MCP connector authorised as the owner over OAuth, no credential
+  in any repository, no browser automation. Every other external application
+  stays out of scope, and the render-don't-post rule in the tracker views
+  governs them.
 
 ### This repository — claude-code-generic-guide
 
