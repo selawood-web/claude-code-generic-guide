@@ -81,6 +81,7 @@ here in the turn it is raised, each carrying a bracketed disposition.
 | `status` | `draft` → `ready` → `building` → `shipped`, or `dropped`. Gaps are tolerated in `draft` only. |
 | `owner` | A person or role accountable for the outcome, not the author of the document. |
 | `target` | A date, a quarter, or the literal `unscheduled`. An empty target is a decision nobody made. |
+| `tracker` | Optional, and written by the skill rather than by hand: the URL of the tracker item this definition was posted to. Its presence is what stops a second item being created for the same `id` — see [`tracker-handoff.md`](tracker-handoff.md). The linter ignores it. |
 
 ## The ledger — why the ninth box exists
 
