@@ -14,7 +14,9 @@ exception is named. Where a project's charter names a tracker as an agreed revie
 channel, render the view and post it there; everywhere else, render and hand it to
 the owner. Check the charter rather than assuming either way — and a posted item is
 still a view, so the definition file remains the source of truth and wins whenever
-the two disagree.
+the two disagree. How a post actually happens — the preconditions, the
+`features/tracker.json` config, and how the reviewer is notified rather than merely
+assigned — is [`tracker-handoff.md`](tracker-handoff.md).
 
 Include the definition's path and id in every view, so a tracker item can always be
 walked back to the file that owns it.

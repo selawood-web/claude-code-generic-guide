@@ -83,10 +83,15 @@ Report one of two, never a hedge:
 - **Draft, blocked on N** — list exactly the blocking questions, each with the owner who
   can answer it and what happens the moment it lands.
 
-### Step 7 — Render the tracker view, if asked
-Produce the paste-ready view from [`tracker-views.md`](tracker-views.md). Rendered, never
-posted — this system does not hand off to external applications, and no tracker
-credentials are used.
+### Step 7 — Render the tracker view, and post it where that is the agreed channel
+Produce the view from [`tracker-views.md`](tracker-views.md). Whether it is handed to the
+owner or posted is the charter's call, not this skill's: *Standing Constraints* names any
+tracker that is an agreed review channel, and [`tracker-handoff.md`](tracker-handoff.md)
+carries the preconditions, the `features/tracker.json` config, and how the reviewer is
+notified. Default is render and hand over. Where the charter does name the tracker and all
+three preconditions hold, post it and notify the named reviewer in the same turn, without
+asking each time — a definition blocked on someone is only blocked once they know it
+exists.
 
 ### Step 8 — Capture every idea in the turn it is raised
 This is the step that stops work from leaking. An idea, scope change, or cut raised mid-build
