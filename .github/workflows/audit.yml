@@ -147,15 +147,35 @@ jobs:
             echo "The secret is empty."
             exit 1
           fi
-          # Pattern matching, not grep: grep treats a trailing newline as a line
-          # separator and never sees it, which is exactly the paste artifact to catch.
-          case "$key" in
-            *[!\!-~]*)
-              echo "The secret contains whitespace or a non-printable character — the paste picked up a newline or a stray byte."
-              echo "Re-set it from a file: gh secret set ANTHROPIC_API_KEY --repo <owner/name> --app actions < key.txt"
-              exit 1
-              ;;
-          esac
+          # Byte-exact and locale-proof: tr under LC_ALL=C on the raw byte stream.
+          # grep is line-based and never sees a trailing newline; a shell character
+          # range is collation-dependent. [:graph:] is printable-except-space, so
+          # what survives deletion is exactly the junk worth reporting — a space, a
+          # newline, a carriage return, a tab, or a UTF-8 byte-order mark.
+          stray=$(printf '%s' "$key" | LC_ALL=C tr -d '[:graph:]' | wc -c | tr -d ' ')
+          if [ "$stray" -gt 0 ]; then
+            echo "The secret carries $stray character(s) that do not belong in an API key."
+            # Where and what, never the key itself. The byte names the cause:
+            # 0xEF at position 1 is a UTF-8 BOM, 0x0A or 0x0D at the end is a
+            # newline from a shell redirect, 0x20 in the middle is a stray space.
+            python3 - <<'PYEOF'
+          import os
+          key = os.environ.get("ANTHROPIC_API_KEY", "")
+          bad = [(i + 1, ord(c)) for i, c in enumerate(key) if not (33 <= ord(c) <= 126)]
+          where = ", ".join(f"position {p} of {len(key)} (0x{b:02X})" for p, b in bad[:6])
+          print(f"stray bytes at: {where}")
+          first = bad[0][1] if bad else None
+          if first in (0x0A, 0x0D):
+              print("That is a newline. A shell redirect appended it — PowerShell needs -NoNewline.")
+          elif first in (0xEF, 0xFEFF):
+              print("That is a UTF-8 byte-order mark. PowerShell's > and Out-File add one unless told not to.")
+          elif first == 0x20:
+              print("That is a space. The value was split or padded somewhere.")
+          PYEOF
+            echo "Set it without a file or a redirect, which avoids every encoding path:"
+            echo "  gh secret set ANTHROPIC_API_KEY --repo <owner/name> --app actions --body \"sk-ant-...\""
+            exit 1
+          fi
           case "$key" in
             sk-ant-*) prefix="sk-ant- (expected)" ;;
             *)        prefix="NOT sk-ant-" ;;
