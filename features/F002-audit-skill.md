@@ -218,3 +218,9 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   assert both traps — [in]
 - 2026-09-16 — That same failure skipped the render, the artifact and the gate, leaving
   nothing to diagnose from. Those three steps now run with `always()` — [in]
+- 2026-09-16 — Three authenticated runs died at the first API call with a 401, and no
+  log could say whether the stored secret was mangled or the key itself was rejected.
+  The workflow now preflights before spending a run: the key's shape (length, known
+  literal prefix, whitespace or non-printable bytes) and one minimal live call that
+  reports the API's own error text. Shape facts only — no part of the value is ever
+  printed — [in]

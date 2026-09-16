@@ -129,6 +129,72 @@ jobs:
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
             --budget-usd "$BUDGET" --dry-run
 
+      # Three authenticated runs died at the first API call, and the log could not
+      # say whether the stored secret was mangled or the key itself was rejected.
+      # This answers that before a run is spent: the key's SHAPE, never any part of
+      # its value, and one minimal live call. A malformed secret fails here; a
+      # rejected key fails here with the API's own words.
+      - name: Preflight the API key
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -uo pipefail
+          key="${ANTHROPIC_API_KEY:-}"
+          # Shape only. Length and a known literal prefix are format facts, not key
+          # material, and they are what tells a truncated paste from a bad key.
+          if [ -z "$key" ]; then
+            echo "The secret is empty."
+            exit 1
+          fi
+          # Pattern matching, not grep: grep treats a trailing newline as a line
+          # separator and never sees it, which is exactly the paste artifact to catch.
+          case "$key" in
+            *[!\!-~]*)
+              echo "The secret contains whitespace or a non-printable character — the paste picked up a newline or a stray byte."
+              echo "Re-set it from a file: gh secret set ANTHROPIC_API_KEY --repo <owner/name> --app actions < key.txt"
+              exit 1
+              ;;
+          esac
+          case "$key" in
+            sk-ant-*) prefix="sk-ant- (expected)" ;;
+            *)        prefix="NOT sk-ant-" ;;
+          esac
+          echo "key shape: ${#key} characters, prefix ${prefix}"
+          if [ "${#key}" -lt 90 ]; then
+            echo "That is shorter than an Anthropic API key normally runs (~100+), which is what a truncated paste looks like."
+          fi
+
+          # One minimal call. Cheaper than an audit run, and definitive.
+          code=$(curl -sS -o "$RUNNER_TEMP/preflight.json" -w '%{http_code}' \
+            https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $key" \
+            -H "anthropic-version: 2023-06-01" \
+            -H "content-type: application/json" \
+            -d '{"model":"claude-haiku-4-5-20251001","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}' \
+            || echo "000")
+          echo "api preflight: HTTP $code"
+          if [ "$code" = "200" ]; then
+            echo "The key authenticates. Anything that fails after this is the run, not the credential." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # The API's own error text, which names the problem better than a guess.
+          python - "$RUNNER_TEMP/preflight.json" <<'PY' || true
+          import json, sys
+          try:
+              with open(sys.argv[1], encoding="utf-8") as fh:
+                  body = json.load(fh)
+              err = body.get("error") or {}
+              print(f"api says: {err.get('type', '?')} — {err.get('message', body)}")
+          except Exception:
+              print("api returned a body that is not JSON")
+          PY
+          {
+            echo "The stored ANTHROPIC_API_KEY does not authenticate (HTTP $code)."
+            echo "The shape above says whether the secret is mangled; anything else means the key itself needs replacing."
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          exit 1
+
       - name: Install Claude Code
         if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
