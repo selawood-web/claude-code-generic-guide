@@ -89,8 +89,10 @@ being able to change anything.
   audited repository's hooks, `env` block, and tool grants never execute, and this is
   visible in the run's JSON result
 - Given a specialist subagent, when its definition in `.claude/agents/` is read, then its
-  `tools` field names only `Read`, `Glob`, `Grep`, and an explicit `Bash` allow-list of
-  read-only commands, and `tools/validate.py` fails on any other value
+  `tools` field is exactly `Read, Glob, Grep` with `omitClaudeMd: true`, and
+  `tools/validate.py` fails on any other value; only the verifier carries `Bash`, and it
+  carries `isolation: worktree` and `disallowedTools` naming `Write`, `Edit`, and
+  `NotebookEdit`
 - Given a fresh CCGG install into an empty repository, when `install.sh` runs, then the
   skill, the subagent definitions, and the probe harness are present, and the validator
   passes in the target on the first run
@@ -103,6 +105,10 @@ being able to change anything.
   `--max-turns`, `--max-budget-usd`, `--output-format json`), all verified against the
   official reference on 2026-09-16; a rename in either breaks the skill, and the
   currency check inside the audit is the early signal
+- Depends on `worktree.baseRef` set to `head` in the audit's settings, because a subagent
+  worktree otherwise branches from the remote default branch and the verifier would
+  reproduce findings against the wrong commit; a worktree carries committed files only,
+  so the audit runs on committed HEAD and the preflight says what is uncommitted
 - Depends on `install.sh`, `update.sh`, and `tools/validate.py` learning a new CCGG-owned
   directory, `.claude/agents/`; today neither script copies it, and the drop-in contract
   in the charter bounds what rule files may link to
@@ -144,3 +150,11 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   a reviewer actually acts on
 - 2026-09-16 — An auto-fix mode inside the audit run — [dropped] the read-only guarantee
   is the feature; fixes belong to a separate owner-invoked run against the report
+- 2026-09-16 — Specialists carry no `Bash` at all and the verifier alone executes, inside
+  a worktree, because a subagent's `tools` field cannot narrow Bash to a command list —
+  a specifier removes the whole tool — [in]
+- 2026-09-16 — The report directory is ignored by default with its own `.gitignore`,
+  matching the shipped scanner; keeping a report is a deliberate `git add -f` — [in]
+- 2026-09-16 — Slice 1 ships the probe harness in CI, the deterministic facts script,
+  the harness specialist, and the verifier; the other five specialists are slice 2 and
+  the headless CI job is slice 3, per the architecture record — [in]
