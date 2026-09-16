@@ -1,0 +1,203 @@
+name: audit
+
+# The headless half of /ccgg-audit (F002 slice 3). An audit is invoked, never
+# automatic: the skill carries `disable-model-invocation: true` for the same
+# reason this workflow does not run on every push. Start it by hand, or put the
+# `audit` label on a pull request.
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "all, harness, process, product, or a path"
+        type: string
+        default: all
+      budget_usd:
+        description: "hard spend cap for the run"
+        type: string
+        default: "10"
+      dry_run:
+        description: "assemble and render only — no model run, no spend"
+        type: boolean
+        default: false
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read          # the audit reads the tree and never writes to it
+  pull-requests: write    # one comment carrying the report
+
+concurrency:
+  group: audit-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    # A labeled pull request, or a manual run. Never a fork: GitHub withholds
+    # secrets from fork pull requests, so the run could only fail at auth.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (contains(github.event.pull_request.labels.*.name, 'audit') &&
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0   # the verifier's worktree and the base-ref guard both need history
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+
+      - name: Settings
+        id: settings
+        env:
+          SCOPE: ${{ inputs.scope || 'all' }}
+          BUDGET: ${{ inputs.budget_usd || '10' }}
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          # An environment value is data: keep it out of the step summary and out
+          # of any path that a later step interpolates into a shell.
+          case "$SCOPE" in
+            all|harness|process|product) ;;
+            *) if [ ! -e "$SCOPE" ]; then echo "scope is neither a layer nor a path in this repository"; exit 1; fi ;;
+          esac
+          case "$BUDGET" in
+            ''|*[!0-9.]*) echo "budget must be a number"; exit 1 ;;
+          esac
+          {
+            echo "scope=$SCOPE"
+            echo "budget=$BUDGET"
+            echo "stamp=CCGG-AUDIT-$(date -u +%Y%m%dT%H%M%SZ)"
+          } >> "$GITHUB_OUTPUT"
+          # Bare mode reads ANTHROPIC_API_KEY and nothing else: it never opens the
+          # keychain or an OAuth credential, which is the point of running bare.
+          if [ -n "${KEY:-}" ]; then
+            echo "authenticated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authenticated=false" >> "$GITHUB_OUTPUT"
+            echo "No ANTHROPIC_API_KEY — the deterministic stage runs and the model run is skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # No model, no spend: the facts, the gate's catch rate, and the channel
+      # inventory. These artifacts are what the specialists read.
+      - name: Deterministic stage
+        env:
+          STAMP: ${{ steps.settings.outputs.stamp }}
+          SCOPE: ${{ steps.settings.outputs.scope }}
+        run: |
+          set -euo pipefail
+          python tools/audit_facts.py --out "$STAMP" --scope "$SCOPE"
+          python tools/audit_probes.py --out "$STAMP" || true
+          case "$SCOPE" in
+            all|harness) python tools/audit_redteam.py --out "$STAMP" || true ;;
+          esac
+
+      # The verifier is the one agent that executes, and its guard must not come
+      # from the tree under audit — a pull request could otherwise ship a guard
+      # that permits everything. Take it from the base branch the maintainers own.
+      - name: Trusted copy of the verifier guard
+        id: guard
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/audit-verifier-guard.sh"
+          src=".claude/hooks/audit-verifier-guard.sh"
+          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA:$src" 2>/dev/null; then
+            git show "$BASE_SHA:$src" > "$dest"
+            echo "guard taken from the base branch, not from the audited head"
+          else
+            cp "$src" "$dest"
+            echo "no base ref (manual run on a branch the maintainers own); guard taken from the checkout"
+          fi
+          chmod +x "$dest"
+          echo "path=$dest" >> "$GITHUB_OUTPUT"
+
+      # Nothing to run (no key, or a deliberate dry run): still assemble, so the
+      # command, the agents JSON and the orchestrator prompt are on the record.
+      - name: Assemble the headless run
+        if: steps.settings.outputs.authenticated != 'true' || inputs.dry_run == true
+        env:
+          STAMP: ${{ steps.settings.outputs.stamp }}
+          SCOPE: ${{ steps.settings.outputs.scope }}
+          GUARD: ${{ steps.guard.outputs.path }}
+          BUDGET: ${{ steps.settings.outputs.budget }}
+        run: |
+          python tools/audit_headless.py \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
+            --budget-usd "$BUDGET" --dry-run
+
+      - name: Install Claude Code
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+
+      # The same launcher a maintainer runs locally, with the same assembled command:
+      # auto-discovery off, agents inline, grants taken from the skill, budget capped.
+      # `--agents` takes literal JSON, so it is passed as one argument, never a path.
+      - name: Headless audit
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        env:
+          STAMP: ${{ steps.settings.outputs.stamp }}
+          SCOPE: ${{ steps.settings.outputs.scope }}
+          GUARD: ${{ steps.guard.outputs.path }}
+          BUDGET: ${{ steps.settings.outputs.budget }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          npm install -g @anthropic-ai/claude-code
+          python tools/audit_headless.py \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --budget-usd "$BUDGET"
+
+      # The report is rendered from findings.jsonl by a script, not written by the
+      # model: a candidate no verifier reached still appears, tagged unverified.
+      - name: Render the report
+        id: report
+        env:
+          STAMP: ${{ steps.settings.outputs.stamp }}
+        run: |
+          set -euo pipefail
+          stamp="$STAMP"
+          python tools/audit_report.py --dir "$stamp" || true
+          if [ ! -f "$stamp/REPORT.md" ]; then
+            {
+              echo "# CCGG audit report"
+              echo
+              echo "_No report was rendered: the run produced no findings file._"
+            } > "$stamp/REPORT.md"
+          fi
+          blockers=$(grep -c '^### 🔴' "$stamp/REPORT.md" || true)
+          echo "blockers=${blockers:-0}" >> "$GITHUB_OUTPUT"
+
+      # The audit never pushes. Its output leaves as an artifact and one comment.
+      - name: Upload the report directory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ccgg-audit-${{ steps.settings.outputs.stamp }}
+          path: ${{ steps.settings.outputs.stamp }}/
+          retention-days: 14
+
+      - name: Comment the report on the pull request
+        if: github.event_name == 'pull_request'
+        continue-on-error: true   # a failed comment must not bury the findings
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STAMP: ${{ steps.settings.outputs.stamp }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python tools/audit_pr_comment.py \
+            --file "$STAMP/REPORT.md" --repo "$REPO" --pr "$PR" --run-url "$RUN_URL"
+
+      - name: Fail on a blocker
+        env:
+          BLOCKERS: ${{ steps.report.outputs.blockers }}
+        run: |
+          if [ "${BLOCKERS:-0}" -gt 0 ]; then
+            echo "The audit reported $BLOCKERS blocker(s) — see the report comment or the artifact."
+            exit 1
+          fi
+          echo "No blocker in this run."
