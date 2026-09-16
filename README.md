@@ -81,6 +81,15 @@ Set `CCGG_HOME` to your local clone of this guide (e.g. in each project's
 `CCGG_REPO` is optional: when set and `CCGG_HOME` doesn't exist yet (a fresh
 machine, a cloud session), the hook shallow-clones the guide there first — so the
 same committed settings work on every machine that can reach the guide repo.
+**Set `CCGG_REF` with it** — a tag or branch of the guide you control:
+```json
+{ "env": { "CCGG_HOME": "/path/to/ccgg", "CCGG_REPO": "https://github.com/<owner>/claude-code-generic-guide.git", "CCGG_REF": "v1" } }
+```
+This is a trust boundary, stated plainly: whatever that revision's `update.sh`
+does runs in every session of the project with your permissions, and under
+`claude -p` with no trust dialog. The hook therefore clones only at `CCGG_REF`,
+`update.sh` fetches only that ref, and the sync is skipped with a printed line
+when the clone is not at it. Without `CCGG_REF`, the hook refuses to clone at all.
 The session-start hook then runs `update.sh` on every session start, resume, and
 compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
 files (skills, hooks, validator) in the project. Rules files you customized

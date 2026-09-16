@@ -1,8 +1,7 @@
 ---
 name: architecture
 description: Design system architecture with trade-off analysis. Use when the user wants to "design a system", "architect a solution", "plan the tech stack", or asks "how should I structure this".
-when-to-use: design architecture, system design, tech stack, structure the app, design the system
-allowed-tools: powershell, bash
+when_to_use: design architecture, system design, tech stack, structure the app, design the system
 argument-hint: "[system or feature to design]"
 purpose: System design with trade-off analysis
 ---

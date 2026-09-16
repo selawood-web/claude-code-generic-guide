@@ -1,8 +1,7 @@
 ---
 name: testing
 description: Generate comprehensive tests for code. Use when the user says "write tests", "add tests", "test coverage", "unit tests", "integration tests", or "test this function/module".
-when-to-use: write tests, add tests, test coverage, unit tests, integration tests, TDD
-allowed-tools: powershell, bash
+when_to_use: write tests, add tests, test coverage, unit tests, integration tests, TDD
 argument-hint: "[file, module, or function to test]"
 purpose: Test suite generation (unit/integration/E2E)
 ---

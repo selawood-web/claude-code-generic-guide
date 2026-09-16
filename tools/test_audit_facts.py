@@ -164,11 +164,23 @@ class HookRegistrationTests(unittest.TestCase):
 
 
 class HookStdoutTests(unittest.TestCase):
-    def test_echo_on_precompact_flagged(self):
+    def test_agent_instruction_on_precompact_flagged(self):
         facts = Facts()
         hook_stdout_facts(SETTINGS, lambda n: 'echo "run /flush"\n' if n == "b.sh" else "exit 0\n", VOCAB, facts)
         self.assertEqual(len(findings(facts, "hook-stdout")), 1)
         self.assertIn("PreCompact", findings(facts)[0].evidence)
+
+    def test_summary_instruction_on_precompact_is_ok(self):
+        facts = Facts()
+        hook_stdout_facts(SETTINGS, lambda n: 'echo "Preserve open threads and decisions"\n' if n == "b.sh" else "exit 0\n", VOCAB, facts)
+        self.assertEqual(findings(facts, "hook-stdout"), [])
+        self.assertTrue(any(f.status == "ok" and "summary" in f.evidence for f in facts.items))
+
+    def test_echo_on_other_debug_only_event_flagged(self):
+        facts = Facts()
+        settings = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": ".claude/hooks/s.sh"}]}]}}
+        hook_stdout_facts(settings, lambda n: 'echo "remember to test"\n', VOCAB, facts)
+        self.assertEqual(len(findings(facts, "hook-stdout")), 1)
 
     def test_echo_on_session_start_fine(self):
         facts = Facts()

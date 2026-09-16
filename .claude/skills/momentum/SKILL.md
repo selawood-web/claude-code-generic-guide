@@ -1,8 +1,7 @@
 ---
 name: momentum
 description: Drive a task to completion without stalling — every reply names the next step, work continues until the whole task is done, and a real blocker arrives as one precise, answerable request. Use when the user says "momentum", "keep going", "don't stop", "what's the next step", or when a task will span more than one turn.
-when-to-use: momentum, keep going, don't stop, next step, drive to done, no stalling, finish it
-allowed-tools: powershell, bash
+when_to_use: momentum, keep going, don't stop, next step, drive to done, no stalling, finish it
 argument-hint: "[optional: the task to drive to completion]"
 purpose: Drive a task to done — next step always named, blockers asked precisely
 ---

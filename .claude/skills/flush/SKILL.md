@@ -1,8 +1,7 @@
 ---
 name: flush
 description: Write a structured summary of the current session to the memory log so future sessions can recall it. Use when the user says "flush", "save this session", "write a session summary", before context compaction, or at the end of a productive session.
-when-to-use: flush, save session, session summary, before compact, end of session, preserve context
-allowed-tools: powershell, bash
+when_to_use: flush, save session, session summary, before compact, end of session, preserve context
 argument-hint: "[optional: topics to emphasize in the summary]"
 purpose: Structured session summary written to the memory log
 ---
@@ -65,6 +64,6 @@ Success: the file exists and contains today's summary. Read it back to confirm.
 For each item under "Worth remembering", ask: is this a reusable principle or a one-off fact? Reusable principles go to `MEMORY.md` via the `learn` skill now — session logs get archived, `MEMORY.md` is what future sessions read first.
 
 ## When to run
-- Before `/compact` (the pre-compact hook reminds you)
+- Before `/compact` — the pre-compact hook can only shape the summary, not run this skill; flush first, then compact
 - At the end of any session that made decisions or discoveries
 - Skip for trivial sessions — an empty summary is noise, not memory

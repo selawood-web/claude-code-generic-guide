@@ -64,8 +64,16 @@ TARGET="$(cd "$TARGET" && pwd)"
 # The guide repo itself needs no sync from itself.
 if [ "$TARGET" = "$SRC" ]; then exit 0; fi
 
-# Refresh the guide clone so the sync carries the latest merged master.
-git -C "$SRC" pull --ff-only -q 2>/dev/null || true
+# Refresh the guide clone. With CCGG_REF set (the session-start hook's pin), fetch
+# exactly that tag or branch and check it out detached, so the sync never drifts
+# past the pinned revision; without it, follow the clone's own branch.
+if [ -n "${CCGG_REF:-}" ]; then
+  git -C "$SRC" fetch -q --depth 1 --force origin "+${CCGG_REF}:refs/ccgg/pin" 2>/dev/null \
+    && git -C "$SRC" checkout -q --detach refs/ccgg/pin 2>/dev/null \
+    || echo "ccgg update: could not fetch $CCGG_REF from origin; syncing the clone as it is"
+else
+  git -C "$SRC" pull --ff-only -q 2>/dev/null || true
+fi
 
 changed=0
 sync_file() { # $1 = path under SRC; $2 = path under TARGET (defaults to $1)

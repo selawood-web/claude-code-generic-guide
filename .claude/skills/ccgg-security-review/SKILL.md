@@ -1,8 +1,7 @@
 ---
 name: ccgg-security-review
 description: Perform a security-focused review of code changes or the full codebase. Use when the user asks for a "security review", "security audit", "check for vulnerabilities", or "is this secure".
-when-to-use: security review, security audit, check security, vulnerabilities, is this secure, OWASP
-allowed-tools: powershell, bash
+when_to_use: security review, security audit, check security, vulnerabilities, is this secure, OWASP
 argument-hint: "[file, PR, or scope to review]"
 purpose: OWASP-based security audit
 ---

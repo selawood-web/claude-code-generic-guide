@@ -1,8 +1,7 @@
 ---
 name: wire
 description: Roll CCGG into another repository in one command — clone it, run the guide's installer, add the live-sync env config, validate, and open the PR. Use when the user says "wire <repo>", "install ccgg into", "roll ccgg out to", or "set up ccgg in my other project".
-when-to-use: wire, install ccgg into, roll out ccgg, set up ccgg in, add ccgg to project, connect project to ccgg
-allowed-tools: powershell, bash
+when_to_use: wire, install ccgg into, roll out ccgg, set up ccgg in, add ccgg to project, connect project to ccgg
 argument-hint: "[repo name or path to wire]"
 purpose: "Roll CCGG into another repo: install, live-sync config, validated PR"
 ---
@@ -44,7 +43,8 @@ one — add the keys):
 ```json
 { "env": {
     "CCGG_HOME": "/tmp/ccgg-guide",
-    "CCGG_REPO": "<the guide repo's clone URL>"
+    "CCGG_REPO": "<the guide repo's clone URL>",
+    "CCGG_REF": "<a tag or branch of the guide the owner controls — the pin the hook trusts>"
 } }
 ```
 Every future session start then auto-clones the guide if absent and syncs the

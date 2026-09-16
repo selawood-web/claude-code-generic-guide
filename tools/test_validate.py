@@ -186,9 +186,6 @@ class StripCodeBlocksTests(unittest.TestCase):
         self.assertEqual(strip_code_blocks(["a", "```", "x"]), ["a", "", ""])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class AgentFrontmatterTests(unittest.TestCase):
     """Check 12 — the F002 read-only boundary for audit agents."""
@@ -255,3 +252,63 @@ class ParseFrontmatterFieldsTests(unittest.TestCase):
     def test_split_tool_list_keeps_names_drops_specifiers(self):
         self.assertEqual(validate.split_tool_list("Read, Bash(git *) Grep"), {"Read", "Bash", "Grep"})
         self.assertEqual(validate.split_tool_list(""), set())
+
+
+class SkillSemanticsTests(unittest.TestCase):
+    """Check 13 — keys the product reads, tools the product has."""
+
+    VOCAB = {"skill_keys": ["name", "description", "when_to_use", "allowed-tools", "disallowed-tools"],
+             "tools": ["Read", "Bash", "Grep"]}
+
+    def test_clean_frontmatter(self):
+        fields = {"name": "x", "description": "d", "when_to_use": "t", "allowed-tools": "Read Bash(git *)", "purpose": "p"}
+        self.assertEqual(validate.skill_semantics_problems("s.md", fields, self.VOCAB), [])
+
+    def test_hyphenated_variant_named(self):
+        problems = validate.skill_semantics_problems("s.md", {"when-to-use": "t"}, self.VOCAB)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("'when_to_use'", problems[0])
+
+    def test_unknown_tool_named(self):
+        problems = validate.skill_semantics_problems("s.md", {"allowed-tools": "powershell, bash"}, self.VOCAB)
+        self.assertEqual(len(problems), 2)
+        self.assertIn("'powershell'", problems[0])
+
+    def test_mcp_and_wildcard_accepted(self):
+        self.assertEqual(validate.skill_semantics_problems("s.md", {"allowed-tools": "mcp__github__x *"}, self.VOCAB), [])
+
+    def test_empty_fields(self):
+        self.assertEqual(validate.skill_semantics_problems("s.md", {}, self.VOCAB), [])
+
+    def test_key_spelling_variant(self):
+        self.assertEqual(validate.key_spelling_variant("When_To_Use", ["when_to_use"]), "when_to_use")
+        self.assertIsNone(validate.key_spelling_variant("purpose", ["when_to_use"]))
+
+
+class FetchExecTests(unittest.TestCase):
+    """Check 14 — no unpinned clone, no download piped into a shell."""
+
+    def test_pinned_clone_ok(self):
+        self.assertEqual(validate.fetch_exec_problems("h.sh", 'git clone --depth 1 --branch "$REF" "$URL" dir\n'), [])
+
+    def test_unpinned_clone_flagged(self):
+        problems = validate.fetch_exec_problems("h.sh", 'git clone -q "$URL" dir\n')
+        self.assertEqual(len(problems), 1)
+        self.assertIn("h.sh:1", problems[0])
+
+    def test_curl_to_shell_flagged(self):
+        problems = validate.fetch_exec_problems("h.sh", "curl -s http://x/y.sh | sh\n")
+        self.assertEqual(len(problems), 1)
+
+    def test_curl_to_file_ok(self):
+        self.assertEqual(validate.fetch_exec_problems("h.sh", "curl -s http://x/y -o out.txt\n"), [])
+
+    def test_comment_ignored(self):
+        self.assertEqual(validate.fetch_exec_problems("h.sh", "# never: curl x | sh\n"), [])
+
+    def test_empty(self):
+        self.assertEqual(validate.fetch_exec_problems("h.sh", ""), [])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -12,7 +12,7 @@ from; the full evidence stays in the research file.
 
 ### Documented-but-dead is the modal harness defect
 **Principle**: A mechanism in a rules or config file is not present until the product is shown to read it. Text that the product ignores fails silently, and silent failure is the default for every file no compiler executes.
-**Learned from**: This repository's pre-compact hook "signals the AI" on a channel the product routes to a debug log; every skill carries a `when-to-use` key while the product reads `when_to_use`; the tool grant names no tool the product has. All three passed the validator.
+**Learned from**: This repository's pre-compact hook "signals the AI" on a channel that only reaches the compaction summarizer; every skill carried a `when-to-use` key while the product reads `when_to_use`; the tool grant named no tool the product has. All three passed the validator until checks 13 and 14 landed.
 **Detection**: For each mechanism, name the product surface that consumes it and verify against the current reference, not memory. Then exercise it once in a live session.
 **Tags**: #harness #verification #currency
 
@@ -49,8 +49,13 @@ from; the full evidence stays in the research file.
 
 ### Findings need a verifier that is not the hunter
 **Principle**: A second opinion from the same context is not verification. A finding is verified when something outside the model reproduces it — a failing test, a triggered path, a killed mutant — or it carries an *unverified* tag.
-**Learned from**: Every shipped scanner that publishes a false-positive strategy converges on this: independent verifier agents, sandbox reproduction, re-running the analyser on the fix. Multi-agent review without checkable evidence collapses into false consensus.
+**Learned from**: Every shipped scanner that publishes a false-positive strategy converges on this: independent verifier agents, sandbox reproduction, re-running the analyser on the fix. Multi-agent review without checkable evidence collapses into false consensus. The first live run of this repository's own audit proved it: the specialist and the research both said PreCompact stdout is discarded; the verifier read the installed product and found it feeds the compaction summarizer — same defect, different mechanism, different fix.
 **Tags**: #verification #multi-agent #false-positives
+
+### A documentation summary is not the product
+**Principle**: A fetched page summarised by a model is one more model output. When a claim about product behaviour decides a fix, the oracle is the product itself — its binary, a live session, or the reference quoted verbatim.
+**Learned from**: The research's suggested fix for the pre-compact hook ("emit `additionalContext` JSON, documented for PreCompact") came from a lossy summary of the hooks reference; the verifier found no such output path in two installed versions.
+**Tags**: #currency #verification #oracle
 
 ### A verified deterministic finding closes as a check, not a fix
 **Principle**: Fixing the instance leaves the class. If the finding could have been caught by a script, the pull request that fixes it also adds the script and its fixture test.

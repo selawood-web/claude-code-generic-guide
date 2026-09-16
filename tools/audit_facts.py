@@ -11,7 +11,8 @@ two files into the report directory:
 
 Checks (the four the 2026-09-16 audit found missing come first):
   hook-registration   settings.json ↔ .claude/hooks/ in both directions; unknown events
-  hook-stdout         hooks whose stdout never reaches the model yet print to it
+  hook-stdout         hooks that print for the model on an event whose stdout never reaches it
+                      (PreCompact stdout feeds the compaction summarizer, nothing else)
   hidden-characters   zero-width, bidi, soft hyphen, BOM in files read as instructions
   frontmatter         skill and agent keys against the documented vocabulary; tool names;
                       empty descriptions; specifiers in fields that cannot take them
@@ -272,10 +273,22 @@ def hook_stdout_facts(settings: dict, read_script, vocab: dict, facts: Facts) ->
                 continue
             prints = [ln.strip() for ln in text.splitlines()
                       if re.match(r"\s*(echo|printf)\b", ln) and not re.search(r">\s*\S", ln)]
-            if prints and "additionalContext" not in text:
-                facts.add("hook-stdout", "finding", f".claude/hooks/{name}",
-                          f"prints on {event}, whose plain stdout never reaches the model: {prints[0][:80]}",
-                          "class: dead-mechanism; use JSON additionalContext, or a SessionStart matcher, if the model must see it")
+            if not prints:
+                continue
+            if event == "PreCompact":
+                # PreCompact stdout is handed to the compaction model as summary
+                # instructions; it is dead only when it addresses the agent.
+                commands = COMMAND_REF_RE.findall(" ".join(prints)) or re.findall(r"(?<![\w/])/([a-z][a-z0-9-]+)\b", " ".join(prints))
+                if commands:
+                    facts.add("hook-stdout", "finding", f".claude/hooks/{name}",
+                              f"prints on PreCompact an instruction to the agent (/{commands[0]}); PreCompact stdout only reaches the compaction summarizer",
+                              "class: dead-mechanism; write summary instructions instead, and move any agent-facing reminder to a SessionStart matcher")
+                else:
+                    facts.add("hook-stdout", "ok", f".claude/hooks/{name}", "PreCompact stdout shapes the compaction summary")
+                continue
+            facts.add("hook-stdout", "finding", f".claude/hooks/{name}",
+                      f"prints on {event}, whose stdout goes to the debug log, never to the model: {prints[0][:80]}",
+                      "class: dead-mechanism; only SessionStart, UserPromptSubmit, UserPromptExpansion and PostModelSwitch stdout reach the model")
 
 
 def command_references(text: str) -> set[str]:

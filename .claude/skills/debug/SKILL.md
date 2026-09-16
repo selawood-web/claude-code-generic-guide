@@ -1,8 +1,7 @@
 ---
 name: debug
 description: Systematically debug an issue, error, or unexpected behavior. Use when the user describes a bug, an error message, "this doesn't work", "something is wrong", or "why is this happening".
-when-to-use: debug, fix bug, error, exception, not working, broken, unexpected behavior
-allowed-tools: powershell, bash
+when_to_use: debug, fix bug, error, exception, not working, broken, unexpected behavior
 argument-hint: "[error message or description of the problem]"
 purpose: Systematic root cause analysis
 ---

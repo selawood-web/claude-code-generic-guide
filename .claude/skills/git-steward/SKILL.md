@@ -1,8 +1,7 @@
 ---
 name: git-steward
 description: Bootstrap and automatically manage a project's git lifecycle — name a new project, create its GitHub repository, and take ongoing responsibility for commits, branches, and pushes without being asked each time. Use when the user says "new project", "set up git", "create a repo", "put this on GitHub", or wants git handled automatically.
-when-to-use: new project, set up git, create a repo, put this on github, init the project, handle git for me, git automatically
-allowed-tools: powershell, bash
+when_to_use: new project, set up git, create a repo, put this on github, init the project, handle git for me, git automatically
 argument-hint: "[optional: project purpose or preferred name]"
 purpose: Name a new project, create its GitHub repo, own the git lifecycle automatically
 ---

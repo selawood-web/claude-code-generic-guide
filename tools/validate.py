@@ -16,6 +16,11 @@ Checks, in order:
  12. Subagent definitions in .claude/agents/ parse, and the audit's agents keep the
      read-only boundary F002 promises (no Bash outside the verifier, worktree
      isolation and write tools removed on the verifier, CLAUDE.md omitted).
+ 13. Skill frontmatter means what it says: no key that is a spelling variant of a
+     documented product key (`when-to-use` for `when_to_use`), and every tool a
+     skill grants is a tool the product has (`powershell, bash` grants nothing).
+ 14. No hook or shell script clones without a pinned ref, or pipes a download into
+     a shell — a session-start hook that does either executes remote code unseen.
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -32,7 +37,13 @@ ROOT = subprocess.check_output(
     ["git", "rev-parse", "--show-toplevel"], text=True, encoding="utf-8"
 ).strip()
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
-SKILL_KEYS = ("name", "description", "when-to-use", "allowed-tools", "argument-hint", "purpose")
+SKILL_KEYS = ("name", "description", "when_to_use", "argument-hint", "purpose")
+VOCAB_PATH = os.path.join("tools", "audit_vocab.json")
+# A hook that clones without a pinned ref, or pipes a download into a shell, runs
+# whatever the remote serves at that moment — with the user's permissions.
+GIT_CLONE_RE = re.compile(r"\bgit\s+clone\b")
+CLONE_PIN_RE = re.compile(r"(--branch|-b\s|--revision)")
+FETCH_TO_SHELL_RE = re.compile(r"\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(sh|bash|zsh)\b")
 
 findings: list[str] = []
 
@@ -143,6 +154,79 @@ def frontmatter_scalar_problem(line: str) -> str | None:
     if ": " in value:
         return f"unquoted value contains ': ' — wrap it in double quotes: {line.strip()}"
     return None
+
+
+def load_vocab() -> dict | None:
+    """tools/audit_vocab.json — the documented product surface checks 13 compare against."""
+    try:
+        with open(os.path.join(ROOT, VOCAB_PATH), encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def key_spelling_variant(key: str, documented: list[str]) -> str | None:
+    """The documented key this one is a hyphen/underscore/case variant of, or None."""
+    norm = key.replace("-", "").replace("_", "").lower()
+    for doc in documented:
+        if doc != key and doc.replace("-", "").replace("_", "").lower() == norm:
+            return doc
+    return None
+
+
+def skill_semantics_problems(path: str, fields: dict[str, str], vocab: dict) -> list[str]:
+    """Check 13, as messages: variant keys and unknown tool names in one skill's frontmatter."""
+    problems = []
+    for key in fields:
+        variant = key_spelling_variant(key, vocab["skill_keys"])
+        if variant:
+            problems.append(f"{path}: frontmatter key '{key}' is not read by Claude Code — the documented key is '{variant}'")
+    known = set(vocab["tools"])
+    for field in ("allowed-tools", "disallowed-tools"):
+        value = fields.get(field, "")
+        for entry in re.split(r"[,\s]+", re.sub(r"\([^)]*\)", "", value.strip("[] "))):
+            entry = entry.strip().strip("'\"")
+            if entry and entry != "*" and not entry.startswith("mcp__") and entry not in known:
+                problems.append(f"{path}: {field} names '{entry}', which is not a Claude Code tool — the grant applies to nothing")
+    return problems
+
+
+def check_skill_semantics() -> None:
+    skills = tracked(".claude/skills/*/SKILL.md")
+    if not skills:
+        return
+    vocab = load_vocab()
+    if vocab is None:
+        fail(f"{VOCAB_PATH}: missing or unreadable — install.sh and update.sh ship it; skill semantics not checked")
+        return
+    for path in skills:
+        lines = open(os.path.join(ROOT, path), encoding="utf-8").read().splitlines()
+        fields, _ = parse_frontmatter_fields(lines)
+        if fields is None:
+            continue  # check_skills already reported the structural problem
+        for problem in skill_semantics_problems(path, fields, vocab):
+            fail(problem)
+
+
+def fetch_exec_problems(path: str, text: str) -> list[str]:
+    """Check 14, as messages: unpinned clones and download-to-shell pipes in one script."""
+    problems = []
+    for no, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if GIT_CLONE_RE.search(line) and not CLONE_PIN_RE.search(line):
+            problems.append(f"{path}:{no}: git clone without --branch/--revision — pin the ref a session executes")
+        if FETCH_TO_SHELL_RE.search(line):
+            problems.append(f"{path}:{no}: downloads and pipes into a shell — never execute what a remote serves unseen")
+    return problems
+
+
+def check_fetch_exec() -> None:
+    for path in dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh")):
+        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        for problem in fetch_exec_problems(path, text):
+            fail(problem)
 
 
 def check_skills() -> None:
@@ -492,7 +576,9 @@ def check_features() -> None:
 def main() -> int:
     check_markdown()
     check_skills()
+    check_skill_semantics()
     check_agents()
+    check_fetch_exec()
     check_catalogs()
     check_context_budget()
     check_volatile_content()

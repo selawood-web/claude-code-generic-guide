@@ -8,17 +8,38 @@
 # absent, so this script is safe in any project that copies .claude/ in.
 set -uo pipefail
 
-# Live update: pull CCGG-owned files (skills, hooks, validator) from the local
-# guide clone when CCGG_HOME points at one, so every session starts on the
-# latest merged guide. Skills also refresh mid-session on next invocation.
-# When the clone is absent (fresh machine, cloud session) and CCGG_REPO gives
-# the guide's URL, clone it first — degrading to silence if that fails.
+# Live update: sync CCGG-owned files (skills, hooks, agents, validator) from the
+# guide clone at CCGG_HOME, so every session starts on the guide revision the
+# project pinned. Skills also refresh mid-session on next invocation.
+#
+# Trust boundary: whatever update.sh finds in that clone runs here with the
+# user's permissions, on every session start, resume, clear, and compact — and
+# under `claude -p` with no trust dialog at all. So a clone from CCGG_REPO is
+# made only at CCGG_REF (a tag or branch you control), and update.sh runs only
+# while the clone's HEAD is at that ref. A clone that already exists without a
+# pin (your own working checkout) is synced as-is. Failures are printed, never
+# hidden: a silent sync failure looks exactly like a compromised one.
+ccgg_at_ref() { # $1 = clone, $2 = ref name
+  head="$(git -C "$1" rev-parse HEAD 2>/dev/null)" || return 1
+  want="$(git -C "$1" rev-parse --verify -q "refs/ccgg/pin" 2>/dev/null \
+       || git -C "$1" rev-parse --verify -q "$2^{commit}" 2>/dev/null)" || return 1
+  [ -n "$head" ] && [ "$head" = "$want" ]
+}
 if [ -n "${CCGG_HOME:-}" ]; then
   if [ ! -d "$CCGG_HOME" ] && [ -n "${CCGG_REPO:-}" ] && command -v git >/dev/null 2>&1; then
-    git clone --depth 1 -q "$CCGG_REPO" "$CCGG_HOME" 2>/dev/null || true
+    if [ -n "${CCGG_REF:-}" ]; then
+      git clone --depth 1 -q --branch "$CCGG_REF" "$CCGG_REPO" "$CCGG_HOME" \
+        || echo "-- ccgg: clone of $CCGG_REPO at $CCGG_REF failed; live sync skipped --"
+    else
+      echo "-- ccgg: CCGG_REPO is set without CCGG_REF; refusing an unpinned clone — set CCGG_REF to a tag or branch --"
+    fi
   fi
   if [ -x "${CCGG_HOME}/update.sh" ]; then
-    "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || true
+    if [ -n "${CCGG_REF:-}" ] && ! ccgg_at_ref "$CCGG_HOME" "$CCGG_REF"; then
+      echo "-- ccgg: $CCGG_HOME is not at $CCGG_REF; live sync skipped --"
+    else
+      "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || echo "-- ccgg: update.sh failed --"
+    fi
   fi
 fi
 

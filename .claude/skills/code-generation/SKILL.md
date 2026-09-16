@@ -1,8 +1,7 @@
 ---
 name: code-generation
 description: Generate production-ready code with explicit error handling, edge cases, and tests. Use when the user says "implement", "write code", "build this function/module", or "add this feature".
-when-to-use: implement, write code, generate code, build feature, add function
-allowed-tools: powershell, bash
+when_to_use: implement, write code, generate code, build feature, add function
 argument-hint: "[what to implement]"
 purpose: Production-ready implementation with critic pass
 ---

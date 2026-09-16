@@ -1,8 +1,7 @@
 ---
 name: commit
 description: Create a well-formatted git commit following conventional commits standard. Use when the user wants to commit changes, says "commit", "save my work", or asks to "check in code".
-when-to-use: commit, save changes, check in, git commit
-allowed-tools: powershell, bash
+when_to_use: commit, save changes, check in, git commit
 argument-hint: "[optional: scope or message hint]"
 purpose: Conventional commits with staged diff review
 ---

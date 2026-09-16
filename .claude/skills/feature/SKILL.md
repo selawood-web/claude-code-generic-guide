@@ -1,8 +1,7 @@
 ---
 name: feature
 description: Turn a feature idea into a complete, checkable definition — a versioned file in features/, enforced by a linter, rendered into whatever tracker the team uses. Use when the user says "define this feature", "write it up", "what exactly are we building", or hands over a rough capability idea.
-when-to-use: define a feature, feature definition, write up a feature, what are we building, feature brief, project overview, scope this, definition of done
-allowed-tools: powershell, bash
+when_to_use: define a feature, feature definition, write up a feature, what are we building, feature brief, project overview, scope this, definition of done
 argument-hint: "[feature idea, or the id of an existing definition]"
 purpose: Feature idea into a checked, tracked definition
 ---

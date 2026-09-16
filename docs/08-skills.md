@@ -106,13 +106,13 @@ You can also pass a description directly: `/skillify deploy workflow for k8s`. T
 
 ### The /create-skill Alias
 
-`/create-skill` is a backward-compatible alias for `/skillify`. Running `/create-skill` invokes `/skillify`, which typically enters from-scratch mode (since `/create-skill` is usually run in a fresh session). If you're used to `/create-skill`, everything still works -- you get the same interview flow with richer frontmatter generation (`when-to-use`, `allowed-tools`, `argument-hint`, and success criteria on every step).
+`/create-skill` is a backward-compatible alias for `/skillify`. Running `/create-skill` invokes `/skillify`, which typically enters from-scratch mode (since `/create-skill` is usually run in a fresh session). If you're used to `/create-skill`, everything still works -- you get the same interview flow with richer frontmatter generation (`when_to_use`, `argument-hint`, and success criteria on every step).
 
 ### What Gets Generated
 
 The generated SKILL.md includes:
 
-- **Complete frontmatter**: `name`, `description`, `when-to-use` (trigger phrases for auto-invocation), `allowed-tools`, `argument-hint`, and `arguments`
+- **Complete frontmatter**: `name`, `description`, `when_to_use` (trigger phrases for auto-invocation), `argument-hint`, and `arguments`
 - **Numbered steps** with success criteria, artifact descriptions, and human checkpoints where appropriate
 - **Parameterized inputs**: Variable values (PR numbers, branch names, etc.) are extracted as skill arguments rather than hardcoded
 
