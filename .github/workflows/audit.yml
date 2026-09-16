@@ -154,23 +154,26 @@ jobs:
 
       # The report is rendered from findings.jsonl by a script, not written by the
       # model: a candidate no verifier reached still appears, tagged unverified.
+      # The renderer also decides whether this run audited anything at all.
       - name: Render the report
         id: report
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
         run: |
           set -euo pipefail
-          stamp="$STAMP"
-          python tools/audit_report.py --dir "$stamp" || true
-          if [ ! -f "$stamp/REPORT.md" ]; then
-            {
-              echo "# CCGG audit report"
-              echo
-              echo "_No report was rendered: the run produced no findings file._"
-            } > "$stamp/REPORT.md"
+          python tools/audit_report.py --dir "$STAMP" || true
+          if [ ! -f "$STAMP/REPORT.md" ] || [ ! -f "$STAMP/status.json" ]; then
+            # The renderer itself failed. That is an incomplete run by definition.
+            printf '# CCGG audit report\n\n_The renderer failed; this run audited nothing._\n' > "$STAMP/REPORT.md"
+            printf '{"complete": false, "blockers": 0, "findings": 0}\n' > "$STAMP/status.json"
           fi
-          blockers=$(grep -c '^### 🔴' "$stamp/REPORT.md" || true)
-          echo "blockers=${blockers:-0}" >> "$GITHUB_OUTPUT"
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          status = json.load(open(os.path.join(os.environ["STAMP"], "status.json")))
+          print(f"blockers={int(status.get('blockers', 0))}")
+          print(f"complete={str(bool(status.get('complete', False))).lower()}")
+          print(f"findings={int(status.get('findings', 0))}")
+          PY
 
       # The audit never pushes. Its output leaves as an artifact and one comment.
       - name: Upload the report directory
@@ -193,10 +196,35 @@ jobs:
           python tools/audit_pr_comment.py \
             --file "$STAMP/REPORT.md" --repo "$REPO" --pr "$PR" --run-url "$RUN_URL"
 
-      - name: Fail on a blocker
+      # A green check has to mean an audit happened. Zero findings from a run whose
+      # model stage never started is not a clean bill, and saying otherwise here
+      # would be the exact defect this workflow exists to find.
+      - name: Gate
         env:
           BLOCKERS: ${{ steps.report.outputs.blockers }}
+          COMPLETE: ${{ steps.report.outputs.complete }}
+          FINDINGS: ${{ steps.report.outputs.findings }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          AUTHENTICATED: ${{ steps.settings.outputs.authenticated }}
         run: |
+          set -euo pipefail
+          if [ "$COMPLETE" != "true" ]; then
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "Dry run: assembled the command and rendered the deterministic results. Nothing was audited, as asked."
+              echo "Dry run — nothing audited, by request." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "This run audited nothing: the model stage left no candidates, no findings and no revision stamp."
+            if [ "$AUTHENTICATED" != "true" ]; then
+              echo "Cause: no ANTHROPIC_API_KEY secret, so the headless run was skipped."
+              echo "Add the secret, or dispatch with dry_run: true when you only want the deterministic half."
+            else
+              echo "Cause: the headless run started but produced nothing — check the Headless audit step's log."
+            fi
+            echo "Audited nothing. A green check here would be a false clean bill." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Audit complete: $FINDINGS finding(s)." >> "$GITHUB_STEP_SUMMARY"
           if [ "${BLOCKERS:-0}" -gt 0 ]; then
             echo "The audit reported $BLOCKERS blocker(s) — see the report comment or the artifact."
             exit 1

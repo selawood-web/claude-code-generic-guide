@@ -2,7 +2,9 @@
 """Render REPORT.md for a /ccgg-audit run from the report directory's artifacts.
 
 Reads findings.jsonl (the verifier's output, one JSON object per line), facts.json,
-probes.json, and REVISION-*.json when present. A candidate in candidates/*.json
+probes.json, and REVISION-*.json when present. A run that left none of those behind is
+reported as incomplete rather than as a clean audit, in the report and in status.json.
+A candidate in candidates/*.json
 that no verifier record covers is rendered as an unverified finding rather than
 dropped, and the commit falls back to inventory.json when no REVISION stamp exists. Every finding is validated against
 the F002 schema in code, and one rule is enforced here rather than in any brief:
@@ -80,8 +82,20 @@ def sort_key(rec: dict) -> tuple[int, int, str]:
     return (SEVERITIES.index(rec["severity"]), CONFIDENCES.index(rec["confidence"]), rec["id"])
 
 
-def render(findings: list[dict], facts: dict | None, probes: dict | None, revision: dict | None) -> str:
+INCOMPLETE_BANNER = (
+    "> **This run did not audit anything.** No specialist candidates, no findings file and\n"
+    "> no revision stamp are present, which means the model stage never ran — most often a\n"
+    "> missing `ANTHROPIC_API_KEY`, a budget cap reached before the first specialist, or a\n"
+    "> cancelled job. The deterministic results below stand on their own. **Zero findings\n"
+    "> here is not a clean bill.**"
+)
+
+
+def render(findings: list[dict], facts: dict | None, probes: dict | None, revision: dict | None,
+           evidence: dict | None = None) -> str:
     out = ["# CCGG audit report", ""]
+    if evidence is not None and not evidence.get("complete", True):
+        out += [INCOMPLETE_BANNER, ""]
     if revision:
         out.append(f"- **Commit:** `{revision.get('head', '?')}`" + (" (uncommitted changes present)" if revision.get("dirty") else ""))
         out.append(f"- **Scope:** {revision.get('scope', 'all')}")
@@ -90,8 +104,10 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
         out.append("")
     counts = {s: sum(1 for f in findings if f["severity"] == s) for s in SEVERITIES}
     unverified = sum(1 for f in findings if f["confidence"] == "unverified")
+    incomplete = evidence is not None and not evidence.get("complete", True)
     out.append(f"**{len(findings)} finding(s):** {counts['blocker']} blocker, {counts['important']} important, "
-               f"{counts['suggestion']} suggestion — {unverified} unverified.")
+               f"{counts['suggestion']} suggestion — {unverified} unverified."
+               + ("  ⚠ Incomplete run: nothing was audited." if incomplete else ""))
     out.append("")
     if probes:
         s = probes.get("summary", {})
@@ -128,6 +144,33 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
         out.append("_No finding proposes a permanent check._")
     out.append("")
     return "\n".join(out)
+
+
+def run_evidence(report_dir: str) -> dict:
+    """What in the report directory proves the model stage ran at all.
+
+    "Found nothing" and "never ran" both produce zero findings, and only one of
+    them is a clean bill. The deterministic stage leaves facts and probes behind
+    whether or not a model follows it, so those are not evidence: the specialists'
+    candidate files, a findings file with records in it, and the orchestrator's
+    revision stamp are.
+    """
+    candidates = bool(glob.glob(os.path.join(report_dir, "candidates", "*.json")))
+    stamped = bool(glob.glob(os.path.join(report_dir, "REVISION-*.json")))
+    records = 0
+    findings_path = os.path.join(report_dir, "findings.jsonl")
+    if os.path.exists(findings_path):
+        try:
+            with open(findings_path, encoding="utf-8") as fh:
+                records = sum(1 for line in fh if line.strip())
+        except OSError:
+            records = 0
+    return {
+        "candidates": candidates,
+        "revision_stamp": stamped,
+        "findings_lines": records,
+        "complete": bool(candidates or stamped or records),
+    }
 
 
 def candidates_as_unverified(candidates: list[dict]) -> list[dict]:
@@ -212,12 +255,23 @@ def main(argv: list[str]) -> int:
     seen = {rec["id"] for rec in findings}
     synthesized = [rec for rec in candidates_as_unverified(load_candidates(args.dir)) if rec["id"] not in seen]
     findings += synthesized
+    evidence = run_evidence(args.dir)
     text = render(findings, read_json(os.path.join(args.dir, "facts.json")),
                   read_json(os.path.join(args.dir, "probes.json")),
-                  revision_of(args.dir))
+                  revision_of(args.dir), evidence)
     with open(os.path.join(args.dir, "REPORT.md"), "w", encoding="utf-8") as fh:
         fh.write(text)
+    # A caller deciding whether this run counts should read a field, not grep prose.
+    status = dict(evidence, findings=len(findings), unverified=sum(
+        1 for f in findings if f["confidence"] == "unverified"))
+    status["blockers"] = sum(1 for f in findings if f["severity"] == "blocker")
+    with open(os.path.join(args.dir, "status.json"), "w", encoding="utf-8") as fh:
+        json.dump(status, fh, indent=2)
+        fh.write("\n")
     note = f" ({len(synthesized)} candidate(s) without a verifier record rendered unverified)" if synthesized else ""
+    if not evidence["complete"]:
+        print(f"audit-report: INCOMPLETE — the model stage left no trace in {args.dir}; "
+              f"zero findings here is not a clean bill")
     print(f"audit-report: {len(findings)} finding(s){note} -> {os.path.join(args.dir, 'REPORT.md')}")
     return 0
 

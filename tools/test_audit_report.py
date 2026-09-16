@@ -4,6 +4,7 @@
 Run: python -m unittest discover -s tools -p "test_*.py"
 """
 
+import contextlib
 import json
 import os
 import tempfile
@@ -119,6 +120,79 @@ class CandidateFallbackTests(unittest.TestCase):
 
     def test_garbage_skipped(self):
         self.assertEqual(candidates_as_unverified([{"claim": "no id"}, "text", 3]), [])
+
+
+class RunEvidenceTests(unittest.TestCase):
+    """Zero findings from a run that never happened must not read as a clean audit."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="ccgg-evidence-")
+        self.dir = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, rel, text="{}"):
+        path = os.path.join(self.dir, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def test_bare_directory_is_incomplete(self):
+        self.assertFalse(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_deterministic_artifacts_alone_are_not_evidence_of_an_audit(self):
+        self.write("facts.json")
+        self.write("probes.json")
+        self.write("inventory.json")
+        self.assertFalse(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_candidates_stamp_or_records_each_prove_the_run(self):
+        for rel in ("candidates/audit-harness.json", "REVISION-abc.json"):
+            with self.subTest(rel=rel):
+                with tempfile.TemporaryDirectory() as d:
+                    path = os.path.join(d, rel)
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, "w", encoding="utf-8") as fh:
+                        fh.write("[]")
+                    self.assertTrue(audit_report.run_evidence(d)["complete"])
+        self.write("findings.jsonl", json.dumps(GOOD) + "\n")
+        self.assertTrue(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_empty_findings_file_is_not_evidence(self):
+        self.write("findings.jsonl", "\n\n")
+        self.assertFalse(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_render_banners_an_incomplete_run(self):
+        text = render([], None, None, None, {"complete": False})
+        self.assertIn("did not audit anything", text)
+        self.assertIn("not a clean bill", text)
+        self.assertIn("Incomplete run", text)
+
+    def test_render_says_nothing_extra_for_a_real_clean_run(self):
+        text = render([], None, None, None, {"complete": True})
+        self.assertNotIn("did not audit anything", text)
+        self.assertNotIn("Incomplete", text)
+
+    def test_main_writes_status_json_and_says_incomplete(self):
+        self.write("facts.json")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(audit_report.main(["--dir", self.dir]), 0)
+        self.assertIn("INCOMPLETE", out.getvalue())
+        with open(os.path.join(self.dir, "status.json"), encoding="utf-8") as fh:
+            status = json.load(fh)
+        self.assertEqual((status["complete"], status["findings"], status["blockers"]), (False, 0, 0))
+        with open(os.path.join(self.dir, "REPORT.md"), encoding="utf-8") as fh:
+            self.assertIn("not a clean bill", fh.read())
+
+    def test_status_counts_blockers_for_a_complete_run(self):
+        self.write("findings.jsonl", json.dumps(dict(GOOD, severity="blocker")) + "\n")
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(audit_report.main(["--dir", self.dir]), 0)
+        with open(os.path.join(self.dir, "status.json"), encoding="utf-8") as fh:
+            status = json.load(fh)
+        self.assertEqual((status["complete"], status["blockers"]), (True, 1))
 
 
 class ReportDirTests(unittest.TestCase):

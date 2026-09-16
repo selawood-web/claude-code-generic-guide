@@ -94,6 +94,9 @@ being able to change anything.
 - Given a headless run, when the verifier executes, then its guard hook comes from a
   path the caller controls and never from the audited tree, and a run that names no
   such path is refused
+- Given a run whose model stage never started, when the report is rendered, then the
+  report says so, `status.json` records `complete: false`, and the CI job fails rather
+  than reporting a clean audit — unless a dry run was requested
 - Given a specialist subagent, when its definition in `.claude/agents/` is read, then its
   `tools` field is exactly `Read, Glob, Grep` with `omitClaudeMd: true`, and
   `tools/validate.py` fails on any other value; only the verifier carries `Bash`, and it
@@ -204,3 +207,7 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-16 — Whether `--bare` with inline `--agents` honours `isolation: worktree` is
   undocumented; the first authenticated CI run is the check, and the fallback the
   architecture record names (one `claude -p` per specialist) still stands — [open]
+- 2026-09-16 — The first CI dispatch passed green having audited nothing, because no
+  `ANTHROPIC_API_KEY` secret exists and zero findings rendered as a clean report. A
+  green check must mean an audit happened: the renderer now distinguishes "found
+  nothing" from "never ran" and the job fails the second case — [in]
