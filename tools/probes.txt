@@ -21,7 +21,7 @@ CLAUDE.md bridge removed | caught | echo '# nothing' > CLAUDE.md
 
 # --- skill frontmatter -----------------------------------------------------------
 skill frontmatter missing a house key | caught | sed -i '/^purpose:/d' .claude/skills/debug/SKILL.md
-skill allowed-tools set to nonsense names | caught | sed -i 's/^allowed-tools:.*/allowed-tools: teleport, mindread/' .claude/skills/debug/SKILL.md
+skill allowed-tools set to nonsense names | caught | sed -i '/^name: debug$/a allowed-tools: teleport, mindread' .claude/skills/debug/SKILL.md
 skill name differs from its directory | missed | sed -i 's/^name: debug/name: debugger/' .claude/skills/debug/SKILL.md
 skill description emptied | missed | sed -i 's/^description:.*/description: /' .claude/skills/debug/SKILL.md
 
