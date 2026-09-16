@@ -165,6 +165,58 @@ def build_command(agents_json: str, prompt_file: str, grants: list[str], scope: 
     return argv
 
 
+def result_object(stdout: str) -> dict | None:
+    """The CLI's `--output-format json` result, whichever line carries it."""
+    if not isinstance(stdout, str):
+        raise TypeError("stdout must be a string")
+    text = stdout.strip()
+    if not text:
+        return None
+    for candidate in (text, *reversed(text.splitlines())):
+        candidate = candidate.strip()
+        if not candidate.startswith("{"):
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except ValueError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def failure_line(stdout: str, stderr: str, returncode: int) -> str:
+    """Why the run failed, in one line.
+
+    The CLI reports its own reason in the JSON result — an invalid key, a budget
+    cap, a turn limit — and burying that under a ten-line tail cost a diagnosis
+    once already. When there is no JSON, the last thing written to stderr is the
+    next best answer, and "no output" is an honest last resort.
+    """
+    result = result_object(stdout)
+    if result:
+        reason = str(result.get("result") or result.get("terminal_reason") or "no reason given").strip()
+        bits = []
+        if result.get("api_error_status"):
+            bits.append(f"HTTP {result['api_error_status']}")
+        if result.get("terminal_reason") and result.get("result"):
+            bits.append(str(result["terminal_reason"]))
+        if result.get("num_turns") is not None:
+            bits.append(f"{result['num_turns']} turn(s)")
+        if result.get("total_cost_usd") is not None:
+            bits.append(f"{float(result['total_cost_usd']):.2f} USD")
+        spawned = (result.get("subagent_stats") or {}).get("spawned")
+        if spawned is not None:
+            bits.append(f"{spawned} subagent(s)")
+        detail = f" ({', '.join(bits)})" if bits else ""
+        return f"audit-headless: the run failed — {reason}{detail}"
+    for stream in (stderr, stdout):
+        lines = [ln.strip() for ln in (stream or "").splitlines() if ln.strip()]
+        if lines:
+            return f"audit-headless: the run exited {returncode} — {lines[-1]}"
+    return f"audit-headless: the run exited {returncode} with no output"
+
+
 def check_scope(scope: str, root: str) -> str:
     if scope in FIXED_SCOPES:
         return scope
@@ -266,8 +318,9 @@ def main(argv: list[str]) -> int:
     with open(result_path, "w", encoding="utf-8") as fh:
         fh.write(proc.stdout)
     if proc.returncode != 0:
-        tail = "\n".join((proc.stderr or proc.stdout).strip().splitlines()[-10:])
-        print(f"audit-headless: the run exited {proc.returncode}\n{tail}", file=sys.stderr)
+        print(failure_line(proc.stdout, proc.stderr, proc.returncode), file=sys.stderr)
+        print(f"audit-headless: the run's own result is in "
+              f"{os.path.join(report_dir, 'headless', 'result.json')}", file=sys.stderr)
         return 1
     print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', 'result.json')}")
     return 0
