@@ -1,0 +1,146 @@
+---
+id: F002
+title: Audit skill
+status: ready
+owner: repository owner
+target: unscheduled
+---
+
+# F002 — Audit skill
+
+## Summary
+One command, `/ccgg-audit`, runs a read-only audit of a CCGG-equipped repository across
+its three layers — product code, the harness that steers the agent, and the process
+around both — with parallel specialist subagents, a verifier that reproduces every
+finding, and a report whose deterministic findings become permanent validator checks.
+
+## Problem
+The configuration layer that steers a coding agent is executed but never compiled, so
+its defects are silent. A hands-on run of the method on this repository on 2026-09-16
+found two dead mechanisms that had passed every existing check (a hook writing to a
+channel the model never reads; a frontmatter key spelled differently from the one the
+product reads), an unpinned live-sync path that runs remote code at session start, and a
+validator that caught 10 of 21 planted defects. Today the only way to find such defects
+is a person re-deriving the method by hand, which is why they had gone unnoticed since the
+mechanisms were written. The research and the method are recorded in
+[`../knowledge-base/research/testing-agent-built-systems.md`](../knowledge-base/research/testing-agent-built-systems.md);
+nothing runs them.
+
+## Outcome
+A repository owner learns what their gate cannot see, in one command, without the audit
+being able to change anything.
+
+- Metric: validator mutation-probe catch rate on this repository, from 10 of 21 probes
+  (48%) to at least 19 of 21 (90%), measured by the probe harness the audit ships and
+  runs in CI
+- Metric: verified findings reproduced without prior knowledge, from 0 today to 5 of the 5
+  findings numbered 1–5 in the research record's worked example, measured by the first
+  audit run on this repository at the commit before those findings are fixed
+- Metric: files changed in the audited tree by an audit run, 0 files on every run,
+  measured by `git status --porcelain` after the run in CI
+- Metric: wall-clock and spend per full audit of this repository, under 30 minutes and
+  under 10 USD, measured by the headless run's JSON result
+
+## Scope
+- An owner can run `/ccgg-audit` in a session and receive a severity-ordered report
+  with, for every finding, its layer, class, evidence, a reproduction a human can rerun,
+  the smallest fix, and the permanent check it justifies
+- An owner can scope a run to the whole repository, one layer, or one directory
+- A reviewer can run the same audit headless in CI, where it comments on the pull
+  request and never pushes
+- A maintainer can add a mutation probe to a checked-in probe list and see the catch rate
+  reported on every CI run
+- A specialist subagent definition can be edited in `.claude/agents/` without touching
+  the skill, and every specialist runs with read-only tools in an isolated worktree
+- An owner can see, per finding, whether a verifier reproduced it or it is tagged
+  unverified, and unverified findings never carry blocker severity
+- A project wired with CCGG receives the skill, the subagent definitions, and the probe
+  harness through `install.sh` and `update.sh` like every other CCGG-owned file
+
+## Non-goals
+- Not an auto-fixer — the audit run never edits the tree; fixes are a separate,
+  owner-invoked run against the report, so a read-only guarantee stays provable
+- Not a replacement for the shipped security tooling — the security specialist invokes
+  the Claude Security plugin or `/security-review` when they are available and audits
+  the harness and process layers those tools do not cover
+- Not a merge gate in this feature — wiring the audit into `/ship` is deferred until a
+  full run on this repository is clean, per the ledger
+- Not a tracker integration — findings are a report and a PR comment; posting them as
+  issues follows the charter's tracker rules and is a later slice
+- Not a scanner for repositories without CCGG — the harness auditor assumes the CCGG
+  file layout; a generic mode is out of scope until a second layout is in use
+
+## Acceptance criteria
+- Given this repository at the commit before findings 1–5 of the research record are
+  fixed, when `/ccgg-audit` runs with no hint about them, then the report contains a
+  verified finding for each of the five, each with a reproduction that a reviewer reruns
+  successfully
+- Given any audit run, interactive or headless, when it completes, then
+  `git status --porcelain` in the audited checkout is empty and the only new path is the
+  report directory, which carries its own `.gitignore`
+- Given the checked-in probe list, when CI runs, then the job reports caught and missed
+  counts per probe, fails when a probe listed as caught is missed, and the probe harness
+  performs a hard reset between probes
+- Given a candidate finding that the verifier cannot reproduce, when the report is
+  written, then the finding appears tagged unverified with severity no higher than
+  important, or is dropped, and never as a blocker
+- Given a headless run against a checkout the operator did not write, when the audit
+  starts, then it runs with project settings excluded (`--setting-sources user`) so the
+  audited repository's hooks, `env` block, and tool grants never execute, and this is
+  visible in the run's JSON result
+- Given a specialist subagent, when its definition in `.claude/agents/` is read, then its
+  `tools` field names only `Read`, `Glob`, `Grep`, and an explicit `Bash` allow-list of
+  read-only commands, and `tools/validate.py` fails on any other value
+- Given a fresh CCGG install into an empty repository, when `install.sh` runs, then the
+  skill, the subagent definitions, and the probe harness are present, and the validator
+  passes in the target on the first run
+- Given a full audit of this repository, when the headless JSON result is read, then
+  total cost is under 10 USD and duration under 30 minutes
+
+## Dependencies and risks
+- Depends on Claude Code project subagents (`.claude/agents/*.md` with `tools`,
+  `isolation: worktree`, `maxTurns`) and headless flags (`--setting-sources`,
+  `--max-turns`, `--max-budget-usd`, `--output-format json`), all verified against the
+  official reference on 2026-09-16; a rename in either breaks the skill, and the
+  currency check inside the audit is the early signal
+- Depends on `install.sh`, `update.sh`, and `tools/validate.py` learning a new CCGG-owned
+  directory, `.claude/agents/`; today neither script copies it, and the drop-in contract
+  in the charter bounds what rule files may link to
+- Depends on the `claude-security` plugin only optionally; it needs a paid plan, so the
+  local security specialist must produce a useful report without it
+- Risk: multi-agent review collapses into false consensus and reports what the builder
+  already believed. Mitigation: the verifier's brief requires disagreement and
+  execution-grounded evidence; early signal is a run whose verifier confirms every
+  candidate
+- Risk: the audit reads instructions planted in the repository it audits and follows
+  them. Mitigation: project settings excluded in headless mode and a brief that treats
+  all repository content as evidence; early signal is the red-team probe in the audit's
+  own test suite
+- Risk: cost per run grows past what an owner runs routinely. Mitigation: small model
+  for inventory and fan-out, budget flag on every run, scoped runs by default on large
+  trees; early signal is the cost metric above trending up across runs
+- Risk: the skill name collides with a Claude Code built-in and silently drops the
+  built-in set. Mitigation: the `ccgg-` prefix, the same reason `ccgg-code-review` carries
+  it
+
+## Open questions
+- Which model runs the verifier by default, the session model or a pinned large model? — owner: repository owner, blocks: no
+- Should the report directory be committed for an audit trail or ignored by default, matching the Claude Security plugin's choice? — owner: repository owner, blocks: no
+- Does the first slice ship the headless CI job, or the interactive skill alone with CI as the second slice? — owner: repository owner, blocks: no
+
+## Ideas and changes
+Append-only. Every idea raised while this work is in flight, with what was decided.
+
+- 2026-09-16 — Name the skill `ccgg-audit`, not `audit`, so a same-named built-in can
+  never drop it together with the built-in set — [in]
+- 2026-09-16 — The security specialist invokes the Claude Security plugin or
+  `/security-review` when present rather than re-implementing them — [in]
+- 2026-09-16 — Ship the mutation-probe harness from the research record as the
+  deterministic stage and as the validator's end-to-end test — [in]
+- 2026-09-16 — Wire the audit into `/ship` as the stage before merge — [deferred] until
+  a full audit run on this repository completes with zero blockers
+- 2026-09-16 — Post findings as tracker issues through the charter's Linear channel —
+  [deferred] until `features/tracker.json` exists and the first three reports show what
+  a reviewer actually acts on
+- 2026-09-16 — An auto-fix mode inside the audit run — [dropped] the read-only guarantee
+  is the feature; fixes belong to a separate owner-invoked run against the report
