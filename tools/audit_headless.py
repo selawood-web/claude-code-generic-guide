@@ -140,8 +140,15 @@ def build_command(agents_json: str, prompt_file: str, grants: list[str], scope: 
                   report_dir: str, max_turns: int, budget_usd: float,
                   model: str | None = None) -> list[str]:
     """The argv for the headless run."""
+    # The prompt is the value of -p, not a trailing positional. Two reasons, both
+    # learned from a run that failed in seconds: -p takes the prompt as its
+    # argument, so a flag sitting there is read as the prompt and the flag is
+    # silently lost; and --allowedTools and --disallowed-tools take a list, so a
+    # trailing prompt is swallowed as one more tool name. Nothing follows the
+    # last list flag.
     argv = [
-        "claude", "-p",
+        "claude",
+        "-p", f"Audit this repository at HEAD. Scope: {scope}. Report directory: {report_dir}.",
         "--bare",                       # no auto-discovery: not the tree's hooks, skills, agents, or memory
         "--setting-sources", "user",    # and none of its settings or env block
         "--agents", agents_json,
@@ -153,10 +160,8 @@ def build_command(agents_json: str, prompt_file: str, grants: list[str], scope: 
     ]
     if model:
         argv += ["--model", model]
-    for grant in grants:
-        argv += ["--allowedTools", grant]
+    argv += ["--allowedTools", *grants]
     argv += ["--disallowed-tools", ",".join(DENIED_TOOLS)]
-    argv.append(f"Audit this repository at HEAD. Scope: {scope}. Report directory: {report_dir}.")
     return argv
 
 

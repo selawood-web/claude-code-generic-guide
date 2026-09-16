@@ -155,8 +155,12 @@ jobs:
       # The report is rendered from findings.jsonl by a script, not written by the
       # model: a candidate no verifier reached still appears, tagged unverified.
       # The renderer also decides whether this run audited anything at all.
+      # always(): a failed or cancelled model step must still leave a report, an
+      # artifact and an honest verdict behind. The first authenticated run failed
+      # here and skipped all three, so there was nothing to diagnose from.
       - name: Render the report
         id: report
+        if: always()
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
         run: |
@@ -177,6 +181,7 @@ jobs:
 
       # The audit never pushes. Its output leaves as an artifact and one comment.
       - name: Upload the report directory
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ccgg-audit-${{ steps.settings.outputs.stamp }}
@@ -184,7 +189,7 @@ jobs:
           retention-days: 14
 
       - name: Comment the report on the pull request
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         continue-on-error: true   # a failed comment must not bury the findings
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -200,6 +205,7 @@ jobs:
       # model stage never started is not a clean bill, and saying otherwise here
       # would be the exact defect this workflow exists to find.
       - name: Gate
+        if: always()
         env:
           BLOCKERS: ${{ steps.report.outputs.blockers }}
           COMPLETE: ${{ steps.report.outputs.complete }}

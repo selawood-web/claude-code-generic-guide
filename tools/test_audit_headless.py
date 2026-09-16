@@ -120,18 +120,27 @@ class BuildCommandTests(unittest.TestCase):
         self.assertEqual(self.argv[self.argv.index("--max-budget-usd") + 1], "10.0")
         self.assertEqual(self.argv[self.argv.index("--max-turns") + 1], "80")
 
-    def test_each_grant_is_its_own_flag(self):
-        self.assertEqual([self.argv[i + 1] for i, a in enumerate(self.argv) if a == "--allowedTools"],
-                         ["Read", "Write(d/**)"])
+    def test_grants_are_one_list_after_a_single_flag(self):
+        start = self.argv.index("--allowedTools")
+        self.assertEqual(self.argv[start + 1:start + 3], ["Read", "Write(d/**)"])
+        self.assertEqual(self.argv.count("--allowedTools"), 1)
 
     def test_edits_and_network_are_denied(self):
         denied = self.argv[self.argv.index("--disallowed-tools") + 1].split(",")
         self.assertEqual(denied, list(DENIED_TOOLS))
         self.assertNotIn("Write", denied, "the run writes its own report directory")
 
-    def test_prompt_is_last_and_names_the_scope(self):
-        self.assertIn("Scope: all", self.argv[-1])
-        self.assertNotIn("--", self.argv[-1])
+    def test_prompt_is_the_value_of_p_not_a_trailing_positional(self):
+        # A trailing prompt is swallowed by the tool-list flags, and a flag left
+        # sitting after -p is read as the prompt. Both cost a run; both are asserted.
+        self.assertEqual(self.argv[1], "-p")
+        self.assertIn("Scope: all", self.argv[2])
+        self.assertFalse(self.argv[2].startswith("-"))
+        self.assertIn("--bare", self.argv[3:], "--bare must not be consumed as the prompt")
+
+    def test_nothing_follows_the_last_tool_list(self):
+        self.assertEqual(self.argv[-2], "--disallowed-tools")
+        self.assertNotIn(" ", self.argv[-1].strip().split(",")[0])
 
     def test_model_is_optional(self):
         self.assertNotIn("--model", self.argv)

@@ -211,3 +211,10 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `ANTHROPIC_API_KEY` secret exists and zero findings rendered as a clean report. A
   green check must mean an audit happened: the renderer now distinguishes "found
   nothing" from "never ran" and the job fails the second case — [in]
+- 2026-09-16 — The first authenticated run failed in seconds: the prompt was a trailing
+  positional, and `-p` takes the prompt as its own value while the tool-list flags take
+  a list, so the prompt was swallowed and `--bare` sat where the prompt belonged. The
+  prompt is now the value of `-p`, nothing follows the last list flag, and two tests
+  assert both traps — [in]
+- 2026-09-16 — That same failure skipped the render, the artifact and the gate, leaving
+  nothing to diagnose from. Those three steps now run with `always()` — [in]
