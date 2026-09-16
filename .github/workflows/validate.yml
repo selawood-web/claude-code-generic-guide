@@ -22,6 +22,11 @@ jobs:
       # validator's own tests — `unittest discover` then exits 5 ("NO TESTS RAN")
       # and every wired project's first PR goes red. Skip when there is nothing
       # to run; never weaken the run itself.
+      # The gate's guarantees as tests of the gate: each probe plants a defect in a
+      # scratch copy and records whether the validator fires. A probe the list
+      # marks `caught` that is missed is a regression and fails the job.
+      - name: Mutation probes against the validator
+        run: python tools/audit_probes.py
       - name: Unit tests for the validator
         run: |
           if ls tools/test_*.py >/dev/null 2>&1; then

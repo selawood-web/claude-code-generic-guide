@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 26 Skill workflows | Step-by-step procedures for every common dev task |
+| 27 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 26 skill workflows
+- All 27 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 26 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 27 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -493,6 +493,27 @@ security review
 check for vulnerabilities
 /ccgg-security-review
 is this secure?
+```
+
+---
+
+### `/ccgg-audit` — Read-Only Audit
+
+**Use when:** You want to know what the repository's own gate cannot see — across the product code, the harness that steers the agent (rules, skills, hooks, settings), and the process around both.
+
+**What it does:**
+1. Runs the deterministic stage with no model: the validator, tests, hook registration in both directions, hidden characters in instruction files, frontmatter keys against the documented vocabulary, command references, network patterns in hooks, and the mutation probes in `tools/probes.txt`
+2. Spawns read-only specialist subagents (`.claude/agents/audit-*.md`, no execution tool) that return candidate findings, each with a falsifier
+3. Spawns the verifier, the only agent that executes, inside an isolated worktree with write tools removed, to reproduce every candidate or mark it unverified
+4. Renders `CCGG-AUDIT-<stamp>/REPORT.md`, ordered by severity; an unverified finding can never be a blocker — the renderer refuses it
+
+Never edits a tracked file. The report directory is ignored by git; keep one deliberately with `git add -f`. The catch rate of the probes runs in CI on every push, so a check the validator loses is a red build. Defined in [`features/F002-audit-skill.md`](features/F002-audit-skill.md).
+
+**Examples:**
+```
+/ccgg-audit
+/ccgg-audit harness
+/ccgg-audit tools/
 ```
 
 ---
@@ -1011,6 +1032,7 @@ Pre-seeded with engineering wisdom:
 | `common-pitfalls.md` | N+1 queries, race conditions, JWT attacks, IDOR, migration mistakes |
 | `ai-infrastructure-lessons.md` | What broke when this repo's own mechanisms were tested against the live product |
 | `agent-harness-patterns.md` | Execution and verification patterns confirmed against a second, independent agent harness |
+| `harness-testing-patterns.md` | How to test the configuration layer that steers the agent: dead mechanisms, mutation probes, trust boundaries, verifier independence |
 
 **Add your own entries** by creating new `.md` files in this directory. Use the same format:
 
