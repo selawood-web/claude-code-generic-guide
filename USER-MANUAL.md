@@ -503,9 +503,10 @@ is this secure?
 
 **What it does:**
 1. Runs the deterministic stage with no model: the validator, tests, hook registration in both directions, hidden characters in instruction files, frontmatter keys against the documented vocabulary, command references, network patterns in hooks, and the mutation probes in `tools/probes.txt`
-2. Spawns read-only specialist subagents (`.claude/agents/audit-*.md`, no execution tool) that return candidate findings, each with a falsifier
-3. Spawns the verifier, the only agent that executes, inside an isolated worktree with write tools removed, to reproduce every candidate or mark it unverified
-4. Renders `CCGG-AUDIT-<stamp>/REPORT.md`, ordered by severity; an unverified finding can never be a blocker — the renderer refuses it
+2. Runs the red-team probes in `tools/redteam_probes.txt`: plants a marker in each content channel and measures whether it reaches what the model sees
+3. Spawns six read-only specialist subagents (`.claude/agents/audit-*.md`, no execution tool) — harness, security, tests, spec conformance, consistency, red-team — that return candidate findings, each with a falsifier
+4. Spawns the verifier, the only agent that executes, inside an isolated worktree with write tools removed, to reproduce every candidate or mark it unverified
+5. Renders `CCGG-AUDIT-<stamp>/REPORT.md`, ordered by severity; an unverified finding can never be a blocker — the renderer refuses it
 
 Never edits a tracked file. The report directory is ignored by git; keep one deliberately with `git add -f`. The catch rate of the probes runs in CI on every push, so a check the validator loses is a red build. Defined in [`features/F002-audit-skill.md`](features/F002-audit-skill.md).
 

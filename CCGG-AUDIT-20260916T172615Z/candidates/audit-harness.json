@@ -1,0 +1,13 @@
+[
+  {
+    "id": "H-001",
+    "layer": "harness",
+    "class": "dead-mechanism",
+    "severity": "important",
+    "location": "AGENTS.md:88",
+    "claim": "Documentation instructs readers to use `/skill-name` as a literal command, but this command does not exist as a skill or built-in.",
+    "evidence": "Line 88 states: 'Skills are loaded from `.claude/skills/`. Use them with `/skill-name` or they auto-invoke.' The backtick formatting treats `/skill-name` as a code reference, not a placeholder pattern.",
+    "hypothesis": "The template placeholder is formatted identically to literal command references, creating ambiguity that readers might interpret `/skill-name` as an actual skill they can invoke. The audit's command-resolution check correctly flagged it as unresolved.",
+    "falsifier": "Run `grep -E \"^name: skill-name$\" .claude/skills/*/SKILL.md` and `grep 'skill-name' tools/audit_vocab.json` — both should return nothing, confirming `/skill-name` is not a real skill or built-in command."
+  }
+]

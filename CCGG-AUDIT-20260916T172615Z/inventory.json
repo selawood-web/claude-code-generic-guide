@@ -1,0 +1,90 @@
+{
+  "generated_at": "2026-09-16T17:26:15+00:00",
+  "head": "fddcb9266ffde4b2282ca0a09fb7af2ec67541d2",
+  "dirty": false,
+  "stack": [],
+  "rule_files": [
+    "CLAUDE.md",
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "MEMORY.md"
+  ],
+  "skills": [
+    "architecture",
+    "ccgg-audit",
+    "ccgg-code-review",
+    "ccgg-security-review",
+    "code-generation",
+    "commit",
+    "debug",
+    "decide",
+    "deploy",
+    "deploy-steward",
+    "dream",
+    "efficiency",
+    "feature",
+    "flush",
+    "git-steward",
+    "learn",
+    "momentum",
+    "pr",
+    "product-brief",
+    "reconcile-docs",
+    "refactor",
+    "requirements",
+    "ship",
+    "skillify",
+    "standup",
+    "testing",
+    "wire"
+  ],
+  "agents": [
+    ".claude/agents/audit-consistency.md",
+    ".claude/agents/audit-harness.md",
+    ".claude/agents/audit-redteam.md",
+    ".claude/agents/audit-security.md",
+    ".claude/agents/audit-spec.md",
+    ".claude/agents/audit-tests.md",
+    ".claude/agents/audit-verifier.md"
+  ],
+  "hooks": [
+    ".claude/hooks/audit-verifier-guard.sh",
+    ".claude/hooks/pre-compact.sh",
+    ".claude/hooks/session-end.sh",
+    ".claude/hooks/session-start.sh"
+  ],
+  "references": [
+    ".claude/references/code-gate.md",
+    ".claude/references/dialogue.md",
+    ".claude/references/tool-choice.md"
+  ],
+  "tests": [
+    "tools/test_audit_facts.py",
+    "tools/test_audit_probes.py",
+    "tools/test_audit_redteam.py",
+    "tools/test_audit_report.py",
+    "tools/test_feature_lint.py",
+    "tools/test_validate.py"
+  ],
+  "ci_workflows": [
+    ".github/workflows/validate.yml"
+  ],
+  "features": [
+    "features/F001-feature-definition-tool.md",
+    "features/F002-audit-skill.md"
+  ],
+  "permission_surface": {
+    "allow": [],
+    "deny": [],
+    "additionalDirectories": [],
+    "defaultMode": null,
+    "env": [],
+    "enableAllProjectMcpServers": null,
+    "hooks": [
+      "PreCompact",
+      "SessionEnd",
+      "SessionStart"
+    ]
+  },
+  "file_count": 124
+}

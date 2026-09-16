@@ -1,0 +1,57 @@
+[
+  {
+    "id": "S-001",
+    "layer": "harness",
+    "class": "supply-chain",
+    "severity": "important",
+    "location": "/home/user/claude-code-generic-guide/.claude/hooks/session-start.sh:28",
+    "claim": "A committed `.claude/settings.json` env block (CCGG_HOME/CCGG_REPO/CCGG_REF) selects the repository the SessionStart hook clones and then executes `$CCGG_HOME/update.sh` from that clone, which overwrites hooks, agents and tools/*.py in the project and is followed in the same hook by `python3 tools/validate.py`, so whoever lands a settings.json change (or controls CCGG_REPO) runs code with the user's permissions on every session start, resume, clear, compact and under `claude -p` with no trust dialog.",
+    "evidence": "session-start.sh:29-31 `if [ ! -d \"$CCGG_HOME\" ] && [ -n \"${CCGG_REPO:-}\" ] ... git clone --depth 1 -q --branch \"$CCGG_REF\" \"$CCGG_REPO\" \"$CCGG_HOME\"` (fact network-exec-001); :37-41 `if [ -x \"${CCGG_HOME}/update.sh\" ] ... \"${CCGG_HOME}/update.sh\" --quiet \"${CLAUDE_PROJECT_DIR:-.}\"`; :47-49 then runs `python3 tools/validate.py`, a file update.sh:111 just replaced. The only guard is `ccgg_at_ref` (HEAD == ref), no host allowlist, commit hash or signature. `.claude/skills/wire/SKILL.md:41-48` instructs committing exactly this env block into downstream projects' settings.json; `tools/probes.txt:37` records that the gate misses `CCGG_REPO in settings env pointed at an attacker URL`; `tools/redteam_probes.txt:28` names the same channel; fact permission-surface-001 detail: grants in a committed file apply without trust under -p. `.claude/skills/ccgg-audit/SKILL.md:5` pre-allows `Bash(python3 tools/audit_*.py *)`, i.e. the very files update.sh:114-116 rewrites.",
+    "hypothesis": "A pull request (or a compromised guide remote) sets CCGG_REPO/CCGG_REF in settings.json; the next session start clones it, runs its update.sh, which copies attacker hooks/agents/tools into the project, then the hook itself executes the replaced validate.py and the audit skill later executes the replaced audit scripts without a prompt.",
+    "falsifier": "cd <isolated copy> && CCGG_HOME=/tmp/ccgg-verify-$$ CCGG_REPO=file:///nonexistent CCGG_REF=x CLAUDE_PROJECT_DIR=\"$PWD\" bash -x .claude/hooks/session-start.sh 2>&1 | grep -E '^\\+ git clone'   # expect the hook attempts `git clone ... file:///nonexistent` with no source check before it; then: CCGG_HOME=\"$PWD\" CLAUDE_PROJECT_DIR=\"$PWD\" bash -x .claude/hooks/session-start.sh 2>&1 | grep -E '^\\+ .*/update.sh --quiet'   # expect the hook executes whatever update.sh sits at $CCGG_HOME (here the repo's own, which exits 0 because TARGET == SRC); then: grep -nE 'allow|fingerprint|sha256|verify-(tag|commit)|known_hosts' .claude/hooks/session-start.sh   # expect no match; grep -n 'CCGG_REPO' .claude/skills/wire/SKILL.md tools/probes.txt   # wire writes the block, probes.txt:37 says the gate misses it"
+  },
+  {
+    "id": "S-002",
+    "layer": "harness",
+    "class": "supply-chain",
+    "severity": "important",
+    "location": "/home/user/claude-code-generic-guide/update.sh:71",
+    "claim": "The documented 'pin' (CCGG_REF) is a mutable branch or tag that update.sh force-fetches from origin on every session start and checks out, and session-start.sh's `ccgg_at_ref` compares HEAD against that same freshly fetched ref, so an upstream who moves the branch or re-points the tag gets new code executed on the next session with no commit-identity check ever failing.",
+    "evidence": "update.sh:70-73 `git -C \"$SRC\" fetch -q --depth 1 --force origin \"+${CCGG_REF}:refs/ccgg/pin\" && git -C \"$SRC\" checkout -q --detach refs/ccgg/pin`; session-start.sh:24-26 `want=$(git rev-parse --verify -q refs/ccgg/pin || git rev-parse $2^{commit}); [ \"$head\" = \"$want\" ]` — the pin ref is written by the sync it is meant to constrain. Without CCGG_REF, update.sh:75 `git pull --ff-only -q 2>/dev/null || true` follows the clone's branch. session-start.sh:17-19 describes CCGG_REF as 'a tag or branch you control' and wire/SKILL.md:47 as 'the pin the hook trusts'; no 40-hex commit or signature verification exists in either script.",
+    "hypothesis": "An attacker with push access to the configured branch or tag on CCGG_REPO (or a MITM on a non-TLS remote) publishes a new revision; the next session force-fetches it into refs/ccgg/pin, `ccgg_at_ref` passes trivially, and update.sh installs and the hook executes the new files.",
+    "falsifier": "grep -n 'refs/ccgg/pin' update.sh .claude/hooks/session-start.sh   # update.sh:71 rewrites the pin from origin with --force each run; session-start.sh:24 uses that ref as the expected value; then: grep -nE '[0-9a-f]{40}|--verify-signatures|verify-tag|verify-commit|gpg' update.sh .claude/hooks/session-start.sh   # expect no match: nothing pins a commit or checks a signature"
+  },
+  {
+    "id": "S-003",
+    "layer": "harness",
+    "class": "silent-failure",
+    "severity": "suggestion",
+    "location": "/home/user/claude-code-generic-guide/update.sh:75",
+    "claim": "update.sh discards the outcome of the unpinned `git pull` and of executing the freshly synced `tools/catalog.py --write`, contradicting the session-start hook's stated guarantee that sync failures are printed, so a stale, tampered or failing sync on the live-update path leaves no trace in the session.",
+    "evidence": "update.sh:75 `git -C \"$SRC\" pull --ff-only -q 2>/dev/null || true`; update.sh:134 `(cd \"$TARGET\" && python3 tools/catalog.py --write >/dev/null 2>&1) || true` runs code copied at :113 from the remote clone with stdout and stderr dropped; session-start.sh:20-21 promises 'Failures are printed, never hidden: a silent sync failure looks exactly like a compromised one'.",
+    "hypothesis": "A compromised or broken catalog.py delivered by the sync executes at every session start with its output and exit status suppressed, and a failing unpinned pull leaves the clone at whatever revision it had, unreported.",
+    "falsifier": "grep -nE '\\|\\| true|2>/dev/null|>/dev/null 2>&1' update.sh   # expect lines 75 and 134 on the sync/execute path; grep -n 'never hidden' .claude/hooks/session-start.sh   # the guarantee those lines break"
+  },
+  {
+    "id": "S-004",
+    "layer": "harness",
+    "class": "authorization",
+    "severity": "important",
+    "location": "/home/user/claude-code-generic-guide/.claude/hooks/audit-verifier-guard.sh:31",
+    "claim": "The audit verifier's Bash guard is a regex denylist that exits 0 for any command it does not recognise, so the verifier (Bash-enabled, running with the user's permissions) can reach the network, write files outside the worktree and alter git configuration with commands like `python3 -c`, `git fetch`/`git clone`, `git config core.hooksPath`, `sed -i`, `touch` or `find -delete`, despite the header's claim that it fails closed and the agent's claim that it 'executes read-only commands only'.",
+    "evidence": "audit-verifier-guard.sh:7 'Anything the guard cannot parse is refused — it fails closed'; :31-45 the `denied` list matches only git push/write verbs, rm, curl|wget|ssh|scp|rsync|nc|ncat, package installers, sudo|chmod|chown|mkfs|dd, tee|truncate|redirects, mv|cp, and then `sys.exit(0)`; no allowlist, no interpreter check. audit-verifier.md:3 'executes read-only commands only'; :26-27 'a guard hook additionally refuses network, package-install, deletion, and push-shaped commands'. docs/10-hooks.md:165: any exit other than 2 is fail-open.",
+    "hypothesis": "Instruction-shaped content in a candidates file or in repository text steers the verifier to run a Python one-liner or `git fetch`/`sed -i`; the guard allows it and the verifier exfiltrates or writes outside the disposable worktree.",
+    "falsifier": "cd <isolated copy> && for c in 'python3 -c \"import urllib.request as u;u.urlopen(\\\"http://127.0.0.1:9/\\\")\"' 'git fetch origin' 'git clone https://example.invalid/x /tmp/x' 'sed -i s/a/b/ AGENTS.md' 'git config core.hooksPath /tmp/h' 'find . -name \"*.md\" -delete' 'python3 -c \"open(\\\"/tmp/pwned\\\",\\\"w\\\")\"'; do printf '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":%s}}' \"$(python3 -c 'import json,sys;print(json.dumps(sys.argv[1]))' \"$c\")\" | bash .claude/hooks/audit-verifier-guard.sh; echo \"$c -> exit $?\"; done   # expect `exit 0` (allowed) for every line, while a command containing one of the tokens listed at line 35 returns exit 2"
+  },
+  {
+    "id": "S-005",
+    "layer": "harness",
+    "class": "injection",
+    "severity": "important",
+    "location": "/home/user/claude-code-generic-guide/tools/audit_probes.py:141",
+    "claim": "The mutation, plant and observe columns of the committed data files tools/probes.txt and tools/redteam_probes.txt are executed verbatim with `bash -c` under the invoking user with the operator's real environment and HOME, and that execution is pre-approved without a prompt by the ccgg-audit skill's allowed-tools and run on every pull request by CI, so a change to a data file the audit describes as a 'contract' yields arbitrary code execution while the skill promises it 'cannot change anything'.",
+    "evidence": "audit_probes.py:141 `mutated = _run([\"bash\", \"-c\", probe.mutation], scratch_repo)` with `_run(..., env=None)` (:114-115) — inherits the caller's environment and HOME; audit_redteam.py:123,130 `_run([\"bash\", \"-c\", probe.plant|probe.observe], ...)` (private HOME only, PATH and the rest inherited, real filesystem reachable); tools/probes.txt:37 is already a `python3 -c \"...json.dump(...)\"` program; `.claude/skills/ccgg-audit/SKILL.md:5` `allowed-tools: Bash(python3 tools/audit_probes.py *) Bash(python3 tools/audit_redteam.py *)`; :23-25 'The audit never edits a tracked file ... cannot change anything while doing so'; `.github/workflows/validate.yml:29` `run: python tools/audit_probes.py` on `pull_request`; update.sh:11-12 says probes files are 'the project's own contracts', i.e. never refreshed from the guide, so a planted line persists.",
+    "hypothesis": "A commit or PR appends a line such as `x | caught | <shell>` to tools/probes.txt; the next `/ccgg-audit` run (auto-allowed) or CI run executes it with the user's or runner's permissions, outside the scratch copy if the snippet uses absolute paths.",
+    "falsifier": "grep -n '\"bash\", \"-c\"' tools/audit_probes.py tools/audit_redteam.py   # the exec lines; grep -nE 'env=None|env: dict \\| None|HOME' tools/audit_probes.py   # no private HOME or env restriction for mutations; sed -n '37p' tools/probes.txt   # an arbitrary python3 -c program already in the contract; grep -n 'allowed-tools' .claude/skills/ccgg-audit/SKILL.md; grep -n 'audit_probes' .github/workflows/validate.yml   # pre-approval and CI trigger. Human reproduction outside the guarded verifier: in a scratch clone append `escape | caught | id -un >&2; exit 1` to tools/probes.txt, commit, run `python3 tools/audit_probes.py` — the ERROR row prints the operator's username captured from the snippet's stderr"
+  }
+]

@@ -158,3 +158,9 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-16 — Slice 1 ships the probe harness in CI, the deterministic facts script,
   the harness specialist, and the verifier; the other five specialists are slice 2 and
   the headless CI job is slice 3, per the architecture record — [in]
+- 2026-09-16 — Slice 2: the five remaining specialists and a red-team probe set that
+  plants a marker in each content channel and measures, for hook output, whether it
+  reaches what the model sees; scripted live sessions stay out until slice 3 can run
+  headless — [in]
+- 2026-09-16 — The security specialist reads the shipped tooling's output when the
+  orchestrator ran it, since a Read/Glob/Grep agent cannot invoke a skill itself — [in]

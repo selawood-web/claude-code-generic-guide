@@ -1,0 +1,574 @@
+{
+  "scope": "all",
+  "vocab_as_of": "2026-09-16",
+  "facts": [
+    {
+      "id": "hook-registration-001",
+      "kind": "hook-registration",
+      "status": "ok",
+      "location": ".claude/settings.json",
+      "evidence": "4 hook file(s) registered and present",
+      "detail": ""
+    },
+    {
+      "id": "hook-stdout-001",
+      "kind": "hook-stdout",
+      "status": "ok",
+      "location": ".claude/hooks/pre-compact.sh",
+      "evidence": "PreCompact stdout shapes the compaction summary",
+      "detail": ""
+    },
+    {
+      "id": "hidden-characters-001",
+      "kind": "hidden-characters",
+      "status": "ok",
+      "location": "instruction files",
+      "evidence": "45 file(s) scanned, none found",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-001",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/architecture/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-002",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/architecture/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-003",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ccgg-audit/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-004",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ccgg-audit/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-005",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ccgg-code-review/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-006",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ccgg-code-review/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-007",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ccgg-security-review/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-008",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ccgg-security-review/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-009",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/code-generation/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-010",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/code-generation/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-011",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/commit/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-012",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/commit/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-013",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/debug/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-014",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/debug/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-015",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/decide/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-016",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/decide/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-017",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/deploy/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-018",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/deploy/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-019",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/deploy-steward/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-020",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/deploy-steward/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-021",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/dream/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-022",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/dream/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-023",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/efficiency/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-024",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/efficiency/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-025",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/feature/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-026",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/feature/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-027",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/flush/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-028",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/flush/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-029",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/git-steward/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-030",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/git-steward/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-031",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/learn/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-032",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/learn/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-033",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/momentum/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-034",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/momentum/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-035",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/pr/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-036",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/pr/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-037",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/product-brief/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-038",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/product-brief/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-039",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/reconcile-docs/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-040",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/reconcile-docs/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-041",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/refactor/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-042",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/refactor/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-043",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/requirements/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-044",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/requirements/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-045",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ship/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-046",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/ship/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-047",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/skillify/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-048",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/skillify/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-049",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/standup/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-050",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/standup/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-051",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/testing/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-052",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/testing/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-053",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/wire/SKILL.md",
+      "evidence": "key 'purpose' is not a product key but repository tooling reads it",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-054",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/skills/wire/SKILL.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-055",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-consistency.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-056",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-harness.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-057",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-redteam.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-058",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-security.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-059",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-spec.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-060",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-tests.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "frontmatter-061",
+      "kind": "frontmatter",
+      "status": "ok",
+      "location": ".claude/agents/audit-verifier.md",
+      "evidence": "keys and tool names match the documented vocabulary",
+      "detail": ""
+    },
+    {
+      "id": "command-resolution-001",
+      "kind": "command-resolution",
+      "status": "finding",
+      "location": "rule files",
+      "evidence": "`/skill-name` is neither a skill here nor a documented built-in",
+      "detail": "class: dead-mechanism unless it is a placeholder in prose"
+    },
+    {
+      "id": "network-exec-001",
+      "kind": "network-exec",
+      "status": "finding",
+      "location": ".claude/hooks/session-start.sh:31",
+      "evidence": "git clone: git clone --depth 1 -q --branch \"$CCGG_REF\" \"$CCGG_REPO\" \"$CCGG_HOME\" \\",
+      "detail": "class: supply-chain; pin, verify, or document the trust boundary"
+    },
+    {
+      "id": "permission-surface-001",
+      "kind": "permission-surface",
+      "status": "ok",
+      "location": ".claude/settings.json",
+      "evidence": "{\"additionalDirectories\": [], \"allow\": [], \"defaultMode\": null, \"deny\": [], \"enableAllProjectMcpServers\": null, \"env\": [], \"hooks\": [\"PreCompact\", \"SessionEnd\", \"SessionStart\"]}",
+      "detail": "grants in a committed file apply after trust in a session and without trust under -p"
+    },
+    {
+      "id": "gate-001",
+      "kind": "gate",
+      "status": "ok",
+      "location": "/usr/local/bin/python3 tools/validate.py",
+      "evidence": "validator exited 0",
+      "detail": "OK \u2014 markdown links, skills and agents frontmatter, configs, and hooks all valid"
+    },
+    {
+      "id": "gate-002",
+      "kind": "gate",
+      "status": "ok",
+      "location": "/usr/local/bin/python3 -m unittest discover -s tools -p test_*.py",
+      "evidence": "unit tests exited 0",
+      "detail": "...............................................................................................................................................................................\n----------------------------------------------------------------------\nRan 175 tests in 0.012s\n\nOK"
+    },
+    {
+      "id": "gate-003",
+      "kind": "gate",
+      "status": "ok",
+      "location": "/usr/local/bin/python3 tools/feature_lint.py --strict",
+      "evidence": "feature lint exited 0",
+      "detail": "features/F001-feature-definition-tool.md: OK\nfeatures/F002-audit-skill.md: OK\nfeature-lint: 2 file(s), 0 failing"
+    },
+    {
+      "id": "gate-004",
+      "kind": "gate",
+      "status": "ok",
+      "location": "/usr/local/bin/python3 tools/catalog.py",
+      "evidence": "catalog exited 0",
+      "detail": "catalog: 27 skills; all catalogs current"
+    }
+  ]
+}

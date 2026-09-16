@@ -310,5 +310,20 @@ class FetchExecTests(unittest.TestCase):
         self.assertEqual(validate.fetch_exec_problems("h.sh", ""), [])
 
 
+
+class BlankInlineCodeTests(unittest.TestCase):
+    def test_backticked_link_is_not_a_link(self):
+        out = validate.blank_inline_code("see `[x](gone.md)` here")
+        self.assertNotIn("(gone.md)", out)
+        self.assertEqual(len(out), len("see `[x](gone.md)` here"))
+
+    def test_plain_link_untouched(self):
+        self.assertEqual(validate.blank_inline_code("[x](real.md)"), "[x](real.md)")
+
+    def test_empty_and_unclosed(self):
+        self.assertEqual(validate.blank_inline_code(""), "")
+        self.assertEqual(validate.blank_inline_code("a ` b"), "a ` b")
+
+
 if __name__ == "__main__":
     unittest.main()
