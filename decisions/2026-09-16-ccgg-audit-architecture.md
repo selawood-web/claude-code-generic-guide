@@ -1,7 +1,7 @@
 # Architecture — the `/ccgg-audit` skill (F002)
 
 - **Date:** 2026-09-16
-- **Status:** proposed
+- **Status:** decided
 - **Type:** architecture
 - **Deciders:** repository owner
 - **Supersedes / superseded by:** —
