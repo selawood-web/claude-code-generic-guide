@@ -22,6 +22,8 @@ from audit_headless import (
     HeadlessError,
     build_command,
     check_scope,
+    failure_line,
+    result_object,
     orchestrator_prompt,
     retarget_write_grant,
     skill_body,
@@ -145,6 +147,75 @@ class BuildCommandTests(unittest.TestCase):
     def test_model_is_optional(self):
         self.assertNotIn("--model", self.argv)
         self.assertIn("--model", build_command('{}', "p", ["Read"], "all", "d", 1, 1.0, model="haiku"))
+
+
+# The result the CLI actually returned when the first authenticated run hit a bad key.
+REAL_401 = json.dumps({
+    "stop_reason": "stop_sequence", "session_id": "6127458b", "total_cost_usd": 0,
+    "terminal_reason": "api_error", "subagent_stats": {"spawned": 0}, "is_error": True,
+    "num_turns": 1, "subtype": "success", "api_error_status": 401,
+    "result": "Invalid API key · Fix external API key", "type": "result",
+})
+
+
+class ResultObjectTests(unittest.TestCase):
+    def test_plain_json(self):
+        self.assertEqual(result_object(REAL_401)["api_error_status"], 401)
+
+    def test_json_on_the_last_line_among_noise(self):
+        self.assertIsNotNone(result_object(f"warning: something\n{REAL_401}\n"))
+
+    def test_no_json(self):
+        self.assertIsNone(result_object("just text"))
+        self.assertIsNone(result_object("   "))
+
+    def test_malformed_json_is_not_a_crash(self):
+        self.assertIsNone(result_object("{not json}"))
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            result_object(None)
+
+
+class FailureLineTests(unittest.TestCase):
+    """One line, because a ten-line tail hid an invalid key under log noise once."""
+
+    def test_reports_the_clis_own_reason_with_the_numbers(self):
+        line = failure_line(REAL_401, "", 1)
+        self.assertEqual(len(line.splitlines()), 1)
+        self.assertIn("Invalid API key", line)
+        self.assertIn("HTTP 401", line)
+        self.assertIn("1 turn(s)", line)
+        self.assertIn("0.00 USD", line)
+        self.assertIn("0 subagent(s)", line)
+
+    def test_budget_exhaustion_reads_plainly(self):
+        payload = json.dumps({"result": "Budget limit reached", "terminal_reason": "budget",
+                              "num_turns": 44, "total_cost_usd": 10.0,
+                              "subagent_stats": {"spawned": 6}})
+        line = failure_line(payload, "", 1)
+        self.assertIn("Budget limit reached", line)
+        self.assertIn("10.00 USD", line)
+        self.assertIn("6 subagent(s)", line)
+
+    def test_terminal_reason_alone_is_enough(self):
+        self.assertIn("api_error", failure_line(json.dumps({"terminal_reason": "api_error"}), "", 1))
+
+    def test_falls_back_to_the_last_stderr_line(self):
+        line = failure_line("", "warming up\nError: Input must be provided", 1)
+        self.assertEqual(line, "audit-headless: the run exited 1 — Error: Input must be provided")
+
+    def test_falls_back_to_stdout_when_stderr_is_empty(self):
+        self.assertIn("plain trouble", failure_line("plain trouble", "", 2))
+
+    def test_no_output_at_all_is_said_plainly(self):
+        self.assertEqual(failure_line("", "", 137),
+                         "audit-headless: the run exited 137 with no output")
+
+    def test_always_one_line(self):
+        for out, err in ((REAL_401, "noise\nmore"), ("", "a\nb\nc"), ("", "")):
+            with self.subTest(out=out[:20]):
+                self.assertEqual(len(failure_line(out, err, 1).splitlines()), 1)
 
 
 class CheckScopeTests(unittest.TestCase):
