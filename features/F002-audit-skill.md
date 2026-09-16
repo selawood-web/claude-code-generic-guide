@@ -87,10 +87,12 @@ being able to change anything.
   written, then the finding appears tagged unverified with severity no higher than
   important, or is dropped, and never as a blocker
 - Given a headless run against a checkout the operator did not write, when the audit
-  starts, then it runs with auto-discovery off (`--bare`, the documented flag for
-  skipping the tree's hooks, skills, agents, MCP servers and memory) and with
-  `--setting-sources user`, and the assembled command is written into the report
-  directory's `headless/` folder so what ran is on the record beside what it found
+  starts, then nothing in that tree configures the run — its settings, hooks, agents,
+  skills, MCP servers and `CLAUDE.md` are all excluded by `--setting-sources user` and
+  `--strict-mcp-config`, each of the five measured against a planted tree — while the
+  built-in tool set stays wide enough to invoke the specialists, and the assembled
+  command is written into the report directory's `headless/` folder so what ran is on
+  the record beside what it found
 - Given a headless run, when the verifier executes, then its guard hook comes from a
   path the caller controls and never from the audited tree, and a run that names no
   such path is refused
@@ -204,9 +206,13 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-16 — The audit workflow is invoked, never automatic: manual dispatch, or the
   `audit` label on a pull request, and never on a fork, where GitHub withholds the
   secret the run needs — [in]
-- 2026-09-16 — Whether `--bare` with inline `--agents` honours `isolation: worktree` is
-  undocumented; the first authenticated CI run is the check, and the fallback the
-  architecture record names (one `claude -p` per specialist) still stands — [open]
+- 2026-09-16 — Whether the headless run honours `isolation: worktree` on an inline agent
+  is undocumented; the first authenticated CI run that spawns a specialist is the check,
+  and the fallback the architecture record names (one `claude -p` per specialist) still
+  stands — [open]
+- 2026-09-16 — Whether a `hooks` block inside an inline `--agents` definition fires is
+  also unproven, and it is the verifier's guard: until a run shows the guard refusing a
+  command, treat headless verification as unguarded — [open]
 - 2026-09-16 — The first audit run that reached a model spawned no subagent and reported
   no `Agent` tool, after 42 turns and 1.38 USD. Read against the installed CLI (2.1.273)
   rather than a summary: `--bare` skips "hooks, LSP, plugin sync, attribution,
@@ -214,7 +220,15 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   does **not** list subagents, and names `--agents` as the way to supply them;
   `--allowedTools` only pre-approves while `--tools` is what restricts the set, and the
   run passes no `--tools`. So the design should hold and something else is wrong — the
-  tool set the orchestrator actually receives is the missing observation — [open]
+  tool set the orchestrator actually receives is the missing observation — [in]
+- 2026-09-16 — The probe answered it: the run held `Bash` and `Read`, nothing else.
+  `--bare` caps the built-in set to `Bash, Edit, Read` — it loads the inline briefs and
+  then leaves no `Task` tool to invoke one, and `--tools` cannot widen it back. Measured
+  against a planted tree (a hook that touches a file, a `CLAUDE.md`, an agent, a skill),
+  `--setting-sources user` excludes all four exactly as `--bare` does while keeping the
+  full tool set, so the run drops `--bare`, adds `--strict-mcp-config`, and names its
+  built-in set with `--tools` derived from the skill's own grants (`Agent` → `Task`).
+  Validator check 22 refuses both halves of the mistake — [in]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands
@@ -225,7 +239,7 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   nothing" from "never ran" and the job fails the second case — [in]
 - 2026-09-16 — The first authenticated run failed in seconds: the prompt was a trailing
   positional, and `-p` takes the prompt as its own value while the tool-list flags take
-  a list, so the prompt was swallowed and `--bare` sat where the prompt belonged. The
+  a list, so the prompt was swallowed and a flag sat where the prompt belonged. The
   prompt is now the value of `-p`, nothing follows the last list flag, and two tests
   assert both traps — [in]
 - 2026-09-16 — That same failure skipped the render, the artifact and the gate, leaving

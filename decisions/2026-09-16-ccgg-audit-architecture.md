@@ -376,13 +376,40 @@ Recorded while building slice 3, against the headless sketch above:
 - *What excludes the tree.* `--bare` is the documented flag for skipping a project's
   hooks, skills, agents, MCP servers and memory; the exclusion semantics of
   `--setting-sources user` are not documented. The run passes both and leans on `--bare`.
+  **Corrected again after the first authenticated run** (see the next section): `--bare`
+  also caps the built-in tool set, `--setting-sources user` carries the exclusion on its
+  own, and the run no longer passes `--bare`.
 - *The guard.* The sketch did not say where the verifier's guard hook comes from in a
   headless run. Taking it from the audited tree would hand the one executing agent a
   guard written by whoever wrote the tree, so the launcher requires a path the caller
   controls and CI takes it from the base branch.
 - *Authentication.* In bare mode Claude Code reads `ANTHROPIC_API_KEY` and never an
   OAuth credential or the keychain, so the workflow requires that secret and skips the
-  model run without it.
+  model run without it. **Corrected:** the run is no longer bare, so a local operator's
+  own credential may be used; CI has none, so the secret is still what the job requires.
+
+## Corrections — measured against the installed CLI (2.1.273), first run with a model
+
+The first authenticated run spent 1.38 USD over 42 turns, spawned zero specialists, and
+reported that it had no `Agent` tool. A one-turn probe asked the run to name its tools;
+the answer was `Bash` and `Read`. What the flags actually do, each line reproduced by
+starting a run against a planted tree and reading its `system/init` event and transcript:
+
+- **`--bare` caps the built-in tool set to `Bash, Edit, Read`.** `--tools` can narrow
+  that set but cannot widen it, and `--tools default` in bare mode returns the same
+  three. `--bare` *does* register inline `--agents`, so the run loads seven briefs and
+  holds no tool that can invoke one. The help text does not say this.
+- **`--setting-sources user` excludes the tree by itself**, with the full tool set
+  intact: against a planted `.claude/settings.json` hook, `CLAUDE.md`, `.claude/agents/`
+  entry and `.claude/skills/` entry, the hook did not fire, the rules never reached the
+  prompt, and neither the agent nor the skill was listed. `--setting-sources ''` behaves
+  identically; `user` keeps the operator's own configuration, which is theirs to trust.
+- **`--allowedTools` only pre-approves; `--tools` names what exists.** The run now names
+  its built-in set from the skill's own grants, so the two cannot drift.
+- **`Agent` and `Task` are aliases in the permission flags** — denying `Agent` removes
+  `Task` — but `--tools` accepts only `Task`.
+- **`--add-dir <tree>` re-enables discovery of that tree's agents.** The audited tree is
+  read from the working directory, never added.
 
 Recorded after the first full audit run, which verified two statements above against
 what was built:

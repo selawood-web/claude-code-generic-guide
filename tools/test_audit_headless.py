@@ -30,6 +30,7 @@ from audit_headless import (
     retarget_write_grant,
     skill_body,
     skill_grants,
+    tool_names,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -99,6 +100,28 @@ class RetargetWriteGrantTests(unittest.TestCase):
             retarget_write_grant(["Read", "Glob"], "CCGG-AUDIT-X")
 
 
+class ToolNamesTests(unittest.TestCase):
+    """What the run is given, derived from what the skill grants."""
+
+    def test_specifiers_are_dropped_and_order_is_kept(self):
+        self.assertEqual(
+            tool_names(["Bash(python3 tools/audit_facts.py *)", "Write(CCGG-AUDIT-X/**)", "Read"]),
+            ["Bash", "Write", "Read"],
+        )
+
+    def test_repeated_tools_are_named_once(self):
+        self.assertEqual(tool_names(["Bash(a *)", "Bash(b *)", "Read"]), ["Bash", "Read"])
+
+    def test_agent_becomes_the_built_in_name(self):
+        # The permission flags take either name; --tools takes only Task, and the
+        # run that proved it had no subagents at all.
+        self.assertEqual(tool_names(["Agent"]), ["Task"])
+
+    def test_no_grants_is_an_error_not_a_toolless_run(self):
+        with self.assertRaises(HeadlessError):
+            tool_names([])
+
+
 class OrchestratorPromptTests(unittest.TestCase):
     def test_states_scope_directory_and_the_evidence_rule(self):
         text = orchestrator_prompt(SAMPLE, "harness", "CCGG-AUDIT-X")
@@ -113,11 +136,22 @@ class OrchestratorPromptTests(unittest.TestCase):
 
 class BuildCommandTests(unittest.TestCase):
     def setUp(self):
-        self.argv = build_command('{"a":{}}', "/tmp/p.md", ["Read", "Write(d/**)"], "all", "d", 80, 10.0)
+        self.argv = build_command('{"a":{}}', "/tmp/p.md", ["Read", "Write(d/**)", "Agent"], "all", "d", 80, 10.0)
 
     def test_auto_discovery_is_off(self):
-        self.assertIn("--bare", self.argv)
         self.assertEqual(self.argv[self.argv.index("--setting-sources") + 1], "user")
+        self.assertIn("--strict-mcp-config", self.argv)
+
+    def test_bare_mode_is_not_used(self):
+        # --bare caps the built-in set to Bash, Edit and Read: it loads the inline
+        # briefs and then gives the orchestrator no tool that can invoke one. A run
+        # spent 1.38 USD proving it. Isolation comes from --setting-sources instead.
+        self.assertNotIn("--bare", self.argv)
+
+    def test_the_built_in_set_is_named_so_the_run_can_spawn_specialists(self):
+        exposed = self.argv[self.argv.index("--tools") + 1].split(",")
+        self.assertIn("Task", exposed, "no Task tool means no specialist ever runs")
+        self.assertNotIn("Agent", exposed, "--tools takes the built-in name, not the grant's alias")
 
     def test_nobody_is_prompted_and_the_budget_is_capped(self):
         self.assertEqual(self.argv[self.argv.index("--permission-prompts") + 1], "none")
@@ -126,7 +160,7 @@ class BuildCommandTests(unittest.TestCase):
 
     def test_grants_are_one_list_after_a_single_flag(self):
         start = self.argv.index("--allowedTools")
-        self.assertEqual(self.argv[start + 1:start + 3], ["Read", "Write(d/**)"])
+        self.assertEqual(self.argv[start + 1:start + 4], ["Read", "Write(d/**)", "Agent"])
         self.assertEqual(self.argv.count("--allowedTools"), 1)
 
     def test_edits_and_network_are_denied(self):
@@ -140,7 +174,8 @@ class BuildCommandTests(unittest.TestCase):
         self.assertEqual(self.argv[1], "-p")
         self.assertIn("Scope: all", self.argv[2])
         self.assertFalse(self.argv[2].startswith("-"))
-        self.assertIn("--bare", self.argv[3:], "--bare must not be consumed as the prompt")
+        self.assertIn("--setting-sources", self.argv[3:],
+                      "a flag must not be consumed as the prompt")
 
     def test_nothing_follows_the_last_tool_list(self):
         self.assertEqual(self.argv[-2], "--disallowed-tools")
@@ -284,10 +319,13 @@ class ProbeCommandTests(unittest.TestCase):
 
     def test_every_flag_that_shapes_the_toolset_is_identical(self):
         # If these drifted, the probe would answer a question about a different run.
-        for flag in ("--bare", "--setting-sources", "--agents", "--append-system-prompt-file",
+        for flag in ("--setting-sources", "--strict-mcp-config", "--tools", "--agents",
+                     "--append-system-prompt-file",
                      "--permission-prompts", "--allowedTools", "--disallowed-tools"):
             with self.subTest(flag=flag):
                 self.assertIn(flag, self.probe)
+        self.assertEqual(self.probe[self.probe.index("--tools") + 1],
+                         self.real[self.real.index("--tools") + 1])
         self.assertEqual(self.probe[self.probe.index("--agents") + 1],
                          self.real[self.real.index("--agents") + 1])
         self.assertEqual(self.probe[self.probe.index("--allowedTools") + 1:
@@ -343,7 +381,9 @@ class MainTests(unittest.TestCase):
             definitions["audit-verifier"]["hooks"]["PreToolUse"][0]["hooks"][0]["command"], self.guard
         )
         with open(os.path.join(base, "command.txt"), encoding="utf-8") as fh:
-            self.assertIn("--bare", fh.read())
+            recorded = fh.read()
+        self.assertIn("--setting-sources user", recorded)
+        self.assertIn("Task", recorded.split("--tools")[1].split()[0])
 
     def test_a_run_without_a_trusted_guard_is_refused(self):
         code, _, err = self.run_main("--dry-run")

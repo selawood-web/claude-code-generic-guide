@@ -41,6 +41,21 @@ FIXED_SCOPES = ("all", "harness", "process", "product")
 # Removed outright: the audit neither edits nor reaches the network. Write stays,
 # scoped to the report directory, because the run's own artifacts land there.
 DENIED_TOOLS = ("Edit", "NotebookEdit", "WebFetch", "WebSearch")
+# What keeps the audited tree out of the run. `--bare` used to carry this and was
+# wrong for the job: it caps the built-in set to Bash, Edit and Read, so the
+# orchestrator has no Task tool and the inline briefs — which `--bare` does load —
+# can never be invoked. The first authenticated run spent 1.38 USD spawning zero
+# specialists for exactly that reason. Each property is now carried by a flag that
+# leaves the tool set alone, and each was measured against a planted tree:
+#   --setting-sources user  the tree's settings, hooks, agents, skills and CLAUDE.md
+#                           are all excluded (a planted hook never fired, a planted
+#                           CLAUDE.md never reached the prompt, a planted agent and
+#                           skill never appeared)
+#   --strict-mcp-config     no MCP server from the tree's .mcp.json
+#   --tools                 the built-in set, named from the skill's own grants
+ISOLATION = ("--setting-sources", "user", "--strict-mcp-config")
+# `--tools` names the built-in tool; the permission flags accept either name.
+TOOL_ALIASES = {"Agent": "Task"}
 WRITE_GRANT_RE = re.compile(r"Write\([^)]*\)")
 DEFAULT_MAX_TURNS = 80
 DEFAULT_BUDGET_USD = 10.0
@@ -115,6 +130,25 @@ def retarget_write_grant(grants: list[str], report_dir: str) -> list[str]:
     return out
 
 
+def tool_names(grants: list[str]) -> list[str]:
+    """The built-in tools to expose, named from the skill's grants, in file order.
+
+    `--allowedTools` only pre-approves; what the run *has* is the built-in set,
+    and it has to be named or the defaults apply. Deriving it from the same
+    grants keeps the two in lockstep: grant a tool in the skill and the headless
+    run gets it, grant nothing and it has nothing.
+    """
+    names: list[str] = []
+    for grant in grants:
+        name = grant.split("(", 1)[0].strip()
+        name = TOOL_ALIASES.get(name, name)
+        if name and name not in names:
+            names.append(name)
+    if not names:
+        raise HeadlessError("no tool names in the skill's grants; the run would have no tools")
+    return names
+
+
 def orchestrator_prompt(skill_text: str, scope: str, report_dir: str) -> str:
     """The appended system prompt: the skill's own steps, plus where this run stands."""
     return (
@@ -146,16 +180,29 @@ def build_command(agents_json: str, prompt_file: str, grants: list[str], scope: 
     # silently lost; and --allowedTools and --disallowed-tools take a list, so a
     # trailing prompt is swallowed as one more tool name. Nothing follows the
     # last list flag.
+    return _command(
+        f"Audit this repository at HEAD. Scope: {scope}. Report directory: {report_dir}.",
+        agents_json, prompt_file, grants, str(max_turns), str(budget_usd), model,
+    )
+
+
+def _command(prompt: str, agents_json: str, prompt_file: str, grants: list[str],
+             max_turns: str, budget_usd: str, model: str | None) -> list[str]:
+    """Every flag both the audit and the tool probe share, assembled once.
+
+    One function so the probe cannot answer a question about a command nobody
+    runs: change the audit's flags and the probe changes with them.
+    """
     argv = [
         "claude",
-        "-p", f"Audit this repository at HEAD. Scope: {scope}. Report directory: {report_dir}.",
-        "--bare",                       # no auto-discovery: not the tree's hooks, skills, agents, or memory
-        "--setting-sources", "user",    # and none of its settings or env block
+        "-p", prompt,
+        *ISOLATION,
+        "--tools", ",".join(tool_names(grants)),
         "--agents", agents_json,
         "--append-system-prompt-file", prompt_file,
         "--permission-prompts", "none",  # nobody is here to answer one
-        "--max-turns", str(max_turns),
-        "--max-budget-usd", str(budget_usd),
+        "--max-turns", max_turns,
+        "--max-budget-usd", budget_usd,
         "--output-format", "json",
     ]
     if model:
@@ -277,23 +324,8 @@ def probe_command(agents_json: str, prompt_file: str, grants: list[str],
     This asks it, for a fraction of a cent, with every flag that matters kept
     identical — change the real command and this changes with it.
     """
-    argv = [
-        "claude",
-        "-p", PROBE_PROMPT,
-        "--bare",
-        "--setting-sources", "user",
-        "--agents", agents_json,
-        "--append-system-prompt-file", prompt_file,
-        "--permission-prompts", "none",
-        "--max-turns", "1",
-        "--max-budget-usd", str(PROBE_BUDGET_USD),
-        "--output-format", "json",
-    ]
-    if model:
-        argv += ["--model", model]
-    argv += ["--allowedTools", *grants]
-    argv += ["--disallowed-tools", ",".join(DENIED_TOOLS)]
-    return argv
+    return _command(PROBE_PROMPT, agents_json, prompt_file, grants, "1",
+                    str(PROBE_BUDGET_USD), model)
 
 
 def check_scope(scope: str, root: str) -> str:
