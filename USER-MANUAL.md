@@ -1011,6 +1011,7 @@ Pre-seeded with engineering wisdom:
 | `common-pitfalls.md` | N+1 queries, race conditions, JWT attacks, IDOR, migration mistakes |
 | `ai-infrastructure-lessons.md` | What broke when this repo's own mechanisms were tested against the live product |
 | `agent-harness-patterns.md` | Execution and verification patterns confirmed against a second, independent agent harness |
+| `harness-testing-patterns.md` | How to test the configuration layer that steers the agent: dead mechanisms, mutation probes, trust boundaries, verifier independence |
 
 **Add your own entries** by creating new `.md` files in this directory. Use the same format:
 
