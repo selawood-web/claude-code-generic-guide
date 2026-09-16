@@ -134,7 +134,10 @@ consistent across sources even where the exact numbers need re-verification.
   commands, and a project skill's `allowed-tools` are **used** in that
   situation. `--bare` drops hooks, skills, and MCP servers but the project's
   `env` block still applies; only `--setting-sources user` excludes project
-  settings entirely.
+  settings entirely. **Measured since** (CLI 2.1.273): `--setting-sources user`
+  also keeps the tree's `CLAUDE.md`, agents and skills out, and `--bare` caps the
+  built-in tool set to `Bash, Edit, Read` — no `Task`, so a bare run can load
+  subagent briefs and never invoke one.
 
 ---
 
@@ -379,8 +382,8 @@ deterministic checks above plus scripted sessions.
 - **Auditing a checkout you did not write is itself a trust decision.** A
   headless run uses the repository's hooks, `env` block, and skill tool grants
   without asking (verified today against the permissions reference). Run the
-  audit with `--setting-sources user` so no project settings load, or `--bare`
-  plus `--settings '{"disableAllHooks": true}'`, and treat the project's
+  audit with `--setting-sources user` so no project settings load — not `--bare`
+  if the run needs subagents, which it removes the tool for — and treat the project's
   `.claude/` as *input to be audited*, never as configuration to be obeyed.
 - Cost and turn caps are flags, not intentions: `--max-turns`,
   `--max-budget-usd`, and a workflow timeout; `--output-format json` with

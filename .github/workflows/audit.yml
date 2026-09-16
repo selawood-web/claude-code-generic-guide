@@ -75,8 +75,8 @@ jobs:
             echo "budget=$BUDGET"
             echo "stamp=CCGG-AUDIT-$(date -u +%Y%m%dT%H%M%SZ)"
           } >> "$GITHUB_OUTPUT"
-          # Bare mode reads ANTHROPIC_API_KEY and nothing else: it never opens the
-          # keychain or an OAuth credential, which is the point of running bare.
+          # The runner has no keychain and no OAuth credential, so this secret is
+          # the run's only way to authenticate: no key, no model stage.
           if [ -n "${KEY:-}" ]; then
             echo "authenticated=true" >> "$GITHUB_OUTPUT"
           else
@@ -220,7 +220,7 @@ jobs:
           exit 1
 
       - name: Install Claude Code
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
@@ -242,7 +242,8 @@ jobs:
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools
 
       # The same launcher a maintainer runs locally, with the same assembled command:
-      # auto-discovery off, agents inline, grants taken from the skill, budget capped.
+      # the tree's settings, hooks, agents, skills and CLAUDE.md excluded, agents
+      # inline, the tool set and grants taken from the skill, budget capped.
       # `--agents` takes literal JSON, so it is passed as one argument, never a path.
       - name: Headless audit
         if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true
@@ -317,6 +318,7 @@ jobs:
           COMPLETE: ${{ steps.report.outputs.complete }}
           FINDINGS: ${{ steps.report.outputs.findings }}
           DRY_RUN: ${{ inputs.dry_run }}
+          PROBE: ${{ inputs.probe_tools }}
           AUTHENTICATED: ${{ steps.settings.outputs.authenticated }}
         run: |
           set -euo pipefail
@@ -324,6 +326,11 @@ jobs:
             if [ "$DRY_RUN" = "true" ]; then
               echo "Dry run: assembled the command and rendered the deterministic results. Nothing was audited, as asked."
               echo "Dry run — nothing audited, by request." >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$PROBE" = "true" ]; then
+              echo "Tool probe: asked the run what tools it has and stopped. Nothing was audited, as asked."
+              echo "Tool probe — nothing audited, by request; the tool list is in the step log." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             echo "This run audited nothing: the model stage left no candidates, no findings and no revision stamp."

@@ -814,6 +814,42 @@ def check_workflow_pins() -> None:
             fail(f"{path}: uses {ref} — pin the action to a commit SHA; a tag can be moved under you")
 
 
+# --- 22. a headless audit can still invoke its specialists --------------------
+def check_headless_can_spawn() -> None:
+    """The briefs are worth nothing if the orchestrator has no tool to call them.
+
+    A run once loaded seven specialists and spawned none: `--bare` caps the
+    built-in set to Bash, Edit and Read, so the Task tool was never there. The
+    two halves of that mistake are checked here — the mode, and the grant the
+    tool set is derived from. Optional, like the other audit checks.
+    """
+    if not tracked("tools/audit_headless.py"):
+        return
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import audit_headless
+    except ImportError:
+        return
+    with open(os.path.join(ROOT, "tools/audit_headless.py"), encoding="utf-8", errors="replace") as fh:
+        source = fh.read()
+    if '"--bare"' in source or "'--bare'" in source:
+        fail("tools/audit_headless.py: --bare caps the built-in tools to Bash, Edit and Read — "
+             "the run would load the specialists and have no Task tool to invoke them")
+    skill = os.path.join(ROOT, audit_headless.SKILL_PATH)
+    if not os.path.exists(skill):
+        return
+    with open(skill, encoding="utf-8", errors="replace") as fh:
+        skill_text = fh.read()
+    try:
+        exposed = audit_headless.tool_names(audit_headless.skill_grants(skill_text))
+    except audit_headless.HeadlessError as exc:
+        fail(f"{audit_headless.SKILL_PATH}: {exc}")
+        return
+    if "Task" not in exposed:
+        fail(f"{audit_headless.SKILL_PATH}: allowed-tools grants no Agent, so a headless run "
+             f"gets no Task tool and every specialist brief is dead weight (has: {', '.join(exposed)})")
+
+
 def check_features() -> None:
     """Feature definitions, when a project has any, meet the house schema.
 
@@ -858,6 +894,7 @@ def main() -> int:
     check_skill_grants()
     check_agents_serialize()
     check_workflow_pins()
+    check_headless_can_spawn()
     check_features()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")

@@ -504,6 +504,29 @@ class GateIntegrationTests(unittest.TestCase):
                 self.assertEqual(proc.returncode, 1, proc.stdout)
                 self.assertIn(expected, proc.stdout)
 
+    def test_a_headless_run_that_cannot_spawn_its_specialists_fails(self):
+        # Both halves of the mistake that cost a 1.38 USD run: the mode that hides
+        # the Task tool, and the grant the tool set is derived from.
+        self.reset()
+        path = os.path.join(self.repo, "tools/audit_headless.py")
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text.replace('ISOLATION = (', 'ISOLATION = ("--bare", ', 1))
+        proc = self.run_gate()
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("--bare", proc.stdout)
+
+        self.reset()
+        skill = os.path.join(self.repo, ".claude/skills/ccgg-audit/SKILL.md")
+        with open(skill, encoding="utf-8") as fh:
+            text = fh.read()
+        with open(skill, "w", encoding="utf-8") as fh:
+            fh.write(re.sub(r"^(allowed-tools: .*) Agent$", r"\1", text, count=1, flags=re.M))
+        proc = self.run_gate()
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("no Task tool", proc.stdout)
+
     def test_unregistered_hook_fails_both_ways(self):
         self.reset()
         with open(os.path.join(self.repo, ".claude/hooks/orphan.sh"), "w") as fh:
