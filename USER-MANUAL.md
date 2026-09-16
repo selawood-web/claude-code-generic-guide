@@ -510,6 +510,8 @@ is this secure?
 
 Never edits a tracked file. The report directory is ignored by git; keep one deliberately with `git add -f`. The catch rate of the probes runs in CI on every push, so a check the validator loses is a red build. Defined in [`features/F002-audit-skill.md`](features/F002-audit-skill.md).
 
+**Headless, for a checkout you did not write:** `tools/audit_headless.py` runs the same steps with auto-discovery off, so the audited tree's hooks, settings, skills and agents never configure the run that reads it. The briefs are passed inline, built from the same `.claude/agents/` files, and the verifier's guard hook must come from a path you control rather than from the tree under audit. `.github/workflows/audit.yml` runs it on a manual dispatch or an `audit` label, posts the report as one pull-request comment, and pushes nothing. It needs an `ANTHROPIC_API_KEY` secret; without one, the deterministic half still runs.
+
 **Examples:**
 ```
 /ccgg-audit
