@@ -111,41 +111,64 @@ def summarize(results: list[ProbeResult]) -> dict:
     }
 
 
-def _run(cmd: list[str], cwd: str, env: dict | None = None) -> subprocess.CompletedProcess:
+def _run(cmd: list[str], cwd: str, env: dict) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
 
 
-def make_scratch_copy(repo: str, scratch: str) -> str:
-    """Unpack HEAD into scratch/repo and commit it once as the baseline."""
+def probe_env(scratch: str) -> dict[str, str]:
+    """The environment a mutation and the gate run under: minimal, with a private HOME.
+
+    A mutation is a shell snippet from a committed data file. It gets PATH so the
+    gate's interpreters resolve, a HOME of its own beside the scratch copy so
+    nothing it does reaches ~/.claude, a fixed git identity, and nothing else —
+    not the operator's tokens, not the CCGG_* variables that would let it sync
+    from the operator's guide clone.
+    """
+    home = os.path.join(scratch, "home")
+    os.makedirs(home, exist_ok=True)
+    return {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": home,
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_AUTHOR_NAME": "probes", "GIT_AUTHOR_EMAIL": "probes@local",
+        "GIT_COMMITTER_NAME": "probes", "GIT_COMMITTER_EMAIL": "probes@local",
+    }
+
+
+def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
+    """Unpack HEAD into scratch/repo, commit it once as the baseline, return (path, env)."""
     dest = os.path.join(scratch, "repo")
     os.makedirs(dest)
     archive = subprocess.run(
         ["git", "archive", "--format=tar", "HEAD"], cwd=repo, capture_output=True, check=True
     )
     subprocess.run(["tar", "-xf", "-", "-C", dest], input=archive.stdout, check=True)
-    env = dict(os.environ, GIT_AUTHOR_NAME="probes", GIT_AUTHOR_EMAIL="probes@local",
-               GIT_COMMITTER_NAME="probes", GIT_COMMITTER_EMAIL="probes@local")
+    env = probe_env(scratch)
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "baseline"]):
         proc = _run(cmd, dest, env)
         if proc.returncode != 0:
             raise RuntimeError(f"scratch setup failed at {' '.join(cmd)}: {proc.stderr.strip()}")
-    return dest
+    return dest, env
 
 
-def run_probe(probe: Probe, scratch_repo: str, gate: list[str]) -> ProbeResult:
+def run_probe(probe: Probe, scratch_repo: str, gate: list[str], env: dict[str, str]) -> ProbeResult:
     """Reset, mutate, stage, run the gate. Never raises on a bad mutation — it records `error`."""
     for cmd in (["git", "reset", "-q", "--hard", "HEAD"], ["git", "clean", "-fdq"]):
-        proc = _run(cmd, scratch_repo)
+        proc = _run(cmd, scratch_repo, env)
         if proc.returncode != 0:
             return ProbeResult(probe.label, probe.expect, "error", f"reset failed: {proc.stderr.strip()}", probe.line)
-    mutated = _run(["bash", "-c", probe.mutation], scratch_repo)
+    if not probe.mutation.strip():
+        return ProbeResult(probe.label, probe.expect, "error", "empty mutation plants nothing", probe.line)
+    mutated = _run(["bash", "-c", probe.mutation], scratch_repo, env)
     if mutated.returncode == SKIP_EXIT:
         return ProbeResult(probe.label, probe.expect, "skipped", "mutation reported not applicable (exit 3)", probe.line)
     if mutated.returncode != 0:
         return ProbeResult(probe.label, probe.expect, "error",
                            f"mutation exited {mutated.returncode}: {mutated.stderr.strip()[:200]}", probe.line)
-    _run(["git", "add", "-A"], scratch_repo)
-    gated = _run(gate, scratch_repo)
+    _run(["git", "add", "-A"], scratch_repo, env)
+    gated = _run(gate, scratch_repo, env)
     if gated.returncode == 0:
         return ProbeResult(probe.label, probe.expect, "missed", "gate exited 0", probe.line)
     first = next((ln.strip() for ln in gated.stdout.splitlines() if ln.startswith("  ")), "")
@@ -189,7 +212,8 @@ def main(argv: list[str]) -> int:
         print(f"audit-probes: no probes file at {args.probes} — nothing to measure")
         return 0
     try:
-        probes = parse_probes(open(probes_path, encoding="utf-8").read())
+        with open(probes_path, encoding="utf-8") as fh:
+            probes = parse_probes(fh.read())
     except ProbeFileError as exc:
         print(f"audit-probes: {args.probes}: {exc}")
         return 1
@@ -200,8 +224,8 @@ def main(argv: list[str]) -> int:
     gate = shlex.split(args.gate)
     started = time.time()
     with tempfile.TemporaryDirectory(prefix="ccgg-probes-") as scratch:
-        scratch_repo = make_scratch_copy(repo, scratch)
-        results = [run_probe(p, scratch_repo, gate) for p in probes]
+        scratch_repo, env = make_scratch_copy(repo, scratch)
+        results = [run_probe(p, scratch_repo, gate, env) for p in probes]
     summary = summarize(results)
     summary["gate"] = args.gate
     summary["duration_s"] = round(time.time() - started, 1)

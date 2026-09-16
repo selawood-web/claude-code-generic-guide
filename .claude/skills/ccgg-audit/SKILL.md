@@ -90,13 +90,19 @@ budget cap — are appended as `unverified` with `notes: "verifier did not compl
 Success: `findings.jsonl` has one line per candidate.
 
 ### Step 5 — Render
+Write the run's stamp first — `REVISION-<short head>.json` in the report directory,
+with `head`, `dirty`, `scope`, `specialists_run`, `duration_s`, and `cost_usd` (null
+when unknown) — then render:
 ```bash
 python3 tools/audit_report.py --dir CCGG-AUDIT-<stamp>
 ```
 A schema failure here is a defect in the run, not in the repository: fix the offending
-line and re-render; never delete a finding to make the render pass.
+line and re-render; never delete a finding to make the render pass. The renderer
+also reads `candidates/*.json`: a candidate no verifier line covers is rendered
+unverified, never dropped, so a run whose verifier delivered nothing still reports.
 
-Success: `REPORT.md` exists, findings ordered by severity then confidence.
+Success: `REPORT.md` exists, headed by the stamp's commit, findings ordered by
+severity then confidence.
 
 ### Step 6 — Close-out
 Report in the conversation: blocker / important / suggestion counts, the probe catch

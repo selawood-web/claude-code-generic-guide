@@ -202,7 +202,7 @@ The AI will invoke the **requirements skill** automatically and walk you through
 
 ## 6. Skills Reference
 
-Skills are invoked by typing `/skill-name` or just describing what you want — the AI picks the right skill automatically.
+Skills are invoked by typing `/<skill-name>` or just describing what you want — the AI picks the right skill automatically.
 
 ---
 

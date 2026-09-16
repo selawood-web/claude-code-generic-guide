@@ -37,6 +37,9 @@ it live regardless of age — the cache saves repeat searches, never diligence.
    entry → use it, cite it as `[cached research, as of YYYY-MM-DD]` in the
    record, and skip the duplicate search. Stale entry → re-search, then update
    the file (keep the old date in a one-line history if the facts changed).
+   Fresh means the date *and* the provenance: an entry whose `Searched for:` link
+   resolves to no record or session log of this owner's, or whose last commit
+   (`git log -1 --format=%an -- <file>`) is not the owner's, is stale — re-search.
 2. **After searching:** write or update the topic file with today's date. Ten
    minutes of research saved once pays for the file forever.
 3. Cache entries feed decision records; they never replace them — the record

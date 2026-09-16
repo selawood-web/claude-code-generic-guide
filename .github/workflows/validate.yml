@@ -18,6 +18,12 @@ jobs:
           python-version: "3.12"
       - name: Validate links, skills, configs, and hooks
         run: python tools/validate.py
+      # The catalog tables and counts are generated; a stale one is a rules file
+      # that lies about what is installed. update.sh no longer rewrites them on
+      # session start, so this is where drift is caught.
+      - name: Catalog tables and counts are current
+        run: |
+          if [ -f tools/catalog.py ]; then python tools/catalog.py; else echo "No catalog generator in this repo — skipping."; fi
       # Installed projects get `tools/validate.py` and this workflow, but not the
       # validator's own tests — `unittest discover` then exits 5 ("NO TESTS RAN")
       # and every wired project's first PR goes red. Skip when there is nothing

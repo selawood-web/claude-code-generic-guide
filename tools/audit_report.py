@@ -2,7 +2,9 @@
 """Render REPORT.md for a /ccgg-audit run from the report directory's artifacts.
 
 Reads findings.jsonl (the verifier's output, one JSON object per line), facts.json,
-probes.json, and REVISION-*.json when present. Every finding is validated against
+probes.json, and REVISION-*.json when present. A candidate in candidates/*.json
+that no verifier record covers is rendered as an unverified finding rather than
+dropped, and the commit falls back to inventory.json when no REVISION stamp exists. Every finding is validated against
 the F002 schema in code, and one rule is enforced here rather than in any brief:
 an `unverified` finding may not carry `blocker` severity. A violation names the
 line and fails the render, so a report that exists is a report that obeys the
@@ -128,7 +130,60 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
     return "\n".join(out)
 
 
-def read_json(path: str) -> dict | None:
+def candidates_as_unverified(candidates: list[dict]) -> list[dict]:
+    """Findings the verifier never saw, rendered as what they are: unverified.
+
+    A run whose verifier delivered nothing used to render an empty report — a
+    clean bill for a repository nobody checked. Every candidate a specialist
+    produced becomes an unverified finding capped at important, with the
+    falsifier the specialist wrote as the reproduction still to run.
+    """
+    out = []
+    for cand in candidates:
+        if not isinstance(cand, dict) or not str(cand.get("id", "")).strip():
+            continue
+        severity = cand.get("severity") if cand.get("severity") in SEVERITIES else "important"
+        if severity == "blocker":
+            severity = "important"
+        layer = cand.get("layer") if cand.get("layer") in LAYERS else "harness"
+        out.append({
+            "id": str(cand["id"]),
+            "layer": layer,
+            "class": str(cand.get("class") or "unclassified"),
+            "severity": severity,
+            "confidence": "unverified",
+            "location": str(cand.get("location") or "unknown"),
+            "claim": str(cand.get("claim") or "(no claim)"),
+            "evidence": str(cand.get("evidence") or "(specialist gave no evidence)"),
+            "reproduction": "",
+            "fix": "unverified — the verifier did not deliver on this candidate; falsifier still to run: "
+                   + str(cand.get("falsifier") or "(none written)"),
+            "becomes_check": None,
+        })
+    return out
+
+
+def load_candidates(report_dir: str) -> list[dict]:
+    found: list[dict] = []
+    for path in sorted(glob.glob(os.path.join(report_dir, "candidates", "*.json"))):
+        data = read_json(path)
+        if isinstance(data, list):
+            found.extend(c for c in data if isinstance(c, dict))
+    return found
+
+
+def revision_of(report_dir: str) -> dict | None:
+    """The run's REVISION stamp, or the inventory's head/dirty when no stamp was written."""
+    revisions = sorted(glob.glob(os.path.join(report_dir, "REVISION-*.json")))
+    if revisions:
+        return read_json(revisions[-1])
+    inventory = read_json(os.path.join(report_dir, "inventory.json"))
+    if inventory and "head" in inventory:
+        return {"head": inventory.get("head"), "dirty": inventory.get("dirty"), "scope": "(no REVISION stamp)"}
+    return None
+
+
+def read_json(path: str) -> dict | list | None:
     try:
         with open(path, encoding="utf-8") as fh:
             return json.load(fh)
@@ -146,19 +201,24 @@ def main(argv: list[str]) -> int:
     findings_path = os.path.join(args.dir, "findings.jsonl")
     findings, problems = ([], [])
     if os.path.exists(findings_path):
-        findings, problems = load_findings(open(findings_path, encoding="utf-8").read())
+        with open(findings_path, encoding="utf-8") as fh:
+            findings, problems = load_findings(fh.read())
     if problems:
         print(f"audit-report: findings.jsonl violates the schema — {len(problems)} problem(s):")
         for p in problems:
             print(f"  {p}")
         return 1
-    revisions = sorted(glob.glob(os.path.join(args.dir, "REVISION-*.json")))
+    # Candidates the verifier never turned into a record are still findings — unverified ones.
+    seen = {rec["id"] for rec in findings}
+    synthesized = [rec for rec in candidates_as_unverified(load_candidates(args.dir)) if rec["id"] not in seen]
+    findings += synthesized
     text = render(findings, read_json(os.path.join(args.dir, "facts.json")),
                   read_json(os.path.join(args.dir, "probes.json")),
-                  read_json(revisions[-1]) if revisions else None)
+                  revision_of(args.dir))
     with open(os.path.join(args.dir, "REPORT.md"), "w", encoding="utf-8") as fh:
         fh.write(text)
-    print(f"audit-report: {len(findings)} finding(s) -> {os.path.join(args.dir, 'REPORT.md')}")
+    note = f" ({len(synthesized)} candidate(s) without a verifier record rendered unverified)" if synthesized else ""
+    print(f"audit-report: {len(findings)} finding(s){note} -> {os.path.join(args.dir, 'REPORT.md')}")
     return 0
 
 
