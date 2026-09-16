@@ -21,7 +21,7 @@ link to a heading that does not exist | caught | sed -i 's|(strategy.md)|(strate
 tracked markdown file emptied | caught | test -e docs/index.md || exit 3; : > docs/index.md
 always-loaded file over its byte budget | caught | yes 'padding that no reader needs' | head -300 >> WORKING-CHARTER.md
 stated skill count drifted in a catalog | caught | test -e README.md || exit 3; grep -q '27 skill' README.md || exit 3; sed -i 's/27 skill/26 skill/' README.md
-catalog row for a skill that does not exist | caught | test -e README.md || exit 3; sed -i '0,/^| `\/architecture` |/s//| `\/phantom` | Nothing |\n| `\/architecture` |/' README.md
+catalog row for a skill that does not exist | caught | grep -q '^| `/architecture` |' AGENTS.md || exit 3; sed -i '0,/^| `\/architecture` |/s//| `\/phantom` | Nothing |\n&/' AGENTS.md
 CLAUDE.md imports a file that does not exist | caught | printf '@notes/private.md\n' >> CLAUDE.md
 CLAUDE.md bridge removed | caught | echo '# nothing' > CLAUDE.md
 

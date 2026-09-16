@@ -417,6 +417,10 @@ def check_catalogs() -> None:
         for row_name in re.findall(r"^\| `([a-z0-9-]+)` \| `/[a-z0-9-]+` \|", readme, re.M):
             if row_name not in skills:
                 fail(f"README.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
+    if agents is not None:
+        for row_name in re.findall(r"^\| `/([a-z0-9-]+)` \|", agents, re.M):
+            if row_name not in skills:
+                fail(f"AGENTS.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
 
     count_re = re.compile(
         r"\b(\d+)\s+(?:production-ready\s+|reusable\s+|installed\s+)?[Ss]kill(?:s\b| workflows\b)"
