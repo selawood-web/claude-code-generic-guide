@@ -3,7 +3,7 @@ name: audit-harness
 description: Harness specialist for /ccgg-audit. Reads the deterministic facts and the rules, skills, hooks, and agent definitions of a repository, and returns candidate findings about mechanisms that are documented but dead, keys the product does not read, hooks that never fire, and mismatches with the current Claude Code reference. Read-only; only the audit skill invokes it.
 tools: Read, Glob, Grep
 model: haiku
-maxTurns: 40
+maxTurns: 60
 omitClaudeMd: true
 ---
 

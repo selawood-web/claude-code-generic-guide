@@ -265,5 +265,25 @@ class SeverityPolicyTests(unittest.TestCase):
         self.assertTrue(counts_as_failure(self.gap, "draft", strict=True))
 
 
+class MainIntegrationTests(unittest.TestCase):
+    def test_main_reports_per_file_and_exit_code(self):
+        import io
+        import os
+        import tempfile
+        from contextlib import redirect_stdout
+        import feature_lint
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = os.path.join(tmp, "F999-none.md")
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = feature_lint.main([missing])
+            self.assertEqual(rc, 1)
+            self.assertIn("no such file", out.getvalue())
+            out = io.StringIO()
+            with redirect_stdout(out):
+                rc = feature_lint.main(["--strict", missing, missing])
+            self.assertIn("2 file(s), 2 failing", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

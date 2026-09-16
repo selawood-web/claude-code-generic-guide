@@ -149,7 +149,7 @@ List all available skills or inject a specific skill into context:
 
 ### Slash Command Shorthand
 
-Users can reference skills directly as `/skill-name`:
+Users can reference skills directly as `/<skill-name>`:
 
 ```
 /commit              # Invokes the "commit" skill

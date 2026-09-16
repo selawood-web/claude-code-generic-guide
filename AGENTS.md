@@ -85,7 +85,7 @@ search memory for [keyword]
 
 ## Skill System
 
-Skills are loaded from `.claude/skills/`. Use them with `/skill-name` or they auto-invoke.
+Skills are loaded from `.claude/skills/`. Use them with `/<skill-name>` or they auto-invoke.
 
 Run the charter's **Skill Checker** before relying on any skill, every time, including the ones
 listed below — the three questions and the verdict live there, with the procedure in

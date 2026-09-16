@@ -21,6 +21,18 @@ Checks, in order:
      skill grants is a tool the product has (`powershell, bash` grants nothing).
  14. No hook or shell script clones without a pinned ref, or pipes a download into
      a shell — a session-start hook that does either executes remote code unseen.
+ 15. No hidden characters (zero-width, bidirectional controls, Unicode tags, C0
+     controls) in an always-loaded file or anything under .claude/ — text the model
+     reads and the reviewer cannot see is an instruction channel.
+ 16. Every hook file is registered (settings.json or a subagent's hooks) and every
+     registered hook file exists — a hook on one side only never fires or never runs.
+ 17. The settings.json env block that drives live sync is sane: CCGG_REPO carries
+     a CCGG_REF, and CCGG_HOME is not under a shared temporary directory.
+ 18. Every @import in CLAUDE.md or AGENTS.md resolves to a tracked file.
+ 19. Skill grants stay pinned: no bare Write, Edit, Bash, or NotebookEdit in
+     allowed-tools; the audit skill's grants are exactly the audit's four commands
+     and its report directory; skills that act outward (push, PR, merge, deploy,
+     wire) carry disable-model-invocation: true, so only a typed command starts them.
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -261,6 +273,28 @@ def check_skills() -> None:
         for key in SKILL_KEYS:
             if key not in keys:
                 fail(f"{path}: frontmatter missing key '{key}'")
+        fields, _ = parse_frontmatter_fields(lines)
+        for problem in skill_identity_problems(path, fields or {}):
+            fail(problem)
+
+
+def skill_identity_problems(path: str, fields: dict[str, str]) -> list[str]:
+    """A skill with an empty name or description is a skill the model cannot pick.
+
+    The description is what the model matches a request against; empty, the
+    skill exists in the catalog and never auto-invokes. The name is display-only
+    for project skills, so the directory is the command — a name that differs
+    from it documents a `/command` that does not exist.
+    """
+    problems = []
+    for key in ("name", "description"):
+        if not fields.get(key, "").strip("'\" "):
+            problems.append(f"{path}: frontmatter '{key}' is empty")
+    dirname = os.path.basename(os.path.dirname(path))
+    name = fields.get("name", "").strip("'\" ")
+    if name and dirname and name != dirname:
+        problems.append(f"{path}: name '{name}' differs from its directory '{dirname}' — the command is /{dirname}")
+    return problems
 
 
 AGENT_REQUIRED_KEYS = ("name", "description")
@@ -562,6 +596,162 @@ def check_hooks() -> None:
                 fail(f"{path}: bash syntax error — {probe.stderr.strip()}")
 
 
+# --- 15. hidden characters --------------------------------------------------
+# Zero-width joiners and spaces, bidirectional overrides, Unicode tag characters
+# and C0 controls other than tab, newline and carriage return: invisible in a
+# diff, present in what the model reads.
+HIDDEN_RE = re.compile(
+    "[\u200b-\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069\U000e0000-\U000e007f"
+    "\x00-\x08\x0b\x0c\x0e-\x1f]"
+)
+
+
+def hidden_characters(text: str) -> list[tuple[int, str]]:
+    """(line number, U+XXXX) for every hidden character in text."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    found = []
+    for n, line in enumerate(text.splitlines(), 1):
+        for m in HIDDEN_RE.finditer(line):
+            found.append((n, f"U+{ord(m.group(0)):04X}"))
+    return found
+
+
+def check_hidden_characters() -> None:
+    paths = [p for p in ALWAYS_LOADED if os.path.exists(os.path.join(ROOT, p))]
+    paths += tracked(".claude/*.md")
+    for path in paths:
+        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        for line, code in hidden_characters(text)[:5]:
+            fail(f"{path}:{line}: hidden character {code} — invisible to a reviewer, read by the model")
+
+
+# --- 16. hook registration ----------------------------------------------------
+HOOK_REF_RE = re.compile(r"\.claude/hooks/([A-Za-z0-9._-]+\.sh)")
+
+
+def hook_references(settings_text: str, agent_texts: dict[str, str]) -> dict[str, str]:
+    """hook file name → where it is registered, from settings.json and agent frontmatter."""
+    refs: dict[str, str] = {}
+    for name in HOOK_REF_RE.findall(settings_text):
+        refs.setdefault(name, ".claude/settings.json")
+    for path, text in agent_texts.items():
+        lines = text.splitlines()
+        end = lines[1:].index("---") + 1 if lines and "---" in lines[1:] else 0
+        for name in HOOK_REF_RE.findall("\n".join(lines[:end])):
+            refs.setdefault(name, path)
+    return refs
+
+
+def check_hook_registration() -> None:
+    files = {os.path.basename(p) for p in tracked(".claude/hooks/*.sh")}
+    settings_path = os.path.join(ROOT, ".claude", "settings.json")
+    settings_text = open(settings_path, encoding="utf-8").read() if os.path.exists(settings_path) else ""
+    agents = {p: open(os.path.join(ROOT, p), encoding="utf-8", errors="replace").read()
+              for p in tracked(".claude/agents/*.md")}
+    if not files and not settings_text:
+        return
+    refs = hook_references(settings_text, agents)
+    for name in sorted(files - set(refs)):
+        fail(f".claude/hooks/{name}: not registered in .claude/settings.json or any agent's hooks — it never fires")
+    for name in sorted(set(refs) - files):
+        fail(f"{refs[name]}: registers .claude/hooks/{name}, which is not a tracked file — the hook never runs")
+
+
+# --- 17. live-sync env --------------------------------------------------------
+SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
+
+
+def ccgg_env_problems(env: dict) -> list[str]:
+    """Problems with a settings.json env block that drives the session-start sync."""
+    problems = []
+    home = str(env.get("CCGG_HOME", "") or "")
+    repo = str(env.get("CCGG_REPO", "") or "")
+    ref = str(env.get("CCGG_REF", "") or "")
+    if repo and not ref:
+        problems.append("env sets CCGG_REPO without CCGG_REF — the hook refuses an unpinned clone, so live sync never starts; pin a tag, branch, or commit")
+    if home and (home in SHARED_TMP or home.startswith(tuple(t + "/" for t in SHARED_TMP))):
+        problems.append("env sets CCGG_HOME under a shared temporary directory — anyone on the host can pre-create it; use a path under your home such as ~/.claude/ccgg-guide")
+    if repo.startswith("http://"):
+        problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
+    return problems
+
+
+def check_ccgg_env() -> None:
+    path = os.path.join(ROOT, ".claude", "settings.json")
+    if not os.path.exists(path):
+        return
+    try:
+        settings = json.load(open(path, encoding="utf-8"))
+    except json.JSONDecodeError:
+        return  # check 6 reports it
+    env = settings.get("env") if isinstance(settings, dict) else None
+    if not isinstance(env, dict):
+        return
+    for problem in ccgg_env_problems(env):
+        fail(f".claude/settings.json: {problem}")
+
+
+# --- 18. imports --------------------------------------------------------------
+IMPORT_RE = re.compile(r"^@([^\s@]\S*)", re.M)
+
+
+def import_targets(text: str) -> list[str]:
+    """The paths a CLAUDE.md-style file imports with `@path` lines (code blocks excluded)."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    body = "\n".join(strip_code_blocks(text.splitlines()))
+    return IMPORT_RE.findall(body)
+
+
+def check_imports() -> None:
+    tracked_all = set(tracked("*"))
+    for path in ("CLAUDE.md", "AGENTS.md"):
+        full = os.path.join(ROOT, path)
+        if not os.path.exists(full):
+            continue
+        for target in import_targets(open(full, encoding="utf-8", errors="replace").read()):
+            if target.startswith("~"):
+                continue  # a user-level import, outside the repository
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            if not os.path.exists(os.path.join(ROOT, dest)):
+                fail(f"{path}: imports @{target}, which does not exist — the rules it holds never load")
+            elif dest not in tracked_all:
+                fail(f"{path}: imports @{target}, which is not tracked — every other clone loads nothing there")
+
+
+# --- 19. skill grants ---------------------------------------------------------
+AUDIT_SKILL_GRANTS = ("Bash(python3 tools/audit_facts.py *) Bash(python3 tools/audit_probes.py *) "
+                      "Bash(python3 tools/audit_redteam.py *) Bash(python3 tools/audit_report.py *) "
+                      "Write(CCGG-AUDIT-*/**) Read Glob Grep Agent")
+OUTWARD_SKILLS = ("ship", "git-steward", "deploy", "deploy-steward", "wire", "pr", "ccgg-audit")
+BARE_GRANT_RE = re.compile(r"\b(Write|Edit|Bash|NotebookEdit)\b(?!\()")
+
+
+def skill_grant_problems(path: str, fields: dict[str, str]) -> list[str]:
+    """Grants a skill pre-approves: a bare write or shell grant approves everything."""
+    problems = []
+    name = os.path.basename(os.path.dirname(path))
+    grants = fields.get("allowed-tools", "").strip("'\" ")
+    for tool in sorted(set(BARE_GRANT_RE.findall(grants))):
+        problems.append(f"{path}: allowed-tools grants bare {tool} — pre-approves every {tool} call; scope it with a specifier")
+    if name == "ccgg-audit" and grants and grants != AUDIT_SKILL_GRANTS:
+        problems.append(f"{path}: the audit's allowed-tools drifted from the pinned set (tools/validate.py AUDIT_SKILL_GRANTS)")
+    if name in OUTWARD_SKILLS and fields.get("disable-model-invocation", "").strip().lower() != "true":
+        problems.append(f"{path}: acts outward (push, PR, merge, deploy, wire) but lacks disable-model-invocation: true — the model can start it unasked")
+    return problems
+
+
+def check_skill_grants() -> None:
+    for path in tracked(".claude/skills/*/SKILL.md"):
+        lines = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read().splitlines()
+        fields, _ = parse_frontmatter_fields(lines)
+        if fields is None:
+            continue
+        for problem in skill_grant_problems(path, fields):
+            fail(problem)
+
+
 def check_features() -> None:
     """Feature definitions, when a project has any, meet the house schema.
 
@@ -599,6 +789,11 @@ def main() -> int:
     check_configs()
     check_claude_md_bridge()
     check_hooks()
+    check_hidden_characters()
+    check_hook_registration()
+    check_ccgg_env()
+    check_imports()
+    check_skill_grants()
     check_features()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")

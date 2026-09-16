@@ -1,5 +1,6 @@
 ---
 name: deploy
+disable-model-invocation: true
 description: Execute a deployment workflow safely. Use when the user says "deploy", "ship", "release", "push to production", or "go live".
 when_to_use: deploy, ship, release, push to production, go live, rollout
 argument-hint: "[environment: staging|production, or service name]"

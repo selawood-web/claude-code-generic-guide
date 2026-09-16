@@ -5,9 +5,19 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 """
 
 import json
+import os
+import tempfile
+import contextlib
+import io
 import unittest
 
-from audit_report import load_findings, render, validate_record
+import audit_report
+
+
+def _quiet_main(argv):
+    with contextlib.redirect_stdout(io.StringIO()):
+        return audit_report.main(argv)
+from audit_report import candidates_as_unverified, load_findings, render, revision_of, validate_record
 
 GOOD = {
     "id": "H-001", "layer": "harness", "class": "dead-mechanism", "severity": "important",
@@ -90,6 +100,72 @@ class RenderTests(unittest.TestCase):
         text = render([], None, None, None)
         self.assertIn("_None verified._", text)
         self.assertIn("_No finding proposes a permanent check._", text)
+
+
+class CandidateFallbackTests(unittest.TestCase):
+    CAND = {"id": "S-001", "layer": "harness", "class": "supply-chain", "severity": "blocker",
+            "location": "x.sh:1", "claim": "c", "evidence": "e", "hypothesis": "h", "falsifier": "grep x"}
+
+    def test_blocker_capped_and_unverified(self):
+        rec = candidates_as_unverified([self.CAND])[0]
+        self.assertEqual((rec["severity"], rec["confidence"]), ("important", "unverified"))
+        self.assertIn("grep x", rec["fix"])
+        self.assertEqual(validate_record(rec), [])
+
+    def test_missing_fields_defaulted_not_dropped(self):
+        rec = candidates_as_unverified([{"id": "X-1"}])[0]
+        self.assertEqual(validate_record(rec), [])
+        self.assertEqual(rec["layer"], "harness")
+
+    def test_garbage_skipped(self):
+        self.assertEqual(candidates_as_unverified([{"claim": "no id"}, "text", 3]), [])
+
+
+class ReportDirTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="ccgg-report-")
+        self.dir = self.tmp.name
+        os.makedirs(os.path.join(self.dir, "candidates"))
+        with open(os.path.join(self.dir, "candidates", "audit-security.json"), "w") as fh:
+            json.dump([CandidateFallbackTests.CAND, dict(CandidateFallbackTests.CAND, id="S-002")], fh)
+        with open(os.path.join(self.dir, "inventory.json"), "w") as fh:
+            json.dump({"head": "abc1234", "dirty": True}, fh)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def report(self):
+        with open(os.path.join(self.dir, "REPORT.md"), encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_revision_falls_back_to_inventory(self):
+        self.assertEqual(revision_of(self.dir)["head"], "abc1234")
+        with open(os.path.join(self.dir, "REVISION-abc.json"), "w") as fh:
+            json.dump({"head": "stamped"}, fh)
+        self.assertEqual(revision_of(self.dir)["head"], "stamped")
+
+    def test_candidates_without_verifier_render_unverified(self):
+        self.assertEqual(_quiet_main(["--dir", self.dir]), 0)
+        text = self.report()
+        self.assertIn("**2 finding(s):** 0 blocker, 2 important, 0 suggestion — 2 unverified.", text)
+        self.assertIn("`abc1234`", text)
+        self.assertIn("uncommitted changes present", text)
+
+    def test_verifier_records_take_precedence(self):
+        with open(os.path.join(self.dir, "findings.jsonl"), "w") as fh:
+            fh.write(json.dumps(dict(GOOD, id="S-001", severity="blocker")) + "\n")
+        self.assertEqual(_quiet_main(["--dir", self.dir]), 0)
+        text = self.report()
+        self.assertIn("1 blocker, 1 important", text)
+        self.assertEqual(text.count("S-001 —"), 1)
+
+    def test_schema_violation_still_fails(self):
+        with open(os.path.join(self.dir, "findings.jsonl"), "w") as fh:
+            fh.write(json.dumps(dict(GOOD, confidence="unverified", severity="blocker")) + "\n")
+        self.assertEqual(_quiet_main(["--dir", self.dir]), 1)
+
+    def test_missing_dir(self):
+        self.assertEqual(_quiet_main(["--dir", os.path.join(self.dir, "nope")]), 2)
 
 
 if __name__ == "__main__":

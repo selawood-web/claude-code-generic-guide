@@ -51,7 +51,8 @@ being able to change anything.
 - A maintainer can add a mutation probe to a checked-in probe list and see the catch rate
   reported on every CI run
 - A specialist subagent definition can be edited in `.claude/agents/` without touching
-  the skill, and every specialist runs with read-only tools in an isolated worktree
+  the skill; every specialist runs with read-only tools (`Read, Glob, Grep`, no
+  execution), and only the verifier executes, inside an isolated worktree
 - An owner can see, per finding, whether a verifier reproduced it or it is tagged
   unverified, and unverified findings never carry blocker severity
 - A project wired with CCGG receives the skill, the subagent definitions, and the probe
@@ -60,9 +61,10 @@ being able to change anything.
 ## Non-goals
 - Not an auto-fixer — the audit run never edits the tree; fixes are a separate,
   owner-invoked run against the report, so a read-only guarantee stays provable
-- Not a replacement for the shipped security tooling — the security specialist invokes
-  the Claude Security plugin or `/security-review` when they are available and audits
-  the harness and process layers those tools do not cover
+- Not a replacement for the shipped security tooling — the orchestrator runs the
+  Claude Security plugin or `/security-review` when they are available and the security
+  specialist reads their output, then audits the harness and process layers those
+  tools do not cover
 - Not a merge gate in this feature — wiring the audit into `/ship` is deferred until a
   full run on this repository is clean, per the ledger
 - Not a tracker integration — findings are a report and a PR comment; posting them as
@@ -84,10 +86,10 @@ being able to change anything.
 - Given a candidate finding that the verifier cannot reproduce, when the report is
   written, then the finding appears tagged unverified with severity no higher than
   important, or is dropped, and never as a blocker
-- Given a headless run against a checkout the operator did not write, when the audit
-  starts, then it runs with project settings excluded (`--setting-sources user`) so the
-  audited repository's hooks, `env` block, and tool grants never execute, and this is
-  visible in the run's JSON result
+- (slice 3) Given a headless run against a checkout the operator did not write, when
+  the audit starts, then it runs with project settings excluded (`--setting-sources
+  user`) so the audited repository's hooks, `env` block, and tool grants never
+  execute, and this is visible in the run's JSON result
 - Given a specialist subagent, when its definition in `.claude/agents/` is read, then its
   `tools` field is exactly `Read, Glob, Grep` with `omitClaudeMd: true`, and
   `tools/validate.py` fails on any other value; only the verifier carries `Bash`, and it
@@ -96,8 +98,8 @@ being able to change anything.
 - Given a fresh CCGG install into an empty repository, when `install.sh` runs, then the
   skill, the subagent definitions, and the probe harness are present, and the validator
   passes in the target on the first run
-- Given a full audit of this repository, when the headless JSON result is read, then
-  total cost is under 10 USD and duration under 30 minutes
+- (slice 3) Given a full audit of this repository, when the headless JSON result is
+  read, then total cost is under 10 USD and duration under 30 minutes
 
 ## Dependencies and risks
 - Depends on Claude Code project subagents (`.claude/agents/*.md` with `tools`,
@@ -164,3 +166,13 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   headless — [in]
 - 2026-09-16 — The security specialist reads the shipped tooling's output when the
   orchestrator ran it, since a Read/Glob/Grep agent cannot invoke a skill itself — [in]
+- 2026-09-16 — The first full run's report is kept as tracked evidence, and its
+  findings are fixed in a separate pull request in report order: the live-sync trust
+  boundary first, then the verifier's allow-list, hook output sanitisation, the gate's
+  new checks and probes, and the corrections to this definition and the architecture
+  record where they described mechanisms that were never built — [in]
+- 2026-09-16 — The verifier's guard becomes an allow-list (repository tests and tools by
+  path, git reads, text inspection) instead of a denylist, with a table-driven test as
+  its contract — [in]
+- 2026-09-16 — A candidate no verifier record covers is rendered unverified rather than
+  dropped, so a run whose verifier delivered nothing never reads as clean — [in]

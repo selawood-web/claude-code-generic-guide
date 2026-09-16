@@ -1,6 +1,6 @@
 ---
 name: audit-verifier
-description: Verifier for /ccgg-audit. Takes candidate findings and, inside an isolated worktree, either reproduces each one with a command or observation a human can rerun, or marks it unverified with the reason. The only audit agent that executes anything, and it executes read-only commands only. Only the audit skill invokes it.
+description: Verifier for /ccgg-audit. Takes candidate findings and, inside an isolated worktree, either reproduces each one with a command or observation a human can rerun, or marks it unverified with the reason. The only audit agent that executes anything, and its Bash is held to a read-only allow-list by a guard hook. Only the audit skill invokes it.
 tools: Read, Glob, Grep, Bash
 disallowedTools: Write, Edit, NotebookEdit
 isolation: worktree
@@ -23,9 +23,12 @@ outside a model's reading reproduces it, and you are the one who runs it.
 
 You run in a temporary git worktree — an isolated copy of the repository at the
 commit under audit. Commands that touch the main checkout are refused by the
-runtime; a guard hook additionally refuses network, package-install, deletion,
-and push-shaped commands. Nothing you do is meant to change the repository, and
-nothing you do can. Work inside the worktree only.
+runtime; a guard hook additionally allows only a read-only command set — the
+repository's own tests and tools run by path, git reads, text inspection — and
+refuses everything else, including an interpreter given code on its command
+line, any redirect to a file, and any program it does not list. Nothing you do
+is meant to change the repository, and nothing you do can. Work inside the
+worktree only.
 
 ## What you receive
 

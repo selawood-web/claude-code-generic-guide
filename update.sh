@@ -65,14 +65,15 @@ TARGET="$(cd "$TARGET" && pwd)"
 if [ "$TARGET" = "$SRC" ]; then exit 0; fi
 
 # Refresh the guide clone. With CCGG_REF set (the session-start hook's pin), fetch
-# exactly that tag or branch and check it out detached, so the sync never drifts
+# exactly that tag, branch, or commit and check it out detached, so the sync never drifts
 # past the pinned revision; without it, follow the clone's own branch.
 if [ -n "${CCGG_REF:-}" ]; then
   git -C "$SRC" fetch -q --depth 1 --force origin "+${CCGG_REF}:refs/ccgg/pin" 2>/dev/null \
     && git -C "$SRC" checkout -q --detach refs/ccgg/pin 2>/dev/null \
-    || echo "ccgg update: could not fetch $CCGG_REF from origin; syncing the clone as it is"
+    || echo "ccgg update: could not fetch CCGG_REF from origin; syncing the clone as it is"
 else
-  git -C "$SRC" pull --ff-only -q 2>/dev/null || true
+  git -C "$SRC" pull --ff-only -q 2>/dev/null \
+    || echo "ccgg update: could not pull the clone's branch; syncing the clone as it is"
 fi
 
 changed=0
@@ -119,19 +120,31 @@ fi
 
 # Report, never remove. A directory the guide no longer ships is either the
 # user's own skill or what an upstream rename left behind; deleting either
-# unasked would destroy work or silently drop a skill still in use.
+# unasked would destroy work or silently drop a skill still in use. Under
+# --quiet (the session-start hook, whose output the model reads) only the
+# count is printed: a directory name is content, not something to forward.
+unknown=0
 for d in "$TARGET/$SKILLS_DIR"/*/; do
   [ -d "$d" ] || continue
   name="$(basename "$d")"
   if [ ! -d "$SRC/.claude/skills/$name" ]; then
-    echo "  ? $SKILLS_DIR/$name — not in the guide (yours, or left by a rename); left in place"
+    unknown=$((unknown+1))
+    if [ "$QUIET" -eq 0 ]; then
+      echo "  ? $SKILLS_DIR/$name — not in the guide (yours, or left by a rename); left in place"
+    fi
   fi
 done
+if [ "$QUIET" -eq 1 ] && [ "$unknown" -gt 0 ]; then
+  echo "ccgg update: $unknown skill director$([ "$unknown" -eq 1 ] && echo y || echo ies) not in the guide; left in place (run update.sh without --quiet to list)"
+fi
 
-# Regenerate the target's marked catalog tables and counts from the synced
-# skills (no-op where the markers are absent or python3 is missing).
+# Check the target's marked catalog tables and counts against the synced
+# skills. Never rewritten from here: AGENTS.md is an always-loaded rules file
+# and the owner regenerates it on purpose, in a commit they can read.
 if [ "$USER_MODE" -eq 0 ] && [ -f "$TARGET/tools/catalog.py" ] && command -v python3 >/dev/null 2>&1; then
-  (cd "$TARGET" && python3 tools/catalog.py --write >/dev/null 2>&1) || true
+  if ! (cd "$TARGET" && python3 tools/catalog.py >/dev/null 2>&1); then
+    echo "ccgg update: catalog tables are STALE after the sync — run: python3 tools/catalog.py --write"
+  fi
 fi
 
 REV="$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)"

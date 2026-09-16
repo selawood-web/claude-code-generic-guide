@@ -67,7 +67,7 @@ if [ -e "$TARGET/.claude/hooks" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/hooks" "$TARGET/.claude/hooks"
-  note_copied ".claude/hooks/ (3 lifecycle hooks)"
+  note_copied ".claude/hooks/ (4 hooks: 3 lifecycle, 1 verifier guard)"
 fi
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 
@@ -118,6 +118,7 @@ fi
 # feature-definition linter it delegates to when a project has features/
 copy_file tools/validate.py
 copy_file tools/feature_lint.py
+copy_file tools/catalog.py
 
 # The audit's deterministic stage, probe harness, renderer, vocabulary, and probe list
 for f in tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_vocab.json tools/probes.txt tools/redteam_probes.txt; do
@@ -168,7 +169,7 @@ echo
 if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
   echo "Running the validator in the target (new files must be git-tracked to be checked):"
   git -C "$TARGET" add -N . >/dev/null 2>&1 || true
-  (cd "$TARGET" && python3 tools/validate.py) || true
+  (cd "$TARGET" && python3 tools/validate.py) || echo "  ! validator reported findings in the target — fix them before the first session"
 else
   echo "Target is not a git repository (or python3 is missing) — validator not run."
 fi

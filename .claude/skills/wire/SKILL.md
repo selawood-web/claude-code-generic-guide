@@ -1,5 +1,6 @@
 ---
 name: wire
+disable-model-invocation: true
 description: Roll CCGG into another repository in one command — clone it, run the guide's installer, add the live-sync env config, validate, and open the PR. Use when the user says "wire <repo>", "install ccgg into", "roll ccgg out to", or "set up ccgg in my other project".
 when_to_use: wire, install ccgg into, roll out ccgg, set up ccgg in, add ccgg to project, connect project to ccgg
 argument-hint: "[repo name or path to wire]"
@@ -42,9 +43,9 @@ Merge into the target's `.claude/settings.json` (never overwrite an existing
 one — add the keys):
 ```json
 { "env": {
-    "CCGG_HOME": "/tmp/ccgg-guide",
+    "CCGG_HOME": "~/.claude/ccgg-guide",
     "CCGG_REPO": "<the guide repo's clone URL>",
-    "CCGG_REF": "<a tag or branch of the guide the owner controls — the pin the hook trusts>"
+    "CCGG_REF": "<a tag, branch, or 40-hex commit of the guide the owner controls — the pin the hook trusts; a commit is the only pin nobody can move>"
 } }
 ```
 Every future session start then auto-clones the guide if absent and syncs the

@@ -3,7 +3,7 @@ name: audit-consistency
 description: Consistency specialist for /ccgg-audit. Reads every rules file, skill, reference, and overview document, and returns candidate findings about rules stated in more than one place, copies that disagree, counts and claims that no longer match reality, and references to mechanisms that moved. Read-only; only the audit skill invokes it.
 tools: Read, Glob, Grep
 model: haiku
-maxTurns: 40
+maxTurns: 60
 omitClaudeMd: true
 ---
 

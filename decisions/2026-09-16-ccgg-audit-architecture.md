@@ -365,6 +365,20 @@ Any of: the first full run on this repository exceeds 10 USD or 30 minutes; the 
 workflows become available on every plan (re-open option B); a specialist produces no
 verified finding in three consecutive runs.
 
+## Corrections
+
+Recorded after the first full audit run, which verified two statements above against
+what was built:
+
+- *Component 4, second layer.* "The audit's own settings deny `Bash(git push *)`,
+  `Bash(rm *)`, `Bash(curl *)`, `Bash(wget *)`" — no such settings exist. The second
+  layer is the verifier's PreToolUse guard hook, `.claude/hooks/audit-verifier-guard.sh`,
+  an allow-list of read-only command forms tested by `tools/test_verifier_guard.py`.
+- *Component 5, grants.* "The three commands the orchestrator runs, and nothing else" —
+  the skill grants four scripts (`audit_facts`, `audit_probes`, `audit_redteam`,
+  `audit_report`), `Write` scoped to `CCGG-AUDIT-*/**` for the report directory, and
+  `Read`, `Glob`, `Grep`, `Agent`. The validator pins that exact set.
+
 ## Outcome
 
 _Empty at creation._

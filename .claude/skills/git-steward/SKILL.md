@@ -1,5 +1,6 @@
 ---
 name: git-steward
+disable-model-invocation: true
 description: Bootstrap and automatically manage a project's git lifecycle — name a new project, create its GitHub repository, and take ongoing responsibility for commits, branches, and pushes without being asked each time. Use when the user says "new project", "set up git", "create a repo", "put this on GitHub", or wants git handled automatically.
 when_to_use: new project, set up git, create a repo, put this on github, init the project, handle git for me, git automatically
 argument-hint: "[optional: project purpose or preferred name]"
