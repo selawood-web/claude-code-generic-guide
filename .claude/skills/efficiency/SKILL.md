@@ -1,8 +1,7 @@
 ---
 name: efficiency
 description: Audit a CCGG-equipped project against the charter's token-efficiency rules — cache-stable auto-loaded context, compaction retention, subagent isolation, model right-sizing — and report concrete fixes. Use when the user says "efficiency", "audit token usage", "why is this burning tokens", or "check the context budget".
-when-to-use: efficiency, token audit, context budget, cache stability, token usage, reduce AI cost
-allowed-tools: powershell, bash
+when_to_use: efficiency, token audit, context budget, cache stability, token usage, reduce AI cost
 argument-hint: "[optional: path to the project to audit; default is the current repo]"
 purpose: Audit the project against the charter's token-efficiency rules
 ---

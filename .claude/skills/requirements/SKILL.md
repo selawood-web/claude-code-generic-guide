@@ -1,8 +1,7 @@
 ---
 name: requirements
 description: Gather and formalize requirements from vague ideas into actionable specifications. Use when the user says "I want to build", "help me plan", "I have an idea", or provides a vague description of something to build.
-when-to-use: gather requirements, plan a feature, I want to build, help me design, requirements
-allowed-tools: powershell, bash
+when_to_use: gather requirements, plan a feature, I want to build, help me design, requirements
 argument-hint: "[feature or product idea]"
 purpose: Vague idea → actionable spec
 ---

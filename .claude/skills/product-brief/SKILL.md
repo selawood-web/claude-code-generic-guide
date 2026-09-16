@@ -1,8 +1,7 @@
 ---
 name: product-brief
 description: Evaluate a product, app, or feature idea before committing to build it — market research, multi-perspective viability debate, an explicit Go/No-go/Pivot verdict, and a durable brief. Use when the user says "I have an app idea", "is this worth building", "evaluate this idea", or "should I build".
-when-to-use: app idea, product idea, is this worth building, evaluate this idea, should I build, validate my idea, market fit
-allowed-tools: powershell, bash
+when_to_use: app idea, product idea, is this worth building, evaluate this idea, should I build, validate my idea, market fit
 argument-hint: "[the product or feature idea]"
 purpose: "Evaluate a product/app idea: market research, Go/No-go/Pivot"
 ---

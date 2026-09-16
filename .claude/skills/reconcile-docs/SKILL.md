@@ -1,8 +1,7 @@
 ---
 name: reconcile-docs
 description: Find every place a rule or fact is restated across the repository's documents, give it a single home, and turn all other statements into references. Use when the user says "reconcile the docs", "these files disagree", "remove duplication between documents", or when two documents state the same rule differently.
-when-to-use: reconcile docs, docs disagree, duplicate rules, doc drift, single source of truth, align documents
-allowed-tools: powershell, bash
+when_to_use: reconcile docs, docs disagree, duplicate rules, doc drift, single source of truth, align documents
 argument-hint: "[the rule, topic, or pair of files that disagree]"
 purpose: "One home per rule: merge duplicated statements across docs"
 ---

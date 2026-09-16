@@ -1,7 +1,7 @@
 ---
 name: ccgg-audit
 description: Run a read-only audit of this repository across its product code, the harness that steers the agent, and the process around both — deterministic checks first, then read-only specialist subagents, then a verifier that reproduces every finding. Use when the user says "audit", "ccgg-audit", "what does our gate not see", or "audit the harness".
-when-to-use: audit, ccgg-audit, audit the repo, audit the harness, what does the gate miss, run the audit
+when_to_use: audit, ccgg-audit, audit the repo, audit the harness, what does the gate miss, run the audit
 allowed-tools: Bash(python3 tools/audit_facts.py *) Bash(python3 tools/audit_probes.py *) Bash(python3 tools/audit_report.py *) Write(CCGG-AUDIT-*/**) Read Glob Grep Agent
 argument-hint: "[all | harness | process | product | <path>]"
 purpose: Read-only three-layer audit with verified findings

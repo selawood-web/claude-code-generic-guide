@@ -1,8 +1,7 @@
 ---
 name: dream
 description: Consolidate accumulated session logs and scattered memory entries into an organized, deduplicated knowledge base. Use when the user says "dream", "consolidate memory", "clean up memory", "organize what you know", or after five or more sessions without consolidation.
-when-to-use: dream, consolidate memory, organize memory, dedupe knowledge, memory cleanup, weekly consolidation
-allowed-tools: powershell, bash
+when_to_use: dream, consolidate memory, organize memory, dedupe knowledge, memory cleanup, weekly consolidation
 argument-hint: "[optional: project slug, defaults to the current repository]"
 purpose: Consolidate session logs into the knowledge base
 ---

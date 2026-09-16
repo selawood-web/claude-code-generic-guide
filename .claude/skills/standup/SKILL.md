@@ -1,8 +1,7 @@
 ---
 name: standup
 description: Generate a concise standup report or session summary from recent work. Use when the user asks for a "standup", "daily summary", "what did we do", "session recap", or "progress report".
-when-to-use: standup, daily summary, session recap, what did we do, progress report, what happened
-allowed-tools: powershell, bash
+when_to_use: standup, daily summary, session recap, what did we do, progress report, what happened
 argument-hint: "[optional: time range or focus area]"
 purpose: Session summary / daily report
 ---

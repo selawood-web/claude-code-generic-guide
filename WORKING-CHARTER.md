@@ -225,8 +225,8 @@ that validator.
   That set also bounds links: a rule file may point only at a file `install.sh` copies,
   or the link check fails in every installed project.
 - **Skill loading.** Every `.claude/skills/<name>/SKILL.md` keeps its YAML frontmatter —
-  `name`, `description`, `when-to-use`, `allowed-tools`, `argument-hint`. A malformed header
-  does not error; the skill just silently stops loading.
+  `name`, `description`, `when_to_use`, `argument-hint`, and the catalog's `purpose`, spelled
+  as the product spells them: a key it does not read is silently ignored, never an error.
 - **Single-homed rules.** A rule stated in this charter, or in a companion it points at, is
   *referenced* from `AGENTS.md` and the skills, never restated there. Two copies drift, and
   that drift is what this charter was written to end. `MEMORY.md` is the one exception: it is

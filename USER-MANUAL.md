@@ -735,7 +735,7 @@ ship it
 
 **What it does:**
 1. Reaches the target repo (path or clone), branches off its default branch
-2. Runs the guide's `install.sh` (never overwrites existing files), then merges the `CCGG_HOME`/`CCGG_REPO` env block into its settings so live sync is on from day one
+2. Runs the guide's `install.sh` (never overwrites existing files), then merges the `CCGG_HOME`/`CCGG_REPO`/`CCGG_REF` env block into its settings so live sync is on from day one
 3. Validates in the target and tests the session-start sync path
 4. Opens the PR and reports the two human steps (project conventions, standing constraints); already-wired projects get update-only, never a re-install
 
@@ -951,7 +951,7 @@ Create `.claude/skills/my-workflow/SKILL.md`:
 ---
 name: my-workflow
 description: [What this does and when to invoke it — be specific about trigger phrases]
-when-to-use: [trigger phrase 1], [trigger phrase 2]
+when_to_use: [trigger phrase 1], [trigger phrase 2]
 ---
 
 # My Workflow

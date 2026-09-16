@@ -1,9 +1,8 @@
 ---
 name: skillify
 description: Capture a workflow completed in this session as a new reusable skill in .claude/skills/. Use when the user says "skillify", "make this a skill", "capture this workflow", "save this as a skill", or after finishing a multi-step process the team will repeat.
-when-to-use: skillify, make this a skill, capture workflow, new skill, save procedure
+when_to_use: skillify, make this a skill, capture workflow, new skill, save procedure
 argument-hint: "[optional: name for the new skill]"
-allowed-tools: powershell, bash
 purpose: Capture a completed workflow as a new skill
 ---
 
@@ -36,8 +35,7 @@ Create `.claude/skills/<name>/SKILL.md` with the house frontmatter — all five 
 ---
 name: <name>
 description: <What it does. Use when the user says "...", "...", or <situation>.>
-when-to-use: <comma-separated trigger phrases>
-allowed-tools: powershell, bash
+when_to_use: <comma-separated trigger phrases>
 argument-hint: "[what an argument means, or omit the brackets' content]"
 purpose: <one-line catalog text for the generated tables>
 ---
@@ -59,7 +57,7 @@ Success: [how to know this step worked]
 Every step gets a success criterion. A step you cannot verify is a step that silently fails.
 
 ### Step 5 — Validate
-- Frontmatter parses: opens and closes with `---`, all house keys present (including `purpose`, the one-line catalog text). A malformed header does not error — the skill just silently never loads.
+- Frontmatter parses: opens and closes with `---` on line 1, all house keys present (including `purpose`, the one-line catalog text), spelled as the product spells them (`when_to_use`, not `when-to-use`). Grant tools only by their real names (`Bash`, `Bash(git *)`), and only when the skill needs the pre-approval.
 - Walk the steps once against the session that produced them: would following this file reproduce the result?
 
 ### Step 6 — Register and commit
