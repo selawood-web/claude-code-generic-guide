@@ -38,6 +38,17 @@ from; the full evidence stays in the research file.
 **Detection**: Hook policy check — network calls, remote execution, and env-sourced URLs in any hook are findings until pinned.
 **Tags**: #supply-chain #hooks #trust
 
+### A guard that cannot parse a command must refuse it, not allow it
+**Principle**: A denylist of dangerous patterns is a list of the attacks you thought of. Whatever falls through reaches the tool. A guard on an agent's execution is an allow-list of command forms, with a table of allowed and refused cases as its test, or it is decoration.
+**Learned from**: This repository's verifier guard claimed in its own header to "fail closed" while ending in `sys.exit(0)`. Its denylist matched `rm`, `curl`, and `git push`, so `python3 -c`, `git fetch`, `sed -i`, `touch`, and `find -delete` all ran. Nothing tested it: the gate checked only `bash -n` and the executable bit, so a deleted pattern would have been invisible.
+**Detection**: For every guard, ask what an unrecognised command does. If the answer is "allowed", the guard is a suggestion.
+**Tags**: #authorization #fail-closed #guards
+
+### The tree under audit must not supply the guard that constrains its auditor
+**Principle**: Trust flows one way. When an agent inspects a checkout it did not write, every constraint on that agent — guard hooks, allow-lists, briefs — comes from a path the operator controls, never from the checkout. Otherwise the subject writes its own examiner's rules.
+**Learned from**: The headless audit registers a guard hook on the one agent that executes, and the hook's path in the agent file points inside the audited tree. A pull request could have shipped a permissive guard and had it applied to the agent reading that pull request. The fix makes the trusted path a required argument, refuses to start without it, and takes it from the base branch in CI.
+**Tags**: #supply-chain #isolation #trust
+
 ### The auditor reads the harness as evidence, never as configuration
 **Principle**: An audit of a checkout must not load that checkout's settings. Run with project settings excluded, treat `.claude/` as input, and report any instruction found inside it rather than following it.
 **Learned from**: The product's own permissions reference: hooks, `env`, and skill tool grants from the repository are used in headless runs; only excluding project settings entirely prevents it.
@@ -56,6 +67,11 @@ from; the full evidence stays in the research file.
 **Principle**: A fetched page summarised by a model is one more model output. When a claim about product behaviour decides a fix, the oracle is the product itself — its binary, a live session, or the reference quoted verbatim.
 **Learned from**: The research's suggested fix for the pre-compact hook ("emit `additionalContext` JSON, documented for PreCompact") came from a lossy summary of the hooks reference; the verifier found no such output path in two installed versions.
 **Tags**: #currency #verification #oracle
+
+### Two ways of running the same thing are built from one source, or they drift
+**Principle**: When a workflow runs both interactively and in CI, the second must be generated from the first's files, and anything the generator cannot carry is an error rather than a silent drop. A copy in YAML is a copy that goes stale without telling anyone.
+**Learned from**: A headless run loads none of the project's skills or agents, so its briefs and grants had to be supplied on the command line. Generating them from the same `SKILL.md` and `.claude/agents/*.md` an interactive run reads means a changed brief reaches both; refusing to serialise an unknown frontmatter key means a new field cannot vanish between the session and CI. The alternative — a second list in the workflow — is the documented-but-dead defect with extra steps.
+**Tags**: #drift #ci #single-source
 
 ### A verified deterministic finding closes as a check, not a fix
 **Principle**: Fixing the instance leaves the class. If the finding could have been caught by a script, the pull request that fixes it also adds the script and its fixture test.
