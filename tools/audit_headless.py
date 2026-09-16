@@ -217,6 +217,50 @@ def failure_line(stdout: str, stderr: str, returncode: int) -> str:
     return f"audit-headless: the run exited {returncode} with no output"
 
 
+def run_summary(result: dict | None) -> list[str]:
+    """What the run actually did, in a line or two.
+
+    A run that exits 0 having written nothing is the hardest case to diagnose and
+    the one that used to print nothing at all: the numbers that explain it —
+    turns, spend, whether any subagent started, whether a tool call was refused —
+    were saved to a file and never shown. They are shown now.
+    """
+    if not result:
+        return ["audit-headless: the run returned no JSON result"]
+    stats = result.get("subagent_stats") or {}
+    bits = []
+    if result.get("num_turns") is not None:
+        bits.append(f"{result['num_turns']} turn(s)")
+    if result.get("total_cost_usd") is not None:
+        bits.append(f"{float(result['total_cost_usd']):.2f} USD")
+    spawned = stats.get("spawned")
+    if spawned is not None:
+        detail = f"{spawned} subagent(s)"
+        if stats.get("completed") is not None or stats.get("failed") is not None:
+            detail += f" ({stats.get('completed', 0)} completed, {stats.get('failed', 0)} failed)"
+        bits.append(detail)
+    if result.get("stop_reason"):
+        bits.append(f"stop_reason {result['stop_reason']}")
+    lines = ["audit-headless: " + (", ".join(bits) if bits else "no run statistics returned")]
+
+    denials = result.get("permission_denials") or []
+    if denials:
+        names = []
+        for entry in denials:
+            name = entry.get("tool_name") if isinstance(entry, dict) else None
+            names.append(str(name or "unknown"))
+        counts: dict[str, int] = {}
+        for name in names:
+            counts[name] = counts.get(name, 0) + 1
+        listed = ", ".join(f"{n} x{c}" if c > 1 else n for n, c in sorted(counts.items()))
+        lines.append(f"audit-headless: {len(denials)} tool call(s) refused by the grant set: {listed}")
+        lines.append("audit-headless: a refused write is why a run can finish cleanly and leave nothing behind")
+    text = str(result.get("result") or "").strip().replace("\n", " ")
+    if text:
+        lines.append(f"audit-headless: the run's last words — {text[:300]}")
+    return lines
+
+
 def check_scope(scope: str, root: str) -> str:
     if scope in FIXED_SCOPES:
         return scope
@@ -322,6 +366,8 @@ def main(argv: list[str]) -> int:
         print(f"audit-headless: the run's own result is in "
               f"{os.path.join(report_dir, 'headless', 'result.json')}", file=sys.stderr)
         return 1
+    for line in run_summary(result_object(proc.stdout)):
+        print(line)
     print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', 'result.json')}")
     return 0
 

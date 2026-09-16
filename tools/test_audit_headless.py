@@ -24,6 +24,7 @@ from audit_headless import (
     check_scope,
     failure_line,
     result_object,
+    run_summary,
     orchestrator_prompt,
     retarget_write_grant,
     skill_body,
@@ -216,6 +217,53 @@ class FailureLineTests(unittest.TestCase):
         for out, err in ((REAL_401, "noise\nmore"), ("", "a\nb\nc"), ("", "")):
             with self.subTest(out=out[:20]):
                 self.assertEqual(len(failure_line(out, err, 1).splitlines()), 1)
+
+
+class RunSummaryTests(unittest.TestCase):
+    """A run that exits 0 having written nothing must still say what it did."""
+
+    EMPTY_RUN = {
+        "num_turns": 12, "total_cost_usd": 0.42, "stop_reason": "end_turn",
+        "subagent_stats": {"spawned": 0, "completed": 0, "failed": 0},
+        "permission_denials": [{"tool_name": "Write"}, {"tool_name": "Write"}, {"tool_name": "Bash"}],
+        "result": "I summarised my findings here rather than writing files.",
+    }
+
+    def test_reports_turns_spend_and_subagents(self):
+        line = run_summary(self.EMPTY_RUN)[0]
+        self.assertIn("12 turn(s)", line)
+        self.assertIn("0.42 USD", line)
+        self.assertIn("0 subagent(s)", line)
+        self.assertIn("end_turn", line)
+
+    def test_refused_tool_calls_are_named_and_counted(self):
+        lines = run_summary(self.EMPTY_RUN)
+        joined = "\n".join(lines)
+        self.assertIn("3 tool call(s) refused", joined)
+        self.assertIn("Write x2", joined)
+        self.assertIn("Bash", joined)
+        self.assertIn("refused write", joined, "the reader should be told what a denial explains")
+
+    def test_the_runs_own_words_are_quoted_and_bounded(self):
+        long_tail = dict(self.EMPTY_RUN, result="x" * 5000)
+        line = [l for l in run_summary(long_tail) if "last words" in l][0]
+        self.assertLess(len(line), 400)
+
+    def test_no_denials_means_no_denial_lines(self):
+        lines = run_summary(dict(self.EMPTY_RUN, permission_denials=[]))
+        self.assertFalse(any("refused" in l for l in lines))
+
+    def test_healthy_run_reads_plainly(self):
+        lines = run_summary({"num_turns": 60, "total_cost_usd": 4.1,
+                             "subagent_stats": {"spawned": 7, "completed": 7, "failed": 0}})
+        self.assertIn("7 subagent(s) (7 completed, 0 failed)", lines[0])
+
+    def test_missing_result_says_so(self):
+        self.assertIn("no JSON result", run_summary(None)[0])
+
+    def test_malformed_denial_entries_do_not_crash(self):
+        lines = run_summary(dict(self.EMPTY_RUN, permission_denials=["oops", {}, None]))
+        self.assertIn("unknown", "\n".join(lines))
 
 
 class CheckScopeTests(unittest.TestCase):
