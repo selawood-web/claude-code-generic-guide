@@ -58,7 +58,9 @@ class FreshInstallTests(unittest.TestCase):
             gate = subprocess.run([sys.executable, "tools/validate.py"], cwd=target, env=env, capture_output=True, text=True)
             self.assertEqual(gate.returncode, 0, gate.stdout)
             for rel in (".claude/skills/ccgg-audit/SKILL.md", ".claude/agents/audit-verifier.md",
-                        ".claude/hooks/audit-verifier-guard.sh", "tools/probes.txt", "tools/audit_vocab.json"):
+                        ".claude/hooks/audit-verifier-guard.sh", "tools/probes.txt", "tools/audit_vocab.json",
+                        "tools/audit_headless.py", "tools/audit_agents_json.py",
+                        ".github/workflows/audit.yml"):
                 self.assertTrue(os.path.exists(os.path.join(target, rel)), rel)
 
 

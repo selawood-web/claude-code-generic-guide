@@ -86,10 +86,14 @@ being able to change anything.
 - Given a candidate finding that the verifier cannot reproduce, when the report is
   written, then the finding appears tagged unverified with severity no higher than
   important, or is dropped, and never as a blocker
-- (slice 3) Given a headless run against a checkout the operator did not write, when
-  the audit starts, then it runs with project settings excluded (`--setting-sources
-  user`) so the audited repository's hooks, `env` block, and tool grants never
-  execute, and this is visible in the run's JSON result
+- Given a headless run against a checkout the operator did not write, when the audit
+  starts, then it runs with auto-discovery off (`--bare`, the documented flag for
+  skipping the tree's hooks, skills, agents, MCP servers and memory) and with
+  `--setting-sources user`, and the assembled command is written into the report
+  directory's `headless/` folder so what ran is on the record beside what it found
+- Given a headless run, when the verifier executes, then its guard hook comes from a
+  path the caller controls and never from the audited tree, and a run that names no
+  such path is refused
 - Given a specialist subagent, when its definition in `.claude/agents/` is read, then its
   `tools` field is exactly `Read, Glob, Grep` with `omitClaudeMd: true`, and
   `tools/validate.py` fails on any other value; only the verifier carries `Bash`, and it
@@ -98,8 +102,9 @@ being able to change anything.
 - Given a fresh CCGG install into an empty repository, when `install.sh` runs, then the
   skill, the subagent definitions, and the probe harness are present, and the validator
   passes in the target on the first run
-- (slice 3) Given a full audit of this repository, when the headless JSON result is
-  read, then total cost is under 10 USD and duration under 30 minutes
+- Given a full audit of this repository, when it runs headless, then spend is capped at
+  10 USD by `--max-budget-usd` and the job by a 45-minute timeout, and the run's cost
+  and duration are recorded in the revision stamp
 
 ## Dependencies and risks
 - Depends on Claude Code project subagents (`.claude/agents/*.md` with `tools`,
@@ -176,3 +181,26 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   its contract — [in]
 - 2026-09-16 — A candidate no verifier record covers is rendered unverified rather than
   dropped, so a run whose verifier delivered nothing never reads as clean — [in]
+- 2026-09-16 — Slice 3: the headless run is assembled by `tools/audit_headless.py` from
+  the skill and the agent files rather than written out in YAML, so CI and a session
+  cannot drift and the assembly is unit-tested — [in]
+- 2026-09-16 — The verifier's guard must not come from the tree under audit: a pull
+  request could otherwise ship a guard that permits everything to the one agent that
+  executes. The launcher refuses to start without `--guard`, and CI takes the guard
+  from the base branch — [in]
+- 2026-09-16 — Headless grants are read from the skill's own `allowed-tools`, with the
+  report-directory Write grant pinned to the run's directory, rather than a second list
+  in the workflow — [in]
+- 2026-09-16 — `--json-schema` and a committed result schema from the architecture
+  record's sketch — [dropped] the run's own artifacts, `findings.jsonl` and the revision
+  stamp, already are the source of truth, and a second schema would be a second place
+  for the contract to drift
+- 2026-09-16 — The CI job runs the CLI directly rather than through
+  `anthropics/claude-code-action`: `--agents` takes only literal JSON, which an argv
+  element carries cleanly and a YAML argument string does not — [in]
+- 2026-09-16 — The audit workflow is invoked, never automatic: manual dispatch, or the
+  `audit` label on a pull request, and never on a fork, where GitHub withholds the
+  secret the run needs — [in]
+- 2026-09-16 — Whether `--bare` with inline `--agents` honours `isolation: worktree` is
+  undocumented; the first authenticated CI run is the check, and the fallback the
+  architecture record names (one `claude -p` per specialist) still stands — [open]

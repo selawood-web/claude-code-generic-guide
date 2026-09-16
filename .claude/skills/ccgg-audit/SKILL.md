@@ -16,8 +16,8 @@ anything while doing so. The design is feature F002 and its
 architecture record in the guide repository; this file owns only the order of operations. The scripts
 own every artifact.
 
-Slices 1 and 2 run the deterministic stage, six read-only specialists, the verifier,
-and the renderer, interactively. The headless CI mode is slice 3.
+The same steps run two ways: typed in a session, or headless against a checkout
+nobody trusts (see **Headless mode** below).
 
 ## Boundaries that never move
 - The audit **never edits a tracked file**. The orchestrator runs four scripts, writes
@@ -115,6 +115,36 @@ rate with any regressions or promotions, and the run's cost and duration. Then:
 
 End with one of the charter's four shapes. The natural one is a next step: the
 first proposed check, or the first blocker's fix.
+
+## Headless mode
+
+An interactive audit runs in a project whose hooks and settings already ran at session
+start; the boundary it can still hold is the read-only one. A headless audit is the one
+to point at a checkout the operator did not write — a pull request, a fork, a repository
+someone handed over — because auto-discovery is off and nothing in the audited tree
+configures the run.
+
+```bash
+python3 tools/audit_facts.py --out CCGG-AUDIT-<stamp> --scope <scope>
+python3 tools/audit_headless.py --report-dir CCGG-AUDIT-<stamp> --scope <scope> \
+  --guard /absolute/path/to/a/trusted/audit-verifier-guard.sh
+```
+
+The launcher builds the run from this file and from `.claude/agents/audit-*.md`, so the
+two ways of running cannot drift: it passes the briefs inline as JSON, appends the steps
+above as the system prompt, and takes its tool grants from this file's `allowed-tools`.
+It writes what it assembled to `<report-dir>/headless/` before starting anything.
+
+Two rules the launcher enforces rather than asks about:
+- **The audited tree never supplies the verifier's guard.** `--guard` names a copy the
+  caller controls; `--trust-checkout` is the deliberate opt-out for a tree you wrote.
+- **The spend is capped** by `--max-budget-usd`, and a candidate left unverified when the
+  cap is reached is reported as unverified, never dropped.
+
+`.github/workflows/audit.yml` runs exactly this in CI, on a manual dispatch or a pull
+request labelled `audit` — never automatically, for the same reason this skill sets
+`disable-model-invocation: true`. It posts the report as one pull-request comment,
+uploads the report directory as an artifact, and pushes nothing.
 
 ## Knowledge Extraction
 ```

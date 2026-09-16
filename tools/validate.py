@@ -29,6 +29,10 @@ Checks, in order:
  17. The settings.json env block that drives live sync is sane: CCGG_REPO carries
      a CCGG_REF, and CCGG_HOME is not under a shared temporary directory.
  18. Every @import in CLAUDE.md or AGENTS.md resolves to a tracked file.
+ 21. Every GitHub Actions `uses:` is pinned to a commit SHA — a tag moves, and a
+     moved tag runs new code with the workflow's permissions.
+ 20. Every audit subagent still serializes into the inline JSON a headless run
+     needs — a brief that only an interactive run can load is a boundary CI loses.
  19. Skill grants stay pinned: no bare Write, Edit, Bash, or NotebookEdit in
      allowed-tools; the audit skill's grants are exactly the audit's four commands
      and its report directory; skills that act outward (push, PR, merge, deploy,
@@ -756,6 +760,60 @@ def check_skill_grants() -> None:
             fail(problem)
 
 
+# --- 20. agents survive the trip to a headless run ----------------------------
+def check_agents_serialize() -> None:
+    """The briefs a headless audit gets are built from these files; prove they build.
+
+    Optional like the feature linter: a project that adopted the validator without
+    the audit tooling has nothing to check here.
+    """
+    if not tracked(".claude/agents/audit-*.md"):
+        return
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    try:
+        import audit_agents_json
+    except ImportError:
+        return
+    try:
+        definitions = audit_agents_json.build(
+            ROOT, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, None, None
+        )
+    except audit_agents_json.AgentFileError as exc:
+        fail(f".claude/agents/: {exc}")
+        return
+    for name, definition in definitions.items():
+        if not definition.get("prompt", "").strip():
+            fail(f".claude/agents/{name}.md: no brief survives serialization")
+
+
+# --- 21. workflow actions are pinned ------------------------------------------
+USES_RE = re.compile(r"^\s*-?\s*uses:\s*(\S+)", re.M)
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+def unpinned_actions(text: str) -> list[str]:
+    """Every `uses:` reference in a workflow that is not a 40-hex commit SHA."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    loose = []
+    for ref in USES_RE.findall(text):
+        ref = ref.strip("\"'")
+        if ref.startswith(("./", "docker://")):
+            continue  # a path in this repository, or an image with its own digest
+        _, _, version = ref.partition("@")
+        if not SHA_RE.match(version):
+            loose.append(ref)
+    return loose
+
+
+def check_workflow_pins() -> None:
+    for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for ref in unpinned_actions(text):
+            fail(f"{path}: uses {ref} — pin the action to a commit SHA; a tag can be moved under you")
+
+
 def check_features() -> None:
     """Feature definitions, when a project has any, meet the house schema.
 
@@ -798,6 +856,8 @@ def main() -> int:
     check_ccgg_env()
     check_imports()
     check_skill_grants()
+    check_agents_serialize()
+    check_workflow_pins()
     check_features()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")

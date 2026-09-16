@@ -112,7 +112,7 @@ if [ "$USER_MODE" -eq 0 ]; then
   sync_file "tools/validate.py"
   sync_file "tools/feature_lint.py"
   sync_file "tools/catalog.py"
-  for f in tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_vocab.json; do
+  for f in tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_agents_json.py tools/audit_headless.py tools/audit_pr_comment.py tools/audit_vocab.json; do
     sync_file "$f"
   done
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true

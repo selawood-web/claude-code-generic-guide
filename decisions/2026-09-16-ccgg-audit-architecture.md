@@ -367,6 +367,23 @@ verified finding in three consecutive runs.
 
 ## Corrections
 
+Recorded while building slice 3, against the headless sketch above:
+
+- *Headless command.* `--agents` accepts a literal JSON string only — no file
+  reference — so the run is launched by `tools/audit_headless.py`, which passes the
+  JSON as one argument. The sketch's `--json-schema` and `tools/audit_result.schema.json`
+  are dropped: `findings.jsonl` and the revision stamp already are the source of truth.
+- *What excludes the tree.* `--bare` is the documented flag for skipping a project's
+  hooks, skills, agents, MCP servers and memory; the exclusion semantics of
+  `--setting-sources user` are not documented. The run passes both and leans on `--bare`.
+- *The guard.* The sketch did not say where the verifier's guard hook comes from in a
+  headless run. Taking it from the audited tree would hand the one executing agent a
+  guard written by whoever wrote the tree, so the launcher requires a path the caller
+  controls and CI takes it from the base branch.
+- *Authentication.* In bare mode Claude Code reads `ANTHROPIC_API_KEY` and never an
+  OAuth credential or the keychain, so the workflow requires that secret and skips the
+  model run without it.
+
 Recorded after the first full audit run, which verified two statements above against
 what was built:
 

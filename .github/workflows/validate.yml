@@ -31,6 +31,12 @@ jobs:
       # The gate's guarantees as tests of the gate: each probe plants a defect in a
       # scratch copy and records whether the validator fires. A probe the list
       # marks `caught` that is missed is a regression and fails the job.
+      # Headless runs never read .claude/agents/; they get the same briefs as inline
+      # JSON from this script. A frontmatter key it cannot carry fails here, so a
+      # headless run can never quietly differ from an interactive one.
+      - name: Audit agents serialize for headless runs
+        run: |
+          if [ -f tools/audit_agents_json.py ]; then python tools/audit_agents_json.py --check; else echo "No audit agent serializer in this repo — skipping."; fi
       - name: Mutation probes against the validator
         run: python tools/audit_probes.py
       - name: Unit tests for the validator
