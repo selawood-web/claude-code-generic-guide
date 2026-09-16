@@ -6,6 +6,8 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 
 import unittest
 
+import validate
+
 from validate import (
     frontmatter_scalar_problem,
     link_leaves_install_set,
@@ -186,3 +188,70 @@ class StripCodeBlocksTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AgentFrontmatterTests(unittest.TestCase):
+    """Check 12 — the F002 read-only boundary for audit agents."""
+
+    def _fields(self, **kw):
+        base = {"name": "audit-x", "description": "d", "tools": "Read, Glob, Grep", "omitClaudeMd": "true"}
+        base.update(kw)
+        return base
+
+    # happy paths
+    def test_specialist_clean(self):
+        self.assertEqual(validate.agent_frontmatter_problems("a.md", self._fields()), [])
+
+    def test_verifier_clean(self):
+        fields = self._fields(name="audit-verifier", tools="Read, Glob, Grep, Bash",
+                              disallowedTools="Write, Edit, NotebookEdit", isolation="worktree")
+        self.assertEqual(validate.agent_frontmatter_problems("v.md", fields), [])
+
+    # edge: a non-audit agent only needs name and description
+    def test_other_agent_unconstrained(self):
+        self.assertEqual(validate.agent_frontmatter_problems("o.md", {"name": "helper", "description": "d", "tools": "Bash"}), [])
+
+    def test_space_separated_tools_accepted(self):
+        self.assertEqual(validate.agent_frontmatter_problems("a.md", self._fields(tools="Read Glob Grep")), [])
+
+    # failure paths
+    def test_specialist_with_bash_rejected(self):
+        problems = validate.agent_frontmatter_problems("a.md", self._fields(tools="Read, Glob, Grep, Bash"))
+        self.assertTrue(any("exactly Read, Glob, Grep" in p for p in problems))
+
+    def test_specialist_missing_omit_claude_md(self):
+        problems = validate.agent_frontmatter_problems("a.md", self._fields(omitClaudeMd=""))
+        self.assertTrue(any("omitClaudeMd" in p for p in problems))
+
+    def test_verifier_without_worktree_or_disallowed(self):
+        problems = validate.agent_frontmatter_problems("v.md", self._fields(name="audit-verifier", tools="Bash"))
+        self.assertTrue(any("worktree" in p for p in problems))
+        self.assertTrue(any("disallow" in p for p in problems))
+
+    def test_missing_description(self):
+        problems = validate.agent_frontmatter_problems("a.md", self._fields(description=""))
+        self.assertIn("a.md: frontmatter missing key 'description'", problems)
+
+
+class ParseFrontmatterFieldsTests(unittest.TestCase):
+    def test_parses_and_skips_nested(self):
+        fields, why = validate.parse_frontmatter_fields(["---", "name: a", "hooks:", "  PreToolUse:", "---", "body"])
+        self.assertIsNone(why)
+        self.assertEqual(fields, {"name": "a", "hooks": ""})
+
+    def test_missing_open(self):
+        fields, why = validate.parse_frontmatter_fields(["name: a", "---"])
+        self.assertIsNone(fields)
+        self.assertIn("line 1", why)
+
+    def test_unclosed(self):
+        fields, why = validate.parse_frontmatter_fields(["---", "name: a"])
+        self.assertIsNone(fields)
+        self.assertIn("never closed", why)
+
+    def test_empty(self):
+        self.assertIsNone(validate.parse_frontmatter_fields([])[0])
+
+    def test_split_tool_list_keeps_names_drops_specifiers(self):
+        self.assertEqual(validate.split_tool_list("Read, Bash(git *) Grep"), {"Read", "Bash", "Grep"})
+        self.assertEqual(validate.split_tool_list(""), set())

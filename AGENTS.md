@@ -95,6 +95,7 @@ listed below — the three questions and the verdict live there, with the proced
 | Skill | Purpose |
 |-------|---------|
 | `/architecture` | System design with trade-off analysis |
+| `/ccgg-audit` | Read-only three-layer audit with verified findings |
 | `/ccgg-code-review` | Multi-dimension review with severity levels |
 | `/ccgg-security-review` | OWASP-based security audit |
 | `/code-generation` | Production-ready implementation with critic pass |

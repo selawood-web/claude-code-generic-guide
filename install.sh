@@ -4,7 +4,7 @@
 #
 #     ./install.sh /path/to/your-project
 #
-# Copies the behavior rules, their on-demand companions, the 26 skills, the
+# Copies the behavior rules, their on-demand companions, the 27 skills, the
 # lifecycle hooks, the validator, and the CI workflow. Never overwrites anything that already exists — existing
 # files are reported and left alone. Safe to run twice.
 #
@@ -60,7 +60,7 @@ if [ -e "$TARGET/.claude/skills" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/skills" "$TARGET/.claude/skills"
-  note_copied ".claude/skills/ (26 skills)"
+  note_copied ".claude/skills/ (27 skills)"
 fi
 if [ -e "$TARGET/.claude/hooks" ]; then
   note_skipped ".claude/hooks/"
@@ -70,6 +70,15 @@ else
   note_copied ".claude/hooks/ (3 lifecycle hooks)"
 fi
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
+
+# Audit subagents (F002) — read-only specialists and the verifier the audit skill spawns
+if [ -e "$TARGET/.claude/agents" ]; then
+  note_skipped ".claude/agents/"
+else
+  mkdir -p "$TARGET/.claude"
+  cp -r "$SRC/.claude/agents" "$TARGET/.claude/agents"
+  note_copied ".claude/agents/ (audit subagents)"
+fi
 
 # Rule-file companions. AGENTS.md and the charter link into this directory, so a
 # target without it fails the validator's link check on its very first run.
@@ -109,6 +118,11 @@ fi
 # feature-definition linter it delegates to when a project has features/
 copy_file tools/validate.py
 copy_file tools/feature_lint.py
+
+# The audit's deterministic stage, probe harness, renderer, vocabulary, and probe list
+for f in tools/audit_facts.py tools/audit_probes.py tools/audit_report.py tools/audit_vocab.json tools/probes.txt; do
+  copy_file "$f"
+done
 
 # CI workflow, adapted to the target's default branch
 if [ -e "$TARGET/.github/workflows/validate.yml" ]; then
@@ -173,7 +187,7 @@ echo "  3. Seed global memory ONCE per machine (skip if done before):"
 echo "       cat $SRC/MEMORY.md >> ~/.claude/CLAUDE.md"
 echo "  4. Verify: open a fresh session in the project, run /context —"
 echo "     CLAUDE.md must appear under Memory files. Then ask:"
-echo "     'what skills are available?' — expect twenty-six."
+echo "     'what skills are available?' — expect twenty-seven."
 echo "  5. Optional — live updates: set CCGG_HOME=$SRC in the project's"
 echo "     .claude/settings.json env block; every session start then syncs the"
 echo "     latest merged guide skills/hooks/validator via update.sh."

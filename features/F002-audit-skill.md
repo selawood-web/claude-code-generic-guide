@@ -1,7 +1,7 @@
 ---
 id: F002
 title: Audit skill
-status: ready
+status: building
 owner: repository owner
 target: unscheduled
 ---

@@ -13,6 +13,9 @@ Checks, in order:
   9. Always-loaded files carry no session-volatile content (cache stability).
  10. Always-loaded files link only into install.sh's copy set (drop-in contract).
  11. Feature definitions in features/ meet the schema (via tools/feature_lint.py).
+ 12. Subagent definitions in .claude/agents/ parse, and the audit's agents keep the
+     read-only boundary F002 promises (no Bash outside the verifier, worktree
+     isolation and write tools removed on the verifier, CLAUDE.md omitted).
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -161,6 +164,78 @@ def check_skills() -> None:
         for key in SKILL_KEYS:
             if key not in keys:
                 fail(f"{path}: frontmatter missing key '{key}'")
+
+
+AGENT_REQUIRED_KEYS = ("name", "description")
+SPECIALIST_TOOLS = {"Read", "Glob", "Grep"}
+VERIFIER_DISALLOWED = {"Write", "Edit", "NotebookEdit"}
+
+
+def parse_frontmatter_fields(lines: list[str]) -> tuple[dict[str, str] | None, str | None]:
+    """Top-level key → value of a frontmatter block, or (None, why)."""
+    if not lines or lines[0].strip() != "---":
+        return None, "frontmatter must start with --- on line 1"
+    try:
+        end = lines[1:].index("---") + 1
+    except ValueError:
+        return None, "frontmatter never closed with ---"
+    fields: dict[str, str] = {}
+    for ln in lines[1:end]:
+        if not ln or ln[0] in " \t" or ":" not in ln:
+            continue
+        key, _, value = ln.partition(":")
+        fields[key.strip()] = value.strip()
+    return fields, None
+
+
+def split_tool_list(value: str) -> set[str]:
+    """`Read, Glob Grep` → {"Read", "Glob", "Grep"}; a specifier keeps its tool name."""
+    bare = re.sub(r"\([^)]*\)", "", value.strip("[] "))
+    return {t.strip() for t in re.split(r"[,\s]+", bare) if t.strip()}
+
+
+def agent_frontmatter_problems(path: str, fields: dict[str, str]) -> list[str]:
+    """The F002 boundary for audit agents, as messages; empty when it holds.
+
+    Specialists (`audit-*` except the verifier) may hold only Read, Glob, Grep —
+    the `tools` field cannot narrow Bash, so the only read-only Bash is no Bash.
+    The verifier alone executes, inside a worktree, with the write tools removed.
+    Every audit agent omits CLAUDE.md: the audited rules are evidence, not orders.
+    """
+    problems = [f"{path}: frontmatter missing key '{k}'" for k in AGENT_REQUIRED_KEYS if not fields.get(k)]
+    name = fields.get("name", "")
+    if not name.startswith("audit-"):
+        return problems
+    if fields.get("omitClaudeMd", "").lower() != "true":
+        problems.append(f"{path}: audit agents must set omitClaudeMd: true")
+    if name == "audit-verifier":
+        if fields.get("isolation") != "worktree":
+            problems.append(f"{path}: the verifier must set isolation: worktree")
+        missing = VERIFIER_DISALLOWED - split_tool_list(fields.get("disallowedTools", ""))
+        if missing:
+            problems.append(f"{path}: the verifier must disallow {', '.join(sorted(missing))}")
+        return problems
+    tools = split_tool_list(fields.get("tools", ""))
+    if tools != SPECIALIST_TOOLS:
+        problems.append(f"{path}: specialist tools must be exactly Read, Glob, Grep — got {', '.join(sorted(tools)) or 'nothing'}")
+    return problems
+
+
+def check_agents() -> None:
+    for path in tracked(".claude/agents/*.md"):
+        lines = open(os.path.join(ROOT, path), encoding="utf-8").read().splitlines()
+        fields, why = parse_frontmatter_fields(lines)
+        if fields is None:
+            fail(f"{path}: {why}")
+            continue
+        for ln in lines[1:]:
+            if ln.strip() == "---":
+                break
+            problem = frontmatter_scalar_problem(ln)
+            if problem:
+                fail(f"{path}: {problem}")
+        for problem in agent_frontmatter_problems(path, fields):
+            fail(problem)
 
 
 def check_configs() -> None:
@@ -417,6 +492,7 @@ def check_features() -> None:
 def main() -> int:
     check_markdown()
     check_skills()
+    check_agents()
     check_catalogs()
     check_context_budget()
     check_volatile_content()
@@ -430,7 +506,7 @@ def main() -> int:
         for f in findings:
             print(f"  {f}")
         return 1
-    print("OK — markdown links, skills frontmatter, configs, and hooks all valid")
+    print("OK — markdown links, skills and agents frontmatter, configs, and hooks all valid")
     return 0
 
 

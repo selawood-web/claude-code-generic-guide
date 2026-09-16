@@ -25,4 +25,4 @@ skills get their own `features/` folder created by `/feature` on first use.
 | Id | Title | Status | Owner | Target |
 |----|-------|--------|-------|--------|
 | [F001](F001-feature-definition-tool.md) | Feature definition tool | building | repository owner | unscheduled |
-| [F002](F002-audit-skill.md) | Audit skill | ready | repository owner | unscheduled |
+| [F002](F002-audit-skill.md) | Audit skill | building | repository owner | unscheduled |
