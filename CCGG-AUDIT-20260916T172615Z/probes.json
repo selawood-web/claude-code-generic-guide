@@ -1,0 +1,178 @@
+{
+  "summary": {
+    "total": 23,
+    "caught": 14,
+    "missed": 9,
+    "skipped": 0,
+    "errors": 0,
+    "catch_rate": 0.6086956521739131,
+    "regressions": [],
+    "promotions": [],
+    "error_labels": [],
+    "gate": "python3 tools/validate.py",
+    "duration_s": 2.5
+  },
+  "probes": [
+    {
+      "label": "broken relative link in a skill",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/skills/testing/SKILL.md: broken link -> strategyy.md",
+      "line": 16
+    },
+    {
+      "label": "new skill directory absent from catalogs",
+      "expect": "caught",
+      "result": "caught",
+      "detail": "README.md: skill 'zzz' missing from the Available Skills table",
+      "line": 17
+    },
+    {
+      "label": "session-volatile date in an always-loaded file",
+      "expect": "caught",
+      "result": "caught",
+      "detail": "WORKING-CHARTER.md:243: session-volatile content in an always-loaded file (invalidates the prompt cache) \u2014 move it on-demand: Last updated 2026-09-16",
+      "line": 18
+    },
+    {
+      "label": "rules file links outside the install set",
+      "expect": "caught",
+      "result": "caught",
+      "detail": "AGENTS.md: links to docs/index.md, which install.sh does not copy \u2014 the link breaks in every installed project; move the target under .claude/references/ or drop the link",
+      "line": 19
+    },
+    {
+      "label": "CLAUDE.md bridge removed",
+      "expect": "caught",
+      "result": "caught",
+      "detail": "CLAUDE.md: does not import @AGENTS.md \u2014 the behavior rules never load",
+      "line": 20
+    },
+    {
+      "label": "skill frontmatter missing a house key",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/skills/debug/SKILL.md: frontmatter missing key 'purpose'",
+      "line": 23
+    },
+    {
+      "label": "skill allowed-tools set to nonsense names",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/skills/debug/SKILL.md: allowed-tools names 'teleport', which is not a Claude Code tool \u2014 the grant applies to nothing",
+      "line": 24
+    },
+    {
+      "label": "skill name differs from its directory",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 25
+    },
+    {
+      "label": "skill description emptied",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 26
+    },
+    {
+      "label": "hook loses executable bit in the index",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/hooks/session-start.sh: not executable in the git index (mode 100644)",
+      "line": 29
+    },
+    {
+      "label": "hook with a bash syntax error",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/hooks/pre-compact.sh: bash syntax error \u2014 /tmp/ccgg-probes-_qaubgyj/repo/.claude/hooks/pre-compact.sh: line 16: syntax error: unexpected end of file",
+      "line": 30
+    },
+    {
+      "label": "settings.json invalid JSON",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/settings.json: invalid JSON \u2014 Expecting property name enclosed in double quotes: line 2 column 1 (char 2)",
+      "line": 31
+    },
+    {
+      "label": "hook registered in settings but file deleted",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 32
+    },
+    {
+      "label": "hooks unregistered while hook files remain",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 33
+    },
+    {
+      "label": "session-start hook pipes a remote script to sh",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/hooks/session-start.sh:76: downloads and pipes into a shell \u2014 never execute what a remote serves unseen",
+      "line": 34
+    },
+    {
+      "label": "hook clones without a pinned ref",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/hooks/session-start.sh:31: git clone without --branch/--revision \u2014 pin the ref a session executes",
+      "line": 35
+    },
+    {
+      "label": "skill frontmatter uses the hyphenated when-to-use key",
+      "expect": "caught",
+      "result": "caught",
+      "detail": ".claude/skills/debug/SKILL.md: frontmatter missing key 'when_to_use'",
+      "line": 36
+    },
+    {
+      "label": "CCGG_REPO in settings env pointed at an attacker URL",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 37
+    },
+    {
+      "label": "zero-width character in AGENTS.md",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 40
+    },
+    {
+      "label": "instruction sentence injected into a skill",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 41
+    },
+    {
+      "label": "feature marked shipped with an open idea",
+      "expect": "caught",
+      "result": "caught",
+      "detail": "features/F001-feature-definition-tool.md:80: status 'shipped' with an undecided idea: 2026-09-06 \u2014 The linter refuses `shipped` while an",
+      "line": 44
+    },
+    {
+      "label": "CI workflow deleted",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 45
+    },
+    {
+      "label": "validator main forced to return 0",
+      "expect": "missed",
+      "result": "missed",
+      "detail": "gate exited 0",
+      "line": 46
+    }
+  ]
+}

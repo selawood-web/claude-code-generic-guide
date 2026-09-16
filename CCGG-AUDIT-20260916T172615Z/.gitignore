@@ -1,0 +1,2 @@
+# Audit reports are ignored by default; keep one deliberately with git add -f.
+*

@@ -1,0 +1,134 @@
+[
+  {
+    "id": "P-001",
+    "layer": "process",
+    "class": "scope-drift",
+    "severity": "important",
+    "location": "features/F002-audit-skill.md:53",
+    "claim": "\"every specialist runs with read-only tools in an isolated worktree\"",
+    "evidence": "Only /home/user/claude-code-generic-guide/.claude/agents/audit-verifier.md:6 carries `isolation: worktree`; the six specialist definitions (audit-harness, audit-security, audit-tests, audit-spec, audit-consistency, audit-redteam) have `tools: Read, Glob, Grep` and no `isolation` key. validate.py check 12 (agent_frontmatter_problems, tools/validate.py:281-305) requires worktree isolation for the verifier only. The decision record (decisions/2026-09-16-ccgg-audit-architecture.md:167-177) deliberately gives specialists no worktree; the definition's Scope was never updated to match.",
+    "hypothesis": "The Scope sentence would hold only if each specialist definition set `isolation: worktree`, or if the sentence were rewritten to promise read-only tools without a worktree.",
+    "falsifier": "grep -L 'isolation: worktree' /home/user/claude-code-generic-guide/.claude/agents/audit-*.md  # lists all six specialists; the criterion is false as written"
+  },
+  {
+    "id": "P-002",
+    "layer": "process",
+    "class": "stated-not-enforced",
+    "severity": "important",
+    "location": "decisions/2026-09-16-ccgg-audit-architecture.md:203",
+    "claim": "\"the audit's own settings deny `Bash(git push *)`, `Bash(rm *)`, `Bash(curl *)`, `Bash(wget *)` as a second layer\"",
+    "evidence": "/home/user/claude-code-generic-guide/.claude/settings.json has no `permissions` block at all (only `hooks` and `worktree.baseRef`); facts.json permission-surface-001 confirms `deny: []`. The second layer that actually exists is the PreToolUse guard hook in audit-verifier.md, which the decision record never names. The decision record is marked `decided` and lists this deny set as a consequence.",
+    "hypothesis": "The stated second layer would exist only if settings.json (or a settings fragment the audit loads) carried a `permissions.deny` list with those four rules.",
+    "falsifier": "python3 -c \"import json;print(json.load(open('/home/user/claude-code-generic-guide/.claude/settings.json')).get('permissions'))\"  # prints None"
+  },
+  {
+    "id": "P-003",
+    "layer": "process",
+    "class": "stated-not-enforced",
+    "severity": "important",
+    "location": ".claude/hooks/audit-verifier-guard.sh:4",
+    "claim": "\"refuse write-shaped, network, and install commands from the audit's verifier ... Anything the guard cannot parse is refused — it fails closed\"",
+    "evidence": "The deny list at /home/user/claude-code-generic-guide/.claude/hooks/audit-verifier-guard.sh:31-40 covers rm, mv, cp, tee, redirects, git write verbs, network binaries, and package installers, but not `sed -i`, `touch`, `mkdir`, `git apply`, `patch`, `perl -i`, or `python3 -c` with a file write — all write-shaped. No test file in tools/ references the guard (grep for `audit-verifier-guard` in tools/test_*.py returns nothing) and no probe in tools/probes.txt exercises it. The skill (SKILL.md:24-25) and F002 rely on this as \"a guard hook on Bash\".",
+    "hypothesis": "The header's claim would hold only if the deny list covered in-place editors and interpreter-driven writes, or if the guard allow-listed read-only commands instead of deny-listing.",
+    "falsifier": "printf '{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"sed -i s/a/b/ AGENTS.md\"}}' | bash /home/user/claude-code-generic-guide/.claude/hooks/audit-verifier-guard.sh; echo exit=$?  # exit=0, the write-shaped command is allowed"
+  },
+  {
+    "id": "P-004",
+    "layer": "process",
+    "class": "stated-not-enforced",
+    "severity": "important",
+    "location": "decisions/2026-09-16-ccgg-audit-architecture.md:296",
+    "claim": "\"The renderer therefore treats a candidate with no verifier record as `unverified` and the report names the cut\" and SKILL.md:90 \"Success: `findings.jsonl` has one line per candidate\"",
+    "evidence": "/home/user/claude-code-generic-guide/tools/audit_report.py reads only findings.jsonl, facts.json, probes.json, and REVISION-*.json (main, lines 146-158); it never opens candidates/*.json and never compares candidate ids to finding ids. The one-line-per-candidate rule lives solely in the orchestrator's prose (SKILL.md:87-88). A verifier that returns fewer lines than it received candidates produces a render that passes with the missing candidates silently gone, contrary to the trade-off table's \"never dropped silently\" (decision record line 287).",
+    "hypothesis": "The guarantee would hold only if audit_report.py loaded candidates/*.json and either synthesized `unverified` records for missing ids or failed the render naming them.",
+    "falsifier": "grep -n 'candidates' /home/user/claude-code-generic-guide/tools/audit_report.py  # no output; the renderer cannot see which candidates lack a verifier record"
+  },
+  {
+    "id": "P-005",
+    "layer": "process",
+    "class": "stated-not-enforced",
+    "severity": "important",
+    "location": ".claude/skills/ccgg-audit/SKILL.md:38",
+    "claim": "\"if [git status] is non-empty, say so in the report header\" and Step 6 \"the run's cost and duration\" — with REPORT.md rendered from a REVISION-<sha>.json stamp per the decision record's data model (line 249)",
+    "evidence": "Nothing in tools/ or .claude/ writes `REVISION-*.json`: grep for `REVISION` across tools/ and .claude/ hits only /home/user/claude-code-generic-guide/tools/audit_report.py:5 and :155, which read it. audit_facts.py records `dirty` in inventory.json (facts script line 38-39 of the skill), but audit_report.py never reads inventory.json, so the commit, dirty flag, cost, and duration lines in render() (lines 83-88) are unreachable. The current run directory confirms it: CCGG-AUDIT-20260916T172615Z/ holds .gitignore, inventory.json, facts.json, probes.json, redteam.json and no REVISION file.",
+    "hypothesis": "The report header could carry dirty state and cost only if some stage wrote REVISION-<sha>.json, or if the renderer read inventory.json for head/dirty.",
+    "falsifier": "grep -rln 'REVISION-' /home/user/claude-code-generic-guide/tools /home/user/claude-code-generic-guide/.claude  # only tools/audit_report.py; and: grep -n inventory /home/user/claude-code-generic-guide/tools/audit_report.py  # no output"
+  },
+  {
+    "id": "P-006",
+    "layer": "process",
+    "class": "unproven-criterion",
+    "severity": "important",
+    "location": "features/F002-audit-skill.md:96",
+    "claim": "\"Given a fresh CCGG install into an empty repository, when `install.sh` runs, then the skill, the subagent definitions, and the probe harness are present, and the validator passes in the target on the first run\"",
+    "evidence": "No workflow or test runs install.sh: grep for `install.sh` across .github/ and tools/test_*.py hits only a comment in tools/test_validate.py:118. .github/workflows/validate.yml runs validate.py, audit_probes.py and unittest only. install.sh itself runs the validator in the target with `|| true` (/home/user/claude-code-generic-guide/install.sh:171), so even a manual install cannot fail on a red validator. F002 is at `building` and lists this criterion without a pending marker.",
+    "hypothesis": "The criterion would be proven only by a CI job or test that runs install.sh into a scratch git repository and asserts validate.py exits 0 there.",
+    "falsifier": "grep -rn 'install.sh' /home/user/claude-code-generic-guide/.github /home/user/claude-code-generic-guide/tools/test_*.py  # only a comment; no check installs into a fresh repo and runs the validator"
+  },
+  {
+    "id": "P-007",
+    "layer": "process",
+    "class": "unproven-criterion",
+    "severity": "suggestion",
+    "location": "features/F002-audit-skill.md:87",
+    "claim": "\"Given a headless run against a checkout the operator did not write, when the audit starts, then it runs with project settings excluded (`--setting-sources user`) ... visible in the run's JSON result\"; also Scope line 49-50 (headless CI comments on the PR), criterion line 99-100 (cost under 10 USD from the headless JSON), and metric line 39-40 (`git status --porcelain` after the run in CI)",
+    "evidence": "No headless entry point exists: `--setting-sources`, `claude -p --bare`, `audit_agents_json.py`, `audit_result.schema.json`, and `orchestrator.md` appear only in the decision record and F002, never in .github/, tools/, or .claude/skills/ccgg-audit/. SKILL.md:19-20 states the headless CI mode is slice 3 and not built. The definition's ledger marks slice 3 `[in]` (line 158-160) and the criteria carry no pending marker, so four criteria/metrics read as commitments with no mechanism behind them.",
+    "hypothesis": "These criteria would hold only once a CI job invokes `claude -p --setting-sources user ...` and records the JSON result; until then the definition should mark them as slice-3 pending.",
+    "falsifier": "grep -rn 'setting-sources' /home/user/claude-code-generic-guide/.github /home/user/claude-code-generic-guide/tools /home/user/claude-code-generic-guide/.claude  # no output"
+  },
+  {
+    "id": "P-008",
+    "layer": "process",
+    "class": "unproven-criterion",
+    "severity": "suggestion",
+    "location": "features/F002-audit-skill.md:91",
+    "claim": "\"`tools/validate.py` fails on any other value\" for a specialist's `tools` field",
+    "evidence": "The pure function agent_frontmatter_problems is unit-tested (tools/test_validate.py:190-230), but nothing proves check_agents is wired into main() and fed tracked files: tools/probes.txt has no probe that adds `Bash` to a specialist or drops `omitClaudeMd`, although probes.txt is described as \"the living contract of what the gate is known to catch\" and the decision record (line 226-227) says the validator check lands so the gate's guarantees become tests of the gate. The criterion is the one F002 read-only guarantee the validator owns, and the end-to-end path is the untested half.",
+    "hypothesis": "The criterion would be proven end to end by a `caught` probe in tools/probes.txt that mutates a specialist's `tools` line and expects the gate to fail.",
+    "falsifier": "grep -n 'agents/' /home/user/claude-code-generic-guide/tools/probes.txt  # no probe mutates an agent definition"
+  },
+  {
+    "id": "P-009",
+    "layer": "process",
+    "class": "unproven-criterion",
+    "severity": "suggestion",
+    "location": "features/F001-feature-definition-tool.md:62",
+    "claim": "\"Given a repository with no `features/` directory, when `tools/validate.py` runs, then it passes unchanged\"",
+    "evidence": "check_features (/home/user/claude-code-generic-guide/tools/validate.py:552-573) returns early when `git ls-files features/*.md` is empty, but no test exercises it: tools/test_validate.py imports only the pure helpers and never calls check_features, and this repository's CI always has features/, so the no-features path never runs anywhere that would fail if it raised. The criterion is also the one that protects every wired project.",
+    "hypothesis": "The criterion would be proven by a test that runs validate.py in a scratch repository without features/ and asserts exit 0, or by a `caught`/`missed` probe that removes features/.",
+    "falsifier": "grep -n 'check_features' /home/user/claude-code-generic-guide/tools/test_validate.py /home/user/claude-code-generic-guide/tools/probes.txt  # no output"
+  },
+  {
+    "id": "P-010",
+    "layer": "process",
+    "class": "scope-drift",
+    "severity": "suggestion",
+    "location": "WORKING-CHARTER.md:209",
+    "claim": "\"a drop-in documentation and configuration layer — markdown, three bash hooks, a JSON settings file, VS Code tasks, and one Python validator (`tools/validate.py`) ... No application code beyond that validator\" and line 214-215 \"Python for `tools/validate.py`\"",
+    "evidence": ".claude/hooks/ holds four scripts (audit-verifier-guard.sh, pre-compact.sh, session-end.sh, session-start.sh) and tools/ holds eight Python programs (validate.py, feature_lint.py, catalog.py, audit_facts.py, audit_probes.py, audit_redteam.py, audit_report.py plus tests). install.sh:70 likewise prints \"(3 lifecycle hooks)\" while copying four. The charter's per-repo section is the standing constraint a new session reads to know what the repository is, and it describes a smaller repository than exists.",
+    "hypothesis": "The section would be accurate only if it named the audit tooling and the fourth hook, or described the tools/ directory generically.",
+    "falsifier": "ls /home/user/claude-code-generic-guide/.claude/hooks/*.sh | wc -l; ls /home/user/claude-code-generic-guide/tools/*.py | grep -vc test_  # 4 and 7, not 3 and 1"
+  },
+  {
+    "id": "P-011",
+    "layer": "process",
+    "class": "stale-status",
+    "severity": "suggestion",
+    "location": "features/F002-audit-skill.md:63",
+    "claim": "\"the security specialist invokes the Claude Security plugin or `/security-review` when they are available\"",
+    "evidence": "The definition's own ledger (line 165-166, `[in]`) states \"a Read/Glob/Grep agent cannot invoke a skill itself\" and moves the invocation to the orchestrator; /home/user/claude-code-generic-guide/.claude/agents/audit-security.md:22-23 reads `candidates/security-tooling.md` only \"if it exists\" and SKILL.md:56-58 has the orchestrator run the tooling. The Non-goals and the ledger item at line 142-143 still say the specialist invokes it, so the definition contradicts itself and the code.",
+    "hypothesis": "The Non-goals sentence would be true only if the specialist held a tool that can run a skill, which validate.py check 12 forbids.",
+    "falsifier": "grep -n 'tools:' /home/user/claude-code-generic-guide/.claude/agents/audit-security.md  # Read, Glob, Grep only; no tool can invoke /security-review"
+  },
+  {
+    "id": "P-012",
+    "layer": "process",
+    "class": "scope-drift",
+    "severity": "suggestion",
+    "location": "decisions/2026-09-16-ccgg-audit-architecture.md:216",
+    "claim": "\"`allowed-tools: Bash(python3 tools/audit_facts.py *) Bash(python3 tools/audit_probes.py *) Bash(python3 tools/audit_report.py *)`, the three commands the orchestrator runs, and nothing else\"",
+    "evidence": "/home/user/claude-code-generic-guide/.claude/skills/ccgg-audit/SKILL.md:5 grants four Bash commands plus `Write(CCGG-AUDIT-*/**) Read Glob Grep Agent`. The `Write` grant is what lets the orchestrator save candidates/*.json and findings.jsonl (SKILL.md:78-80), so the read-only boundary the decision record says is held by \"nothing else\" now rests on a path pattern nothing validates: validate.py check 13 only confirms `Write` is a known tool name, not that its pattern is confined to the ignored report directory.",
+    "hypothesis": "The decision record's consequence would hold only if the skill's allowed-tools were the three commands, or if the record were amended and a check pinned the Write grant to `CCGG-AUDIT-*/**`.",
+    "falsifier": "sed -n 5p /home/user/claude-code-generic-guide/.claude/skills/ccgg-audit/SKILL.md; grep -n 'Write' /home/user/claude-code-generic-guide/tools/validate.py  # the grant is present; no check constrains its pattern"
+  }
+]

@@ -1,0 +1,25 @@
+{
+  "head": "fddcb92",
+  "dirty": false,
+  "scope": "all",
+  "specialists_run": [
+    "audit-harness",
+    "audit-security",
+    "audit-tests",
+    "audit-spec",
+    "audit-consistency",
+    "audit-redteam"
+  ],
+  "verifier_batches": 7,
+  "models": {
+    "specialists": "per definition",
+    "audit-verifier": "inherit"
+  },
+  "security_tooling": "/security-review refused: origin/HEAD unset in this clone",
+  "duration_s": 1201,
+  "cost_usd": null,
+  "subagent_tokens_approx": {
+    "specialists": 598000,
+    "verifiers": 440000
+  }
+}

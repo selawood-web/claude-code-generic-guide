@@ -85,6 +85,19 @@ def strip_code_blocks(lines: list[str]) -> list[str]:
     return out
 
 
+INLINE_CODE_RE = re.compile(r"`+[^`\n]*`+")
+
+
+def blank_inline_code(text: str) -> str:
+    """Inline code spans replaced by spaces of the same length.
+
+    A backticked `[x](path)` is a quoted example, not a link — an audit report
+    that documents a probe line, or a skill that shows link syntax, must not be
+    chased as a reference. Same-length blanks keep column positions stable.
+    """
+    return INLINE_CODE_RE.sub(lambda m: " " * len(m.group(0)), text)
+
+
 def slugify(heading: str) -> str:
     """The anchor GitHub generates for a heading.
 
@@ -121,7 +134,7 @@ def check_markdown() -> None:
             fail(f"{path}: file is empty")
             continue
         raw = open(full, encoding="utf-8", errors="replace").read()
-        content = "\n".join(strip_code_blocks(raw.splitlines()))
+        content = blank_inline_code("\n".join(strip_code_blocks(raw.splitlines())))
         for match in LINK_RE.finditer(content):
             target = match.group(1)
             if target.startswith(("http://", "https://", "mailto:", "#")):
@@ -481,7 +494,7 @@ def check_rule_file_links() -> None:
         if not os.path.exists(path):
             continue
         raw = open(path, encoding="utf-8", errors="replace").read()
-        content = "\n".join(strip_code_blocks(raw.splitlines()))
+        content = blank_inline_code("\n".join(strip_code_blocks(raw.splitlines())))
         for match in LINK_RE.finditer(content):
             target = match.group(1)
             if link_leaves_install_set(target):
