@@ -26,6 +26,7 @@ from audit_headless import (
     result_object,
     run_summary,
     orchestrator_prompt,
+    probe_command,
     retarget_write_grant,
     skill_body,
     skill_grants,
@@ -264,6 +265,39 @@ class RunSummaryTests(unittest.TestCase):
     def test_malformed_denial_entries_do_not_crash(self):
         lines = run_summary(dict(self.EMPTY_RUN, permission_denials=["oops", {}, None]))
         self.assertIn("unknown", "\n".join(lines))
+
+
+class ProbeCommandTests(unittest.TestCase):
+    """The probe must differ from the real run only in what it asks and what it costs."""
+
+    def setUp(self):
+        self.probe = probe_command('{"a":{}}', "/tmp/p.md", ["Read", "Agent"])
+        self.real = build_command('{"a":{}}', "/tmp/p.md", ["Read", "Agent"], "all", "d", 80, 10.0)
+
+    def test_asks_only_for_the_tool_list(self):
+        self.assertEqual(self.probe[1], "-p")
+        self.assertIn("every tool available to you", self.probe[2])
+
+    def test_one_turn_and_pennies(self):
+        self.assertEqual(self.probe[self.probe.index("--max-turns") + 1], "1")
+        self.assertEqual(float(self.probe[self.probe.index("--max-budget-usd") + 1]), 0.50)
+
+    def test_every_flag_that_shapes_the_toolset_is_identical(self):
+        # If these drifted, the probe would answer a question about a different run.
+        for flag in ("--bare", "--setting-sources", "--agents", "--append-system-prompt-file",
+                     "--permission-prompts", "--allowedTools", "--disallowed-tools"):
+            with self.subTest(flag=flag):
+                self.assertIn(flag, self.probe)
+        self.assertEqual(self.probe[self.probe.index("--agents") + 1],
+                         self.real[self.real.index("--agents") + 1])
+        self.assertEqual(self.probe[self.probe.index("--allowedTools") + 1:
+                                    self.probe.index("--disallowed-tools")],
+                         self.real[self.real.index("--allowedTools") + 1:
+                                   self.real.index("--disallowed-tools")])
+
+    def test_model_is_optional(self):
+        self.assertNotIn("--model", self.probe)
+        self.assertIn("--model", probe_command("{}", "p", ["Read"], model="haiku"))
 
 
 class CheckScopeTests(unittest.TestCase):

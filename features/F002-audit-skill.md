@@ -207,6 +207,18 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-16 — Whether `--bare` with inline `--agents` honours `isolation: worktree` is
   undocumented; the first authenticated CI run is the check, and the fallback the
   architecture record names (one `claude -p` per specialist) still stands — [open]
+- 2026-09-16 — The first audit run that reached a model spawned no subagent and reported
+  no `Agent` tool, after 42 turns and 1.38 USD. Read against the installed CLI (2.1.273)
+  rather than a summary: `--bare` skips "hooks, LSP, plugin sync, attribution,
+  auto-memory, background prefetches, keychain reads, and CLAUDE.md auto-discovery" and
+  does **not** list subagents, and names `--agents` as the way to supply them;
+  `--allowedTools` only pre-approves while `--tools` is what restricts the set, and the
+  run passes no `--tools`. So the design should hold and something else is wrong — the
+  tool set the orchestrator actually receives is the missing observation — [open]
+- 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
+  tool it has, with every flag that shapes the tool set kept identical to the real run.
+  Cheaper than inferring from a failed audit, and the tests pin the two commands
+  together so the probe can never answer about a different run — [in]
 - 2026-09-16 — The first CI dispatch passed green having audited nothing, because no
   `ANTHROPIC_API_KEY` secret exists and zero findings rendered as a clean report. A
   green check must mean an audit happened: the renderer now distinguishes "found

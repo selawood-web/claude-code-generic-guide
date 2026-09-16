@@ -20,6 +20,10 @@ on:
         description: "assemble and render only — no model run, no spend"
         type: boolean
         default: false
+      probe_tools:
+        description: "one turn, ~1 cent: ask the run which tools it actually has, then stop"
+        type: boolean
+        default: false
   pull_request:
     types: [opened, labeled, synchronize]
 
@@ -216,16 +220,32 @@ jobs:
           exit 1
 
       - name: Install Claude Code
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
+
+      # A run that spawned no subagent left one question unanswerable from outside:
+      # what did the orchestrator actually receive? This asks it, for about a cent,
+      # with every flag that shapes the tool set kept identical to the real run.
+      - name: Probe the run's tool set
+        if: steps.settings.outputs.authenticated == 'true' && inputs.probe_tools == true
+        env:
+          STAMP: ${{ steps.settings.outputs.stamp }}
+          SCOPE: ${{ steps.settings.outputs.scope }}
+          GUARD: ${{ steps.guard.outputs.path }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          npm install -g @anthropic-ai/claude-code
+          python tools/audit_headless.py \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools
 
       # The same launcher a maintainer runs locally, with the same assembled command:
       # auto-discovery off, agents inline, grants taken from the skill, budget capped.
       # `--agents` takes literal JSON, so it is passed as one argument, never a path.
       - name: Headless audit
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
           SCOPE: ${{ steps.settings.outputs.scope }}

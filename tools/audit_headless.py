@@ -261,6 +261,41 @@ def run_summary(result: dict | None) -> list[str]:
     return lines
 
 
+PROBE_PROMPT = (
+    "List the exact name of every tool available to you, one per line, and nothing "
+    "else. No preamble, no explanation, no markdown."
+)
+PROBE_BUDGET_USD = 0.50
+
+
+def probe_command(agents_json: str, prompt_file: str, grants: list[str],
+                  model: str | None = None) -> list[str]:
+    """The same run, one turn, asking only what tools it was given.
+
+    A run that spawns no subagent and reports no Agent tool leaves one question
+    unanswerable from the outside: what did the orchestrator actually receive?
+    This asks it, for a fraction of a cent, with every flag that matters kept
+    identical — change the real command and this changes with it.
+    """
+    argv = [
+        "claude",
+        "-p", PROBE_PROMPT,
+        "--bare",
+        "--setting-sources", "user",
+        "--agents", agents_json,
+        "--append-system-prompt-file", prompt_file,
+        "--permission-prompts", "none",
+        "--max-turns", "1",
+        "--max-budget-usd", str(PROBE_BUDGET_USD),
+        "--output-format", "json",
+    ]
+    if model:
+        argv += ["--model", model]
+    argv += ["--allowedTools", *grants]
+    argv += ["--disallowed-tools", ",".join(DENIED_TOOLS)]
+    return argv
+
+
 def check_scope(scope: str, root: str) -> str:
     if scope in FIXED_SCOPES:
         return scope
@@ -286,6 +321,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--model", default=None, help="model for the orchestrator (subagents follow their briefs)")
     parser.add_argument("--dry-run", action="store_true",
                         help="assemble and write the artifacts, print the command, run nothing")
+    parser.add_argument("--probe-tools", action="store_true",
+                        help="one turn, half a dollar: ask the run what tools it actually has")
     args = parser.parse_args(argv)
 
     root = args.repo
@@ -336,8 +373,11 @@ def main(argv: list[str]) -> int:
     with open(prompt_file, "w", encoding="utf-8") as fh:
         fh.write(prompt + "\n")
 
-    command = build_command(agents_json, prompt_file, grants, scope, report_dir,
-                            args.max_turns, args.budget_usd, args.model)
+    if args.probe_tools:
+        command = probe_command(agents_json, prompt_file, grants, args.model)
+    else:
+        command = build_command(agents_json, prompt_file, grants, scope, report_dir,
+                                args.max_turns, args.budget_usd, args.model)
     # The record of what ran, with the agents JSON named rather than inlined: it is
     # already beside this file, and a 40 KB argument helps nobody read the command.
     readable = [("@headless/agents.json" if a is agents_json else a) for a in command]
@@ -352,7 +392,7 @@ def main(argv: list[str]) -> int:
         print(shlex.join(readable))
         return 0
 
-    result_path = os.path.join(out_dir, "result.json")
+    result_path = os.path.join(out_dir, "probe-result.json" if args.probe_tools else "result.json")
     try:
         proc = subprocess.run(command, cwd=root, capture_output=True, text=True,
                               encoding="utf-8", errors="replace")
@@ -366,7 +406,14 @@ def main(argv: list[str]) -> int:
         print(f"audit-headless: the run's own result is in "
               f"{os.path.join(report_dir, 'headless', 'result.json')}", file=sys.stderr)
         return 1
-    for line in run_summary(result_object(proc.stdout)):
+    result = result_object(proc.stdout)
+    if args.probe_tools:
+        text = str((result or {}).get("result") or "").strip()
+        print("audit-headless: the tools this run was actually given —")
+        for line in (text.splitlines() or ["(the run named none)"]):
+            print(f"    {line.strip()}")
+        print(f"audit-headless: 'Agent' present: {'yes' if 'agent' in text.lower() else 'NO'}")
+    for line in run_summary(result):
         print(line)
     print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', 'result.json')}")
     return 0
