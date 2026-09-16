@@ -146,6 +146,12 @@ request labelled `audit` — never automatically, for the same reason this skill
 `disable-model-invocation: true`. It posts the report as one pull-request comment,
 uploads the report directory as an artifact, and pushes nothing.
 
+**A green check means an audit happened.** Zero findings from a run whose model stage
+never started is not a clean bill, so the renderer records whether the run left any
+trace — candidates, findings, or a revision stamp — in `status.json` and banners the
+report when it did not. The job fails on an incomplete run unless a dry run was what
+was asked for.
+
 ## Knowledge Extraction
 ```
 remember: [repository] audit — [the class of defect the gate missed and the check that closed it]
