@@ -229,6 +229,16 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   full tool set, so the run drops `--bare`, adds `--strict-mcp-config`, and names its
   built-in set with `--tools` derived from the skill's own grants (`Agent` → `Task`).
   Validator check 22 refuses both halves of the mistake — [in]
+- 2026-09-16 — First run with the fix: **6 subagents, 6 completed, 0 failed**, 19 turns,
+  9.62 USD of a 10 USD cap. The specialists ran; the audit still wrote nothing. Three tool
+  calls were refused by the grant set — `Bash` twice and one `Write` — and the run's own
+  closing message named a launcher defect as the blocker. Hypothesis, not yet proven: with
+  `--permission-prompts none`, the only grants that exist are the skill's four
+  `Bash(python3 tools/audit_*.py *)` patterns, so the verifier's own reproduction commands
+  (`git`, `grep`, `sed`, a worktree) have nothing to approve them, and an interactive run
+  never noticed because a human answers the prompt there. Widening the Bash grant is only
+  safe if the inline agent's guard hook actually fires — the open question above — so the
+  next step is a cent-scale probe of both, not another 10 USD run — [open]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands
