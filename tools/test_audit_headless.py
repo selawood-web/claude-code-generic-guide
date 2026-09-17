@@ -122,6 +122,30 @@ class ToolNamesTests(unittest.TestCase):
             tool_names([])
 
 
+class WriteGrantPathFormTests(unittest.TestCase):
+    """The Write tool takes an absolute path; a relative grant never matches one."""
+
+    GRANTS = ["Read", "Write(CCGG-AUDIT-*/**)"]
+
+    def test_both_forms_are_granted_when_the_root_is_known(self):
+        out = retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X", "/home/runner/work/r/r")
+        self.assertIn("Write(CCGG-AUDIT-X/**)", out)
+        self.assertIn("Write(//home/runner/work/r/r/CCGG-AUDIT-X/**)", out)
+
+    def test_neither_form_reaches_outside_this_run_s_directory(self):
+        for grant in retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X", "/repo"):
+            if grant.startswith("Write("):
+                self.assertTrue(grant.endswith("CCGG-AUDIT-X/**)"), grant)
+
+    def test_without_a_root_the_relative_form_stands_alone(self):
+        out = retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X")
+        self.assertEqual([g for g in out if g.startswith("Write")], ["Write(CCGG-AUDIT-X/**)"])
+
+    def test_the_tool_set_still_names_write_once(self):
+        names = tool_names(retarget_write_grant(self.GRANTS, "d", "/x"))
+        self.assertEqual(names.count("Write"), 1)
+
+
 class OrchestratorPromptTests(unittest.TestCase):
     def test_states_scope_directory_and_the_evidence_rule(self):
         text = orchestrator_prompt(SAMPLE, "harness", "CCGG-AUDIT-X")

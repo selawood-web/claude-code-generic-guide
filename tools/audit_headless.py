@@ -113,13 +113,25 @@ def skill_grants(text: str) -> list[str]:
     return grants
 
 
-def retarget_write_grant(grants: list[str], report_dir: str) -> list[str]:
-    """Pin the skill's report-directory Write grant to this run's actual directory."""
-    pinned = f"Write({report_dir.rstrip('/')}/**)"
+def retarget_write_grant(grants: list[str], report_dir: str, root: str = "") -> list[str]:
+    """Pin the skill's report-directory Write grant to this run's actual directory.
+
+    Two forms, because the Write tool takes an absolute `file_path` and a
+    relative pattern never matched one: a probe run watched the orchestrator's
+    only write refused with "this session has no approval surface", which is
+    what a grant that does not match looks like when nobody can be asked. The
+    `//` form is the absolute pattern; the relative one stays for a run whose
+    cwd is the anchor. Neither widens the scope — both name this run's own
+    directory and nothing else.
+    """
+    directory = report_dir.rstrip("/")
+    pinned = [f"Write({directory}/**)"]
+    if root:
+        pinned.append(f"Write(//{os.path.join(root, directory).lstrip('/')}/**)")
     out, replaced = [], False
     for grant in grants:
         if WRITE_GRANT_RE.fullmatch(grant):
-            out.append(pinned)
+            out.extend(pinned)
             replaced = True
         else:
             out.append(grant)
@@ -498,7 +510,7 @@ def main(argv: list[str]) -> int:
             raise HeadlessError(f"--guard {args.guard} does not exist")
         with open(os.path.join(root, SKILL_PATH), encoding="utf-8") as fh:
             skill_text = fh.read()
-        grants = retarget_write_grant(skill_grants(skill_text), report_dir)
+        grants = retarget_write_grant(skill_grants(skill_text), report_dir, root)
         definitions = audit_agents_json.build(
             root, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, args.guard, None
         )

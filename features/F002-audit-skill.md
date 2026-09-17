@@ -252,6 +252,15 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   fix follows from it: the guard returns a PreToolUse `allow` for what its allow-list
   accepts, so the verifier's Bash is approved by the thing that has read the command rather
   than by a grant that cannot. The orchestrator stays narrow — [in]
+- 2026-09-17 — Probe on the audit's own grants: the verifier's `git status --porcelain`
+  **ran** with no bare `Bash` granted, so the guard's `allow` is what approves it, and the
+  guard still refused the redirect. The orchestrator's one `Write` was refused — "this
+  session has no approval surface", which is what a grant that does not match looks like
+  when nobody can be asked. The Write tool takes an **absolute** `file_path` and the grant
+  was relative, so the run now carries both forms, each naming this run's directory and
+  nothing else — [in]
+- 2026-09-17 — A probe's answer is repeated by the gate step, because reading it meant
+  paging back through the install step every time — [in]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands
