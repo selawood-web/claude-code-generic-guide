@@ -31,16 +31,43 @@ on:
   pull_request:
     types: [opened, labeled, synchronize]
 
+# Least privilege by default. Only the job that posts the comment asks for more,
+# and it is the job that holds no API key.
 permissions:
-  contents: read          # the audit reads the tree and never writes to it
-  pull-requests: write    # one comment carrying the report
+  contents: read
+
+env:
+  # Pinned, not `latest`: this job installs the CLI into a runner that later holds
+  # ANTHROPIC_API_KEY, so an unpinned install is an unreviewed dependency with a
+  # secret in scope. 2.1.273 is the version this design was measured against — the
+  # flag behaviour recorded in features/F002-audit-skill.md and
+  # decisions/2026-09-16-ccgg-audit-architecture.md ("measured against the installed
+  # CLI (2.1.273)"). npm's `latest` moves; what the corrections were written against
+  # does not. Bump this deliberately, re-measuring those flags, never incidentally.
+  CLAUDE_CODE_VERSION: "2.1.273"
 
 concurrency:
   group: audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Three jobs, because two different kinds of code run here and they must not share
+# a runner. Code from the audited head (audit_facts.py, audit_probes.py,
+# audit_redteam.py, their probe data files, and the renderer) is what the audit is
+# about — it cannot be taken from the base ref without auditing the wrong tree. The
+# ANTHROPIC_API_KEY is what an attacker would want. Previously both lived in one
+# job, so a pull request could run its own Python on a runner that later held the
+# secret, with the whole workspace to rewrite in between.
+#
+#   deterministic  head code, no secret of any kind
+#   model          the key, and only base-ref tooling
+#   report         head code again, and the comment token — never the key
+#
+# The report directory travels between them as an artifact, which is also the only
+# thing that crosses.
+
 jobs:
-  audit:
+  # 1. The audited tree's own code runs here, where there is nothing to steal.
+  deterministic:
     # A labeled pull request, or a manual run. Never a fork: GitHub withholds
     # secrets from fork pull requests, so the run could only fail at auth.
     if: >-
@@ -48,11 +75,17 @@ jobs:
       (contains(github.event.pull_request.labels.*.name, 'audit') &&
        github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      stamp: ${{ steps.settings.outputs.stamp }}
+      scope: ${{ steps.settings.outputs.scope }}
+      budget: ${{ steps.settings.outputs.budget }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 0   # the verifier's worktree and the base-ref guard both need history
+          fetch-depth: 0   # the probe harness reads history from the checkout
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
@@ -62,7 +95,6 @@ jobs:
         env:
           SCOPE: ${{ inputs.scope || 'all' }}
           BUDGET: ${{ inputs.budget_usd || '10' }}
-          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
           # An environment value is data: keep it out of the step summary and out
@@ -79,14 +111,6 @@ jobs:
             echo "budget=$BUDGET"
             echo "stamp=CCGG-AUDIT-$(date -u +%Y%m%dT%H%M%SZ)"
           } >> "$GITHUB_OUTPUT"
-          # The runner has no keychain and no OAuth credential, so this secret is
-          # the run's only way to authenticate: no key, no model stage.
-          if [ -n "${KEY:-}" ]; then
-            echo "authenticated=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "authenticated=false" >> "$GITHUB_OUTPUT"
-            echo "No ANTHROPIC_API_KEY — the deterministic stage runs and the model run is skipped." >> "$GITHUB_STEP_SUMMARY"
-          fi
 
       # No model, no spend: the facts, the gate's catch rate, and the channel
       # inventory. These artifacts are what the specialists read.
@@ -96,46 +120,173 @@ jobs:
           SCOPE: ${{ steps.settings.outputs.scope }}
         run: |
           set -euo pipefail
-          python tools/audit_facts.py --out "$STAMP" --scope "$SCOPE"
+          # --run-gates executes the audited head's own validator and tests. Safe
+          # here and nowhere else in this workflow: this job holds no secret (the
+          # split is the point), the runner is ephemeral, and the commands get a
+          # minimal environment with a throwaway HOME rather than the job's.
+          python tools/audit_facts.py --out "$STAMP" --scope "$SCOPE" --run-gates
           python tools/audit_probes.py --out "$STAMP" || true
           case "$SCOPE" in
             all|harness) python tools/audit_redteam.py --out "$STAMP" || true ;;
           esac
 
-      # The verifier is the one agent that executes, and its guard must not come
-      # from the tree under audit — a pull request could otherwise ship a guard
-      # that permits everything. Take it from the base branch the maintainers own.
-      - name: Trusted copy of the verifier guard
-        id: guard
+      # F002's metric: an audit run changes no file in the audited tree. The report
+      # directory carries its own .gitignore, so a clean run leaves `git status`
+      # with nothing to say. Measured here because a metric nothing measures is a
+      # claim (finding P-001); the pathspec keeps the report out of it even in a
+      # checkout whose root .gitignore does not.
+      - name: The audited tree is unchanged
+        if: always()
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain -- . ':(exclude)CCGG-AUDIT-*')"
+          if [ -n "$changed" ]; then
+            echo "the audit changed the audited tree:" >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+          echo "audited tree unchanged"
+
+      - name: Hand the deterministic results to the next job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ccgg-audit-deterministic-${{ steps.settings.outputs.stamp }}
+          path: ${{ steps.settings.outputs.stamp }}/
+          retention-days: 1
+
+  # 2. The only job that sees ANTHROPIC_API_KEY. Every command it runs comes from
+  #    the base ref: the launcher, the skill, the agent briefs, the verifier guard.
+  #    The head checkout is present because it is the thing being audited — it is
+  #    read by the run, never executed by this job.
+  model:
+    needs: deterministic
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      authenticated: ${{ steps.auth.outputs.authenticated }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0   # the verifier's worktree and the base-ref rescue both need history
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Take the deterministic results from the previous job
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ccgg-audit-deterministic-${{ needs.deterministic.outputs.stamp }}
+          path: ${{ needs.deterministic.outputs.stamp }}
+
+      # The runner has no keychain and no OAuth credential, so this secret is the
+      # run's only way to authenticate: no key, no model stage. Reading it is why
+      # this step lives in this job and not in the one that runs the tree's code.
+      - name: Authentication
+        id: auth
+        env:
+          KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${KEY:-}" ]; then
+            echo "authenticated=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authenticated=false" >> "$GITHUB_OUTPUT"
+            echo "No ANTHROPIC_API_KEY — the deterministic stage ran and the model run is skipped." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Everything that TELLS this run what to do must come from the base branch the
+      # maintainers own, never from the tree under audit. Four things qualify, and
+      # the guard was only the first of them:
+      #   the verifier's guard hook  — or a pull request ships a guard permitting all
+      #   the audit skill           — its body becomes the orchestrator's system prompt
+      #   the audit agent briefs    — each body becomes a subagent's system prompt
+      #   the launcher itself       — it holds the pinned grant set and does this rescue
+      # The head checkout is still what gets audited; it just no longer gets a say in
+      # how. audit_agents_json.py comes along because audit_headless.py imports it.
+      - name: Trusted copies of the files that configure the run
+        id: trusted
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          dest="$RUNNER_TEMP/audit-verifier-guard.sh"
-          src=".claude/hooks/audit-verifier-guard.sh"
-          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA:$src" 2>/dev/null; then
-            git show "$BASE_SHA:$src" > "$dest"
-            echo "guard taken from the base branch, not from the audited head"
-          else
-            cp "$src" "$dest"
-            echo "no base ref (manual run on a branch the maintainers own); guard taken from the checkout"
+          src_dir="$RUNNER_TEMP/trusted"
+          rm -rf "$src_dir"
+          mkdir -p "$src_dir/.claude/hooks" "$src_dir/.claude/skills/ccgg-audit" \
+                   "$src_dir/.claude/agents" "$src_dir/tools"
+
+          # One switch for the whole set: either the base ref supplies all of it, or
+          # none of it and we say so. A partial rescue is the dangerous middle.
+          trusted_from_base=0
+          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA:tools/audit_headless.py" 2>/dev/null; then
+            trusted_from_base=1
           fi
-          chmod +x "$dest"
-          echo "path=$dest" >> "$GITHUB_OUTPUT"
+
+          fetch() {   # fetch <path in repo>
+            if [ "$trusted_from_base" -eq 1 ] && git cat-file -e "$BASE_SHA:$1" 2>/dev/null; then
+              git show "$BASE_SHA:$1" > "$src_dir/$1"
+            else
+              cp "$1" "$src_dir/$1"
+            fi
+          }
+
+          fetch ".claude/hooks/audit-verifier-guard.sh"
+          fetch ".claude/skills/ccgg-audit/SKILL.md"
+          fetch "tools/audit_headless.py"
+          fetch "tools/audit_agents_json.py"
+
+          # The agent list itself comes from the base ref when there is one, so a
+          # pull request cannot add a specialist or drop the verifier.
+          if [ "$trusted_from_base" -eq 1 ]; then
+            agents=$(git ls-tree --name-only "$BASE_SHA" .claude/agents/ | grep -E 'audit-.*\.md$' || true)
+          else
+            agents=$(ls .claude/agents/audit-*.md 2>/dev/null || true)
+          fi
+          if [ -z "$agents" ]; then
+            echo "no audit agent briefs found; refusing to assemble a run with no specialists" >&2
+            exit 1
+          fi
+          for a in $agents; do fetch "$a"; done
+
+          chmod +x "$src_dir/.claude/hooks/audit-verifier-guard.sh"
+          if [ "$trusted_from_base" -eq 1 ]; then
+            echo "guard, skill, agent briefs and launcher taken from the base branch, not from the audited head"
+          else
+            echo "no base ref (manual run on a branch the maintainers own); taken from the checkout"
+          fi
+          echo "Trusted set:"; (cd "$src_dir" && find . -type f | sort | sed 's/^/  /')
+
+          # The launcher comes from the base ref, so the flags below must be ones the
+          # BASE understands — not the head's. On the pull request that first adds
+          # --trusted-source the base predates it, and this is that one-time case.
+          # Fail with the remedy rather than dropping the flag: a run that quietly
+          # lost its trusted source would look exactly like a protected one.
+          if ! python "$src_dir/tools/audit_headless.py" --help 2>/dev/null | grep -q -- '--trusted-source'; then
+            echo "The base branch's tools/audit_headless.py predates --trusted-source, so this run" >&2
+            echo "cannot be given a trusted skill or trusted agent briefs. Merge that change to the" >&2
+            echo "base branch first; until then the audit workflow cannot protect its own prompts." >&2
+            exit 1
+          fi
+
+          echo "guard=$src_dir/.claude/hooks/audit-verifier-guard.sh" >> "$GITHUB_OUTPUT"
+          echo "source=$src_dir" >> "$GITHUB_OUTPUT"
+          echo "launcher=$src_dir/tools/audit_headless.py" >> "$GITHUB_OUTPUT"
 
       # Nothing to run (no key, or a deliberate dry run): still assemble, so the
       # command, the agents JSON and the orchestrator prompt are on the record.
       - name: Assemble the headless run
-        if: steps.settings.outputs.authenticated != 'true' || inputs.dry_run == true
+        if: steps.auth.outputs.authenticated != 'true' || inputs.dry_run == true
         env:
-          STAMP: ${{ steps.settings.outputs.stamp }}
-          SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
-          BUDGET: ${{ steps.settings.outputs.budget }}
+          STAMP: ${{ needs.deterministic.outputs.stamp }}
+          SCOPE: ${{ needs.deterministic.outputs.scope }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
+          BUDGET: ${{ needs.deterministic.outputs.budget }}
         run: |
-          python tools/audit_headless.py \
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
-            --budget-usd "$BUDGET" --dry-run
+            --trusted-source "$SOURCE" --budget-usd "$BUDGET" --dry-run
 
       # Three authenticated runs died at the first API call, and the log could not
       # say whether the stored secret was mangled or the key itself was rejected.
@@ -143,7 +294,7 @@ jobs:
       # its value, and one minimal live call. A malformed secret fails here; a
       # rejected key fails here with the API's own words.
       - name: Preflight the API key
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        if: steps.auth.outputs.authenticated == 'true' && inputs.dry_run != true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -224,7 +375,7 @@ jobs:
           exit 1
 
       - name: Install Claude Code
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true
+        if: steps.auth.outputs.authenticated == 'true' && inputs.dry_run != true
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
@@ -233,55 +384,139 @@ jobs:
       # what did the orchestrator actually receive? This asks it, for about a cent,
       # with every flag that shapes the tool set kept identical to the real run.
       - name: Probe the run's tool set
-        if: steps.settings.outputs.authenticated == 'true' && inputs.probe_tools == true
+        if: steps.auth.outputs.authenticated == 'true' && inputs.probe_tools == true
         env:
-          STAMP: ${{ steps.settings.outputs.stamp }}
-          SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
+          STAMP: ${{ needs.deterministic.outputs.stamp }}
+          SCOPE: ${{ needs.deterministic.outputs.scope }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
-          python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools \
-            2>&1 | tee "$STAMP/probe.log"
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Fail here, not mid-run: an install that resolved to something else is a
+          # different tool than the one these flags were measured against.
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
+            --trusted-source "$SOURCE" --probe-tools
 
       # Two facts a ten-dollar audit run could not establish: whether the verifier's
-      # Bash is reachable at all, and whether the guard hook carried inline in its
-      # definition fires. Bash is deliberately wide here, so a refusal can only be
-      # the guard; the command it must refuse writes a marker nothing reads, and the
-      # marker's existence afterwards is the proof that nothing refused it.
+      # Bash is reachable at all under `--permission-prompts none`, and whether the
+      # guard hook carried inline in its definition fires. It spawns the verifier
+      # once on the audit's own grants — so a command that runs can only have been
+      # approved by the hook — and asks for one the guard must refuse, whose marker
+      # nothing reads: the marker's existence afterwards is proof it was not refused.
       - name: Probe the verifier's guard
-        if: steps.settings.outputs.authenticated == 'true' && inputs.probe_verifier == true
+        if: steps.auth.outputs.authenticated == 'true' && inputs.probe_verifier == true
         env:
-          STAMP: ${{ steps.settings.outputs.stamp }}
-          SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
+          STAMP: ${{ needs.deterministic.outputs.stamp }}
+          SCOPE: ${{ needs.deterministic.outputs.scope }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
-          python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-verifier \
-            2>&1 | tee "$STAMP/probe.log"
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
+            --trusted-source "$SOURCE" --probe-verifier
 
       # The same launcher a maintainer runs locally, with the same assembled command:
       # the tree's settings, hooks, agents, skills and CLAUDE.md excluded, agents
       # inline, the tool set and grants taken from the skill, budget capped.
       # `--agents` takes literal JSON, so it is passed as one argument, never a path.
       - name: Headless audit
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true && inputs.probe_verifier != true
+        if: steps.auth.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true && inputs.probe_verifier != true
         env:
-          STAMP: ${{ steps.settings.outputs.stamp }}
-          SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
-          BUDGET: ${{ steps.settings.outputs.budget }}
+          STAMP: ${{ needs.deterministic.outputs.stamp }}
+          SCOPE: ${{ needs.deterministic.outputs.scope }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
+          BUDGET: ${{ needs.deterministic.outputs.budget }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
-          python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --budget-usd "$BUDGET"
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Fail here, not mid-run: an install that resolved to something else is a
+          # different tool than the one these flags were measured against.
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
+            --trusted-source "$SOURCE" --budget-usd "$BUDGET"
+
+      # F002's metric: an audit run changes no file in the audited tree. The report
+      # directory carries its own .gitignore, so a clean run leaves `git status`
+      # with nothing to say. Measured here because a metric nothing measures is a
+      # claim (finding P-001); the pathspec keeps the report out of it even in a
+      # checkout whose root .gitignore does not.
+      - name: The audited tree is unchanged
+        if: always()
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain -- . ':(exclude)CCGG-AUDIT-*')"
+          if [ -n "$changed" ]; then
+            echo "the audit changed the audited tree:" >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+          echo "audited tree unchanged"
+
+      - name: Hand the model results to the report job
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ccgg-audit-model-${{ needs.deterministic.outputs.stamp }}
+          path: ${{ needs.deterministic.outputs.stamp }}/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # 3. Rendering, the comment and the verdict. This job runs the audited tree's
+  #    renderer, so it gets the comment token and no API key. always(): a failed or
+  #    cancelled model job must still leave a report, an artifact and an honest
+  #    verdict behind.
+  report:
+    needs: [deterministic, model]
+    if: always() && needs.deterministic.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write    # one comment carrying the report
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Take the deterministic results
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ccgg-audit-deterministic-${{ needs.deterministic.outputs.stamp }}
+          path: ${{ needs.deterministic.outputs.stamp }}
+      # The model job may have failed before it uploaded anything; the deterministic
+      # half above is still a report, and the gate below still calls it incomplete.
+      - name: Take the model results if there are any
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ccgg-audit-model-${{ needs.deterministic.outputs.stamp }}
+          path: ${{ needs.deterministic.outputs.stamp }}
 
       # The report is rendered from findings.jsonl by a script, not written by the
       # model: a candidate no verifier reached still appears, tagged unverified.
@@ -293,7 +528,7 @@ jobs:
         id: report
         if: always()
         env:
-          STAMP: ${{ steps.settings.outputs.stamp }}
+          STAMP: ${{ needs.deterministic.outputs.stamp }}
         run: |
           set -euo pipefail
           python tools/audit_report.py --dir "$STAMP" || true
@@ -308,6 +543,7 @@ jobs:
           print(f"blockers={int(status.get('blockers', 0))}")
           print(f"complete={str(bool(status.get('complete', False))).lower()}")
           print(f"findings={int(status.get('findings', 0))}")
+          print("stages_missing=" + ",".join(status.get("stages_missing") or []))
           PY
 
       # The audit never pushes. Its output leaves as an artifact and one comment.
@@ -315,8 +551,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ccgg-audit-${{ steps.settings.outputs.stamp }}
-          path: ${{ steps.settings.outputs.stamp }}/
+          name: ccgg-audit-${{ needs.deterministic.outputs.stamp }}
+          path: ${{ needs.deterministic.outputs.stamp }}/
           retention-days: 14
 
       - name: Comment the report on the pull request
@@ -324,7 +560,7 @@ jobs:
         continue-on-error: true   # a failed comment must not bury the findings
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STAMP: ${{ steps.settings.outputs.stamp }}
+          STAMP: ${{ needs.deterministic.outputs.stamp }}
           REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -341,13 +577,21 @@ jobs:
           BLOCKERS: ${{ steps.report.outputs.blockers }}
           COMPLETE: ${{ steps.report.outputs.complete }}
           FINDINGS: ${{ steps.report.outputs.findings }}
-          STAMP: ${{ steps.settings.outputs.stamp }}
+          STAGES_MISSING: ${{ steps.report.outputs.stages_missing }}
           DRY_RUN: ${{ inputs.dry_run }}
           PROBE: ${{ inputs.probe_tools }}
           GUARD_PROBE: ${{ inputs.probe_verifier }}
-          AUTHENTICATED: ${{ steps.settings.outputs.authenticated }}
+          AUTHENTICATED: ${{ needs.model.outputs.authenticated }}
+          MODEL_RESULT: ${{ needs.model.result }}
         run: |
           set -euo pipefail
+          # A deterministic stage that did not run measured nothing. It does not
+          # by itself mean nothing was audited, so it warns rather than fails —
+          # but it must never pass in silence (finding S-011).
+          if [ -n "${STAGES_MISSING:-}" ]; then
+            echo "Deterministic stage incomplete: $STAGES_MISSING did not run. That part of the audit measured nothing."
+            echo "⚠ Deterministic stage incomplete: $STAGES_MISSING did not run — that part measured nothing." >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "$COMPLETE" != "true" ]; then
             if [ "$DRY_RUN" = "true" ]; then
               echo "Dry run: assembled the command and rendered the deterministic results. Nothing was audited, as asked."
@@ -356,18 +600,13 @@ jobs:
             fi
             if [ "$PROBE" = "true" ] || [ "$GUARD_PROBE" = "true" ]; then
               echo "Probe run: asked the run one question and stopped. Nothing was audited, as asked."
-              # Repeated here on purpose: the answer is what the run was for, and a
-              # reader (or an agent reading the tail of this log) should not have to
-              # scroll back past the install step to find it.
-              if [ -f "$STAMP/probe.log" ]; then
-                grep -E "the tools this run|'Agent' present|the guard|report directory is writable|last words" \
-                  "$STAMP/probe.log" | tee -a "$GITHUB_STEP_SUMMARY" || true
-              fi
-              echo "Probe run — nothing audited, by request; the answer is in the step log." >> "$GITHUB_STEP_SUMMARY"
+              echo "Probe run — nothing audited, by request; the answer is in the model job's log." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             echo "This run audited nothing: the model stage left no candidates, no findings and no revision stamp."
-            if [ "$AUTHENTICATED" != "true" ]; then
+            if [ "$MODEL_RESULT" != "success" ]; then
+              echo "Cause: the model job ended '$MODEL_RESULT' — check its log; it holds the key and runs the audit."
+            elif [ "$AUTHENTICATED" != "true" ]; then
               echo "Cause: no ANTHROPIC_API_KEY secret, so the headless run was skipped."
               echo "Add the secret, or dispatch with dry_run: true when you only want the deterministic half."
             else

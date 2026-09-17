@@ -29,6 +29,7 @@ import os
 import re
 import shlex
 import subprocess
+import time
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -53,7 +54,42 @@ DENIED_TOOLS = ("Edit", "NotebookEdit", "WebFetch", "WebSearch")
 #                           skill never appeared)
 #   --strict-mcp-config     no MCP server from the tree's .mcp.json
 #   --tools                 the built-in set, named from the skill's own grants
+#
+# Read that list precisely: it is about auto-discovery. The CLI loads none of the
+# tree's settings, hooks, agents, skills or CLAUDE.md on its own. But this launcher
+# then *deliberately* reads the audit skill and the audit agent briefs and passes
+# them inline, so "excluded" was never true of those two. --trusted-source is what
+# decides where they are read from; without it the tree still writes the prompts of
+# the agents auditing it.
 ISOLATION = ("--setting-sources", "user", "--strict-mcp-config")
+# The grant set this launcher runs with, held here rather than adopted from the tree
+# under audit. skill_grants() still reads that tree's allowed-tools line, but
+# check_grants_pinned() refuses the run when it differs, so a pull request cannot
+# widen the permissions of the audit reviewing it.
+#
+# Deliberately a literal, not an import of tools/validate.py's AUDIT_SKILL_GRANTS:
+# that module is read from the audited tree too, and a commit that neuters the
+# validator is a defect class the probe contract records as undetected
+# (tools/probes.txt, "validator main forced to return 0 | missed"). Two independent
+# pins fail independently. tools/test_audit_headless.py asserts the two stay equal,
+# which catches honest drift without making either depend on the other.
+#
+# Scope, stated plainly: this pin is only as trustworthy as the copy of *this file*
+# that runs. An operator invoking a trusted checkout's audit_headless.py against a
+# tree they did not write is covered. A CI job that runs the audited head's own
+# launcher is not, until .github/workflows/audit.yml rescues this file from the base
+# ref the way it already rescues the verifier guard.
+PINNED_GRANTS = (
+    "Bash(python3 tools/audit_facts.py *)",
+    "Bash(python3 tools/audit_probes.py *)",
+    "Bash(python3 tools/audit_redteam.py *)",
+    "Bash(python3 tools/audit_report.py *)",
+    "Write(CCGG-AUDIT-*/**)",
+    "Read",
+    "Glob",
+    "Grep",
+    "Agent",
+)
 # `--tools` names the built-in tool; the permission flags accept either name.
 TOOL_ALIASES = {"Agent": "Task"}
 WRITE_GRANT_RE = re.compile(r"Write\([^)]*\)")
@@ -85,8 +121,10 @@ def skill_body(text: str) -> str:
 def skill_grants(text: str) -> list[str]:
     """The skill's `allowed-tools` as a list of grants, kept in file order.
 
-    The headless run is granted exactly what the skill is granted in a session.
-    tools/validate.py pins that string, so a change to it is a reviewed change.
+    Parsing only: what comes back is the *audited tree's* claim about its grants,
+    not something to run with. check_grants_pinned() decides whether it may be
+    used. tools/validate.py pins the same string, but it is a file in that same
+    tree, so it is not a control the launcher can lean on.
     """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
@@ -111,6 +149,38 @@ def skill_grants(text: str) -> list[str]:
     if not grants:
         raise HeadlessError(f"{SKILL_PATH}: allowed-tools is empty")
     return grants
+
+
+def check_grants_pinned(grants: list[str]) -> None:
+    """Refuse a run whose skill grants differ from this launcher's pinned set.
+
+    The audited tree names its own `allowed-tools`, and adopting that line lets the
+    checkout choose the permissions of the agent auditing it — a widened Bash
+    specifier arrives pre-approved, because the run is started with
+    `--permission-prompts none`. The run therefore starts only when the tree's
+    grants and PINNED_GRANTS agree exactly, order included.
+
+    Order is part of the comparison on purpose: `--tools` is derived from these
+    grants in file order, so a reordering is a different command, and "exactly the
+    pinned set" is a cheaper rule to audit than "the same grants, somehow arranged".
+    """
+    if list(grants) == list(PINNED_GRANTS):
+        return
+    extra = [g for g in grants if g not in PINNED_GRANTS]
+    missing = [g for g in PINNED_GRANTS if g not in grants]
+    detail = []
+    if extra:
+        detail.append("not in the pinned set: " + ", ".join(extra))
+    if missing:
+        detail.append("missing: " + ", ".join(missing))
+    if not detail:
+        detail.append("the pinned grants in a different order")
+    raise HeadlessError(
+        f"{SKILL_PATH}: allowed-tools differs from the launcher's pinned set "
+        f"({'; '.join(detail)}) — refusing to adopt the audited tree's grants. "
+        f"If this change is intended, update PINNED_GRANTS in tools/audit_headless.py "
+        f"and AUDIT_SKILL_GRANTS in tools/validate.py in the same reviewed commit."
+    )
 
 
 def retarget_write_grant(grants: list[str], report_dir: str, root: str = "") -> list[str]:
@@ -229,6 +299,52 @@ def _command(prompt: str, agents_json: str, prompt_file: str, grants: list[str],
     argv += ["--allowedTools", *grants]
     argv += ["--disallowed-tools", ",".join(DENIED_TOOLS)]
     return argv
+
+
+def _git(root: str, *args: str) -> str:
+    try:
+        return subprocess.check_output(["git", *args], cwd=root, text=True, encoding="utf-8").strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def revision_stamp(root: str, scope: str, specialists: list[str], result: dict | None,
+                   elapsed_s: float) -> tuple[str, dict]:
+    """(filename, contents) for the run's REVISION stamp.
+
+    Written by the launcher rather than asked of the model, which is finding
+    P-004: the CLI's result JSON is the only place total_cost_usd and num_turns
+    exist, the model is told neither, and the one stamp in the repository before
+    this recorded `cost_usd: null` by construction. The renderer reads this for
+    the report's commit and cost line, so it is the difference between a report
+    that says what a run cost and one that cannot.
+    """
+    head = _git(root, "rev-parse", "--short", "HEAD") or "unknown"
+    cost = (result or {}).get("total_cost_usd")
+    try:
+        cost = round(float(cost), 4) if cost is not None else None
+    except (TypeError, ValueError):
+        cost = None
+    return f"REVISION-{head}.json", {
+        "head": head,
+        "dirty": bool(_git(root, "status", "--porcelain")),
+        "scope": scope,
+        "specialists_run": sorted(specialists),
+        "duration_s": round(elapsed_s, 1),
+        "cost_usd": cost,
+        "turns": (result or {}).get("num_turns"),
+    }
+
+
+def write_revision_stamp(root: str, report_dir: str, scope: str, specialists: list[str],
+                         result: dict | None, elapsed_s: float) -> str:
+    """Write the stamp into the report directory; return the path written."""
+    name, stamp = revision_stamp(root, scope, specialists, result, elapsed_s)
+    path = os.path.join(root, report_dir, name)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(stamp, fh, indent=2)
+        fh.write("\n")
+    return path
 
 
 def result_object(stdout: str) -> dict | None:
@@ -479,8 +595,14 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--guard", default=None,
                         help="absolute path to a trusted copy of the verifier's guard hook "
                              "(required unless --trust-checkout)")
+    parser.add_argument("--trusted-source", default=None,
+                        help="absolute path to a directory laid out like the repository, holding the "
+                             "CCGG files this run must not take from the audited tree: "
+                             f"{SKILL_PATH} and {audit_agents_json.DEFAULT_DIR}/{audit_agents_json.DEFAULT_GLOB} "
+                             "(required unless --trust-checkout)")
     parser.add_argument("--trust-checkout", action="store_true",
-                        help="take the verifier's guard from the audited tree; only for a tree you wrote")
+                        help="take the verifier's guard, the skill and the agent briefs from the audited "
+                             "tree; only for a tree you wrote")
     parser.add_argument("--max-turns", type=int, default=DEFAULT_MAX_TURNS)
     parser.add_argument("--budget-usd", type=float, default=DEFAULT_BUDGET_USD)
     parser.add_argument("--model", default=None, help="model for the orchestrator (subagents follow their briefs)")
@@ -516,13 +638,37 @@ def main(argv: list[str]) -> int:
             )
         if args.guard and not os.path.isfile(args.guard):
             raise HeadlessError(f"--guard {args.guard} does not exist")
-        with open(os.path.join(root, SKILL_PATH), encoding="utf-8") as fh:
+        # The guard was never the whole of it. The skill body becomes this run's
+        # system prompt and the agent briefs become its subagents' system prompts,
+        # so a tree that supplies those writes the instructions of the agents
+        # reading it. --trusted-source is where they come from instead.
+        if not args.trusted_source and not args.trust_checkout:
+            raise HeadlessError(
+                "pass --trusted-source <absolute path to a directory holding trusted copies of "
+                f"{SKILL_PATH} and {audit_agents_json.DEFAULT_DIR}/>, or --trust-checkout when the "
+                "tree is one you wrote: a checkout must not supply the skill that becomes this "
+                "run's system prompt, nor the briefs of the agents that review it"
+            )
+        if args.trusted_source and not os.path.isabs(args.trusted_source):
+            raise HeadlessError("--trusted-source must be an absolute path")
+        if args.trusted_source and not os.path.isdir(args.trusted_source):
+            raise HeadlessError(f"--trusted-source {args.trusted_source} is not a directory")
+        # Everything the run is *told* comes from source_root; everything it
+        # *examines* stays under root, including the report directory.
+        source_root = args.trusted_source or root
+        skill_file = os.path.join(source_root, SKILL_PATH)
+        if not os.path.isfile(skill_file):
+            raise HeadlessError(f"{skill_file} does not exist; --trusted-source must mirror the repository layout")
+        with open(skill_file, encoding="utf-8") as fh:
             skill_text = fh.read()
         declared = skill_grants(skill_text)
+        # Before the Write grant is retargeted: the pin is written against the
+        # skill's own text, not against this run's rewritten directory.
+        check_grants_pinned(declared)
         exposed = tool_names(declared)        # what the run has: the skill's own tools
         grants = retarget_write_grant(declared, report_dir, root)  # what it may do with them
         definitions = audit_agents_json.build(
-            root, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, args.guard, None
+            source_root, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, args.guard, None
         )
     except (HeadlessError, audit_agents_json.AgentFileError, OSError) as exc:
         print(f"audit-headless: {exc}", file=sys.stderr)
@@ -583,6 +729,7 @@ def main(argv: list[str]) -> int:
     else:
         result_name = "result.json"
     result_path = os.path.join(out_dir, result_name)
+    started = time.monotonic()
     try:
         proc = subprocess.run(command, cwd=root, capture_output=True, text=True,
                               encoding="utf-8", errors="replace")
@@ -616,6 +763,16 @@ def main(argv: list[str]) -> int:
                 os.remove(marker)
             except OSError:
                 pass
+    # Only after a run that actually completed: the renderer treats a stamp as
+    # evidence the model stage ran, so writing one for a failed or probe-only run
+    # would turn "nothing was audited" into a clean bill. Those paths return above.
+    if not args.probe_tools and not args.probe_verifier:
+        try:
+            written = write_revision_stamp(root, report_dir, scope, list(definitions),
+                                           result, time.monotonic() - started)
+            print(f"audit-headless: wrote {os.path.relpath(written, root)}")
+        except OSError as exc:
+            print(f"audit-headless: could not write the revision stamp: {exc}", file=sys.stderr)
     for line in run_summary(result):
         print(line)
     print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', result_name)}")

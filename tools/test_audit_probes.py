@@ -213,6 +213,20 @@ class MainIntegrationTests(unittest.TestCase):
             self.assertEqual(data["summary"]["regressions"], ["regressed"])
             self.assertEqual((data["summary"]["caught"], data["summary"]["skipped"]), (1, 1))
 
+    def test_a_missing_probes_file_is_a_failure_not_a_clean_sheet(self):
+        """T-001: a gate that measured nothing used to report the same as a clean one."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-probe-main-") as tmp:
+            repo = _tiny_repo(tmp)
+            rc = _quiet_main(["--repo", repo, "--probes", "nope.txt"])
+            self.assertEqual(rc, 1, "a mistyped --probes path was a silent success")
+
+    def test_a_probes_file_with_no_probes_is_a_failure(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-probe-main-") as tmp:
+            repo = _tiny_repo(tmp)
+            with open(os.path.join(repo, "probes.txt"), "w") as fh:
+                fh.write("# every probe commented out\n\n")
+            self.assertEqual(_quiet_main(["--repo", repo, "--probes", "probes.txt"]), 1)
+
     def test_clean_run_exits_zero(self):
         with tempfile.TemporaryDirectory(prefix="ccgg-probe-main-") as tmp:
             repo = _tiny_repo(tmp)

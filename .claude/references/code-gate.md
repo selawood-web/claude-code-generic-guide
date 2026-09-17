@@ -54,8 +54,12 @@ Per function touched, the floor is:
 - one failure mode — the error path, asserting the failure is the one intended.
 
 Then run the **full suite**, not just the new tests: the regression the change
-caused is by definition somewhere you weren't looking. Target 90 percent
-coverage on changed lines.
+caused is by definition somewhere you weren't looking. Aim for 90 percent
+coverage on changed lines — an unmeasured aspiration, not a gate: this
+repository ships no coverage runner, configuration or threshold, and nothing
+in CI measures it (finding P-003). The per-function floor above is the part
+that is enforced; treat the coverage number as a direction, and if you want it
+to bind, add the runner first and say here what measures it.
 
 Never make a failing test pass by weakening it — skipping, quarantining,
 loosening an assertion, or deleting the case. A test that fails is either a

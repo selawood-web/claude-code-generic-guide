@@ -73,17 +73,19 @@ Hooks are discovered from several places (all are merged):
 
 ## Hook Events
 
-| Event | When It Fires | Blocking? |
-|-------|---------------|-----------|
-| `SessionStart` | At session startup | No |
-| `SessionEnd` | When the session ends | No |
-| `UserPromptSubmit` | When the user sends a prompt | No |
-| `PreToolUse` | Before a tool executes | Yes -- can deny |
-| `PostToolUse` | After a tool completes successfully | No |
-| `PostToolUseFailure` | After a tool fails | No |
-| `PreCompact` | Before conversation compaction | No |
-| `Stop` | When the agent stops | No |
-| `Notification` | When the agent sends a notification | No |
+| Event | When It Fires | Blocking? | Where stdout goes |
+|-------|---------------|-----------|-------------------|
+| `SessionStart` | At session startup | No | **Into the model's context** |
+| `SessionEnd` | When the session ends | No | Debug log |
+| `UserPromptSubmit` | When the user sends a prompt | No | **Into the model's context** |
+| `PreToolUse` | Before a tool executes | Yes -- can deny | Debug log (the decision travels as JSON) |
+| `PostToolUse` | After a tool completes successfully | No | Debug log |
+| `PostToolUseFailure` | After a tool fails | No | Debug log |
+| `PreCompact` | Before conversation compaction | No | To the compaction summarizer |
+| `Stop` | When the agent stops | No | Debug log |
+| `Notification` | When the agent sends a notification | No | Debug log |
+
+The last column is a trust boundary, not a detail: see [Hook stdout](#hook-stdout).
 
 ---
 
@@ -164,9 +166,27 @@ For `PreToolUse` hooks, write JSON to **stdout**:
 | `2` | Explicit deny (blocking hooks only) |
 | Other | Fail-open: failure is recorded but the tool call is not blocked. To block a tool call, return JSON `{"decision":"deny","reason":"..."}` on stdout (with exit code `2` or `0`). |
 
-### Passive Hooks
+### Hook stdout
 
-For events like `SessionStart` or `PostToolUse`, stdout is ignored. Just exit 0 on success.
+Where a hook's stdout goes depends on the event, and for some of them it is a
+trust boundary rather than a logging detail.
+
+- **Into the model's context** — `SessionStart`, `UserPromptSubmit`,
+  `UserPromptExpansion`, `PostModelSwitch`. Whatever a hook prints on these events
+  becomes text the model reads, before the user has typed anything. A hook that
+  echoes a file's contents, a configured URL or an environment value has put
+  whoever controls that value into the prompt. This repository's own
+  `.claude/hooks/session-start.sh` states the rule it follows in its header:
+  fixed strings, timestamps, and names that pass a character allow-list — never a
+  file's contents or a validator finding verbatim.
+- **To the compaction summarizer** — `PreCompact`. Not thrown away: the product
+  hands it to the compaction model as additional summary instructions. There is no
+  `additionalContext` output path for this event.
+- **Debug log only** — every other passive event. Exit 0 on success; nothing the
+  hook writes is read back.
+
+`tools/audit_vocab.json` carries the first list as `hook_stdout_reaches_model`, and
+`tools/validate.py` fails when a sentence here disagrees with it.
 
 ### Environment Variables
 

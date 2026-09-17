@@ -70,26 +70,36 @@ so this pre-loads engineering wisdom everywhere.
 Read `session-protocol.md` to understand how to start, manage, and end sessions to maximize knowledge retention.
 
 ### Keeping installed projects current (live sync)
-Set `CCGG_HOME` to your local clone of this guide (e.g. in each project's
-`.claude/settings.json` under `"env"`, or your shell profile):
+Set all three of `CCGG_HOME`, `CCGG_REPO` and `CCGG_REF` in each project's
+`.claude/settings.json` under `"env"`:
 ```json
 { "env": {
     "CCGG_HOME": "/path/to/claude-code-generic-guide",
-    "CCGG_REPO": "https://github.com/<owner>/claude-code-generic-guide.git"
+    "CCGG_REPO": "https://github.com/<owner>/claude-code-generic-guide.git",
+    "CCGG_REF": "<a 40-hex commit of the guide>"
 } }
 ```
-`CCGG_REPO` is optional: when set and `CCGG_HOME` doesn't exist yet (a fresh
-machine, a cloud session), the hook shallow-clones the guide there first — so the
-same committed settings work on every machine that can reach the guide repo.
-**Set `CCGG_REF` with it** — a tag or branch of the guide you control:
-```json
-{ "env": { "CCGG_HOME": "/path/to/ccgg", "CCGG_REPO": "https://github.com/<owner>/claude-code-generic-guide.git", "CCGG_REF": "v1" } }
+…and record the origin you expect in `.claude/ccgg-origins`, one URL per line:
 ```
+https://github.com/<owner>/claude-code-generic-guide.git
+```
+`CCGG_REPO` is what lets the hook shallow-clone the guide when `CCGG_HOME` does
+not exist yet (a fresh machine, a cloud session), so the same committed settings
+work on every machine that can reach the guide repo.
+
 This is a trust boundary, stated plainly: whatever that revision's `update.sh`
 does runs in every session of the project with your permissions, and under
-`claude -p` with no trust dialog. The hook therefore clones only at `CCGG_REF`,
-`update.sh` fetches only that ref, and the sync is skipped with a printed line
-when the clone is not at it. Without `CCGG_REF`, the hook refuses to clone at all.
+`claude -p` with no trust dialog. None of the three is optional — with any of
+them missing the hook prints a line and runs nothing, and `tools/validate.py`
+fails the project. The hook clones only at `CCGG_REF`, `update.sh` fetches only
+that ref, and the sync is skipped with a printed line when the clone is not at
+it. A tag or branch works and the validator prints a caution for it: whoever
+owns the guide can move it, and a 40-hex commit is the one form nobody can.
+
+`.claude/ccgg-origins` is the other half. It lives outside the env block, so
+re-pointing the sync at a different repository is a named change in a diff
+rather than one line inside a settings file. The validator fails any
+`CCGG_REPO` the record does not list, and cautions when there is no record.
 The session-start hook then runs `update.sh` on every session start, resume, and
 compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
 files (skills, hooks, validator) in the project. Rules files you customized

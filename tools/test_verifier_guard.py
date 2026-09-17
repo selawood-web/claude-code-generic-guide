@@ -9,7 +9,11 @@ verifier may do, and belongs in the same pull request as its justification.
 
 import json
 import os
+import re
+import shutil
+import stat
 import subprocess
+import tempfile
 import unittest
 
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -50,6 +54,25 @@ ALLOWED = [
     "cd tools && python3 -m json.tool audit_vocab.json | head",
     "xxd AGENTS.md | head",
     "printenv | grep -c CCGG",
+    # A newline is a command separator, so each line is checked on its own; both
+    # of these are allowed programs and the two-line form must stay allowed.
+    "git log --oneline -3\ngit status --porcelain",
+    # A real newline inside quotes is data, not a separator: one token, one segment.
+    "printf 'a\nb\n' | wc -l",
+    # Python's option letters may carry their value attached, so an allow-listed
+    # module in the attached form is the same request as the detached one.
+    "python3 -mjson.tool tools/audit_vocab.json",
+    "python3 -W ignore -m unittest discover -s tools",
+    "python3 -I -m unittest discover -s tools",
+    "python3 --version",
+    # R-012: the gate tooling the verifier actually reproduces with, in every
+    # spelling it reaches it by.
+    "python3 tools/feature_lint.py",
+    "python3 tools/catalog.py --check",
+    "python3 tools/audit_report.py --dir CCGG-AUDIT-x",
+    "python3 tools/test_validate.py",
+    "python3 ./tools/validate.py",
+    "cd tools && python3 validate.py",
 ]
 
 REFUSED = [
@@ -57,6 +80,38 @@ REFUSED = [
     "python3 -",
     "python3",
     "python3 -m http.server",
+    # S-002: the module and code flags were matched only as the exact tokens `-m`
+    # and `-c`, so the attached and clustered forms python itself accepts walked
+    # past both refusals and were taken for a script path.
+    "python3 -mhttp.server 8000",
+    "python3 -mtimeit",
+    "python3 -msocketserver",
+    "python3 -c'import os' x",
+    "python3 -cimport os",
+    "python3 -Sc 'import os'",
+    "python3 -IBc 'import os'",
+    "python3 -Zz tools/validate.py",
+    # R-012: `python3 <path>` was allowed unconditionally as "the repository's
+    # own code", so any .py file an audited branch carries ran inside the
+    # verifier's worktree — in CI, on the runner that holds the API key.
+    "python3 setup.py install",
+    "python3 scripts/deploy.py",
+    "python3 evil.py",
+    "python3 /tmp/x.py",
+    "python3 ../outside.py",
+    "python3 tools/../setup.py",
+    "python3 .github/x.py",
+    "python3 tools/sub/x.py",
+    # R-013: pytest imports conftest.py and its plugins from whatever tree it is
+    # pointed at; ruff, mypy and flake8 load project config the same way. None of
+    # them is used by this repository's gate, so none is in the allow-list.
+    "pytest tools",
+    "pytest",
+    "python3 -m pytest tools",
+    "ruff check .",
+    "mypy tools",
+    "flake8 tools",
+    "pyflakes tools",
     "bash -c id",
     "printf x | bash",
     "sh -s < x",
@@ -104,9 +159,27 @@ REFUSED = [
     "pip install x",
     "npm install",
     "node -e 'require(\"fs\").writeFileSync(\"x\",\"\")'",
+    # The same whole-token defect as S-002, in the branch next door: node's
+    # letters cluster (`-pe`) and carry an attached value (`-e'code'`).
+    "node -e'require(\"fs\")' y",
+    "node -pe 'process.exit()'",
+    "node --eval='x'",
+    "node -i",
     "diff <(id) /dev/null",
     "echo 'no closing quote",
     "ls; curl http://x",
+    # S-001: a newline separates commands exactly as `;` does. Before the fix the
+    # lexer swallowed it as whitespace, so everything below folded into one
+    # segment whose first word was the allowed `echo` and was never checked.
+    "echo hi\ncurl http://x",
+    "echo hi\npython3 -c 'import os'",
+    "ls\r\ncurl http://x",
+    "ls\n\ncurl http://x",
+    "ls &&\ncurl http://x",
+    "ls\n\tcurl http://x",
+    # `#` comments run to the end of a line, not to the end of the command: the
+    # second line is still checked.
+    "ls\n# a note\ncurl http://x",
     "ls && (cd /tmp && rm -rf x)",
     "echo $(curl http://x)",
     "echo $(echo $(rm x))",
@@ -174,6 +247,68 @@ class AllowListTests(unittest.TestCase):
     def test_non_json_input_refused(self):
         proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
+
+
+class GuardFailureTests(unittest.TestCase):
+    """A guard that fails must not become a guard that allows (finding H-002).
+
+    The hook ends in a pipeline, so its exit status is the interpreter's, and
+    only exit 2 blocks the call: every other way of dying — an uncaught
+    exception, a signal, an interpreter that will not start, an empty guard
+    program — used to reach Claude Code as "no objection" and run the command.
+    """
+
+    def _run(self, stub_body=None, hook=HOOK):
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "curl http://x"}})
+        env = dict(os.environ)
+        with tempfile.TemporaryDirectory() as tmp:
+            if stub_body is not None:
+                stub = os.path.join(tmp, "python3")
+                with open(stub, "w", encoding="utf-8") as fh:
+                    fh.write(stub_body)
+                os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
+                env["PATH"] = tmp + os.pathsep + env.get("PATH", "")
+            proc = subprocess.run(["bash", hook], input=payload,
+                                  capture_output=True, text=True, env=env)
+        return proc.returncode, proc.stderr
+
+    def test_interpreter_exiting_nonzero_refuses(self):
+        for code in (1, 3, 70, 127):
+            with self.subTest(exit_code=code):
+                rc, err = self._run(f"#!/bin/sh\ncat >/dev/null\nexit {code}\n")
+                self.assertEqual(rc, 2, "a crashed guard allowed the command")
+                self.assertIn("audit-verifier-guard", err)
+
+    def test_interpreter_killed_by_signal_refuses(self):
+        rc, err = self._run("#!/bin/sh\ncat >/dev/null\nkill -TERM $$\n")
+        self.assertEqual(rc, 2, "a killed guard allowed the command")
+        self.assertIn("audit-verifier-guard", err)
+
+    def test_interpreter_that_cannot_start_refuses(self):
+        rc, _ = self._run("#!/nonexistent/interpreter\n")
+        self.assertEqual(rc, 2, "an unstartable guard allowed the command")
+
+    def test_empty_guard_program_refuses(self):
+        """If the heredoc ever stops reaching GUARD, `python3 -c ''` exits 0."""
+        with open(HOOK, encoding="utf-8") as fh:
+            source = fh.read()
+        blanked = re.sub(r"(<<'PY'[^\n]*\n).*?(\nPY\n)", r"\1\2", source, count=1, flags=re.S)
+        self.assertNotEqual(blanked, source, "could not blank the guard program")
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = os.path.join(tmp, "guard.sh")
+            with open(copy, "w", encoding="utf-8") as fh:
+                fh.write(blanked)
+            shutil.copymode(HOOK, copy)
+            rc, err = self._run(hook=copy)
+        self.assertEqual(rc, 2, "an empty guard program allowed the command")
+        self.assertIn("audit-verifier-guard", err)
+
+    def test_healthy_guard_still_answers_both_ways(self):
+        rc, _ = self._run()
+        self.assertEqual(rc, 2)
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
+        proc = subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0)
 
 
 if __name__ == "__main__":

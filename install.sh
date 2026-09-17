@@ -121,7 +121,7 @@ copy_file tools/feature_lint.py
 copy_file tools/catalog.py
 
 # The audit's deterministic stage, probe harness, renderer, vocabulary, and probe list
-for f in tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_agents_json.py tools/audit_headless.py tools/audit_pr_comment.py tools/audit_vocab.json tools/probes.txt tools/redteam_probes.txt; do
+for f in tools/audit_env.py tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_agents_json.py tools/audit_headless.py tools/audit_pr_comment.py tools/audit_vocab.json tools/probes.txt tools/redteam_probes.txt; do
   copy_file "$f"
 done
 
@@ -192,7 +192,10 @@ echo "       cat $SRC/MEMORY.md >> ~/.claude/CLAUDE.md"
 echo "  4. Verify: open a fresh session in the project, run /context —"
 echo "     CLAUDE.md must appear under Memory files. Then ask:"
 echo "     'what skills are available?' — expect twenty-seven."
-echo "  5. Optional — live updates: set CCGG_HOME=$SRC in the project's"
-echo "     .claude/settings.json env block; every session start then syncs the"
-echo "     latest merged guide skills/hooks/validator via update.sh."
+echo "  5. Optional — live updates: in the project's .claude/settings.json env"
+echo "     block set all three of CCGG_HOME=$SRC, CCGG_REPO=<the guide's clone"
+echo "     URL> and CCGG_REF=<a 40-hex commit>, and list that URL in"
+echo "     .claude/ccgg-origins. Every session start then syncs the guide's"
+echo "     skills/hooks/validator via update.sh — which runs with your"
+echo "     permissions, so the hook runs nothing unless all three are set."
 echo "  6. Commit the new files."

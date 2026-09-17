@@ -8,12 +8,13 @@
 #          model. A command that passes prints a PreToolUse allow decision, so
 #          the guard is what approves the verifier's Bash: headless there is no
 #          prompt to answer, and the audit skill grants only its four report
-#          scripts, so without this every reproduction command is refused. The rule is an allow-list: a command is run only when every
-#          segment of it (each side of a pipe, `&&`, `;`, and every `$(...)`)
-#          starts with an allowed program in an allowed form. Anything else —
-#          an unknown program, an interpreter given code on its command line,
-#          a redirect to a file, a heredoc, a backtick — is refused, so the
-#          guard fails closed by construction.
+#          scripts, so without this every reproduction command is refused.
+#          The rule is an allow-list: a command is run only when every
+#          segment of it (each side of a pipe, `&&`, `;`, a newline, and every
+#          `$(...)`) starts with an allowed program in an allowed form. Anything
+#          else — an unknown program, an interpreter given code on its command
+#          line, a redirect to a file, a heredoc, a backtick — is refused, so
+#          the guard fails closed by construction.
 #
 # Not registered in settings.json on purpose: this guard is scoped to one
 # subagent. The audit's deterministic stage knows that and does not flag it.
@@ -29,11 +30,22 @@ fi
 INPUT="$(cat)"
 
 read -r -d '' GUARD <<'PY' || true
-import json, re, shlex, sys
+import json, posixpath, re, shlex, sys
 
 KEYWORDS = {"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done",
             "in", "!", "{", "}", "(", ")", "time", "[[", "]]"}
 SEPARATORS = {"|", "||", "&&", ";", "&", ";;", "|&"}
+# A newline starts a new command exactly as `;` does. shlex counts it as
+# whitespace and drops it, so the lexer below lists it as punctuation instead;
+# it then arrives glued to any adjacent separator (`&&\n`, `\r\n`, `\n\n`), which
+# is why membership in SEPARATORS alone is not the test.
+SEPARATOR_CHARS = frozenset("|&;\n\r")
+
+
+def is_separator(tok):
+    return bool(tok) and (tok in SEPARATORS or set(tok) <= SEPARATOR_CHARS)
+
+
 # Programs that never write and never reach the network on their own.
 PLAIN = {
     "cat", "head", "tail", "wc", "ls", "stat", "file", "diff", "cmp", "sort", "uniq",
@@ -43,7 +55,7 @@ PLAIN = {
     "echo", "printf", "test", "[", "true", "false", "read", "sleep", "printenv",
     "md5sum", "sha256sum", "sha1sum", "du", "df", "cd", "pushd", "popd", "export",
     "local", "declare", "set", "unset", "exit", "return", "break", "continue", ":",
-    "shift", "let", "shellcheck", "pytest", "ruff", "mypy", "flake8", "pyflakes",
+    "shift", "let", "shellcheck",
     "git-lfs", "less", "more", "comm", "join", "paste", "fold", "fmt", "yes",
 }
 GIT_READ = {
@@ -61,7 +73,28 @@ GIT_LISTING = {"branch": {"--list", "-a", "-r", "-v", "-vv", "--show-current", "
                "worktree": {"list"},
                "stash": {"list", "show"},
                "notes": {"list", "show"}}
-PY_MODULES = {"unittest", "pytest", "json.tool", "doctest", "py_compile", "tokenize"}
+# pytest is deliberately absent, here and from PLAIN: it imports conftest.py and
+# its entry-point plugins from whatever tree it is pointed at, as ruff, mypy and
+# flake8 load project config from it (finding R-013). This repository's gate uses
+# none of them, so a reproduction never needs one; a future need is a row added
+# here with its constraint, not a program that was never really read.
+PY_MODULES = {"unittest", "json.tool", "doctest", "py_compile", "tokenize"}
+# `python3 <path>` used to be allowed unconditionally as "the repository's own
+# code", which on an audited branch means any .py file the branch carries
+# (finding R-012). The verifier reproduces with the gate's own tooling; that is
+# what these name.
+PY_SCRIPT_DIRS = frozenset(("", "tools"))
+PY_SCRIPT_NAMES = frozenset(("validate.py", "feature_lint.py", "catalog.py"))
+PY_SCRIPT_PREFIXES = ("audit_", "test_")
+# python's option letters cluster and may carry their value attached, so `-c`,
+# `-Sc`, `-cCODE` and `-IBc CODE` are all the code flag (finding S-002). The
+# letters are split and classified rather than matched as whole tokens.
+PY_BOOL_FLAGS = frozenset("bBdEhiIOPqRsSuvVx")   # take no value
+PY_SKIP_FLAGS = frozenset("WXQ")                 # take a value the guard ignores
+PY_LONG_FLAGS = {"--help", "--help-env", "--help-xoptions", "--help-all", "--version"}
+PY_LONG_VALUE_FLAGS = {"--check-hash-based-pycs"}
+NODE_CODE_FLAGS = frozenset("epi")                # -e, -p, -i and their clusters
+NODE_CODE_LONG = {"--eval", "--print", "--interactive"}
 _ADDR = r"(?:\d+|\$|/(?:[^/\\]|\\.)*/)?(?:,(?:\d+|\$|/(?:[^/\\]|\\.)*/))?"
 SED_WRITE_RE = re.compile(r"(?:^|[;\n{])\s*" + _ADDR + r"\s*[wWe]\b")
 SED_SUBST_WRITE_RE = re.compile(
@@ -120,7 +153,7 @@ def extract_substitutions(text):
 def segments(tokens):
     seg = []
     for tok in tokens:
-        if tok in SEPARATORS:
+        if is_separator(tok):
             if seg:
                 yield seg
             seg = []
@@ -150,23 +183,77 @@ def strip_redirects(seg):
     return out
 
 
+def check_py_script(path):
+    """Allow the gate's own scripts as a script argument, and nothing else.
+
+    Names, not contents: the guard cannot read what a file does. What it can do
+    is keep `python3` pointed at the dozen files the gate consists of instead of
+    at anything an audited branch adds (finding R-012). A branch that edits
+    tools/validate.py itself still gets execution — that is what the base-ref
+    copies in .github/workflows/audit.yml are for, not this hook.
+    """
+    norm = posixpath.normpath(path)
+    if posixpath.isabs(norm) or norm == ".." or norm.startswith("../"):
+        refuse("python script outside the worktree")
+    directory, _, name = norm.rpartition("/")
+    if directory not in PY_SCRIPT_DIRS:
+        refuse("python script outside tools/")
+    if name.endswith(".py") and (name in PY_SCRIPT_NAMES
+                                 or name.startswith(PY_SCRIPT_PREFIXES)):
+        return
+    refuse(f"{name} is not one of the gate's own scripts")
+
+
 def check_python(args):
+    """Refuse code on the command line and any module outside PY_MODULES.
+
+    Letters are read the way python reads them: a cluster like `-IBc` ends in
+    the code flag, and a value may be attached (`-cCODE`, `-mjson.tool`) or be
+    the next argument. Matching `-c` and `-m` as whole tokens missed every one
+    of those forms, and the unrecognised token then fell through to the
+    script-path branch (finding S-002).
+    """
     i = 0
+    saw_long_only = False
     while i < len(args):
         a = args[i]
-        if a in ("-c", "-"):
+        if a == "-":
             refuse("python code on the command line")
-        if a == "-m":
-            if i + 1 < len(args) and args[i + 1] in PY_MODULES:
-                return
-            refuse("python -m with a module outside the allow-list")
-        if a in ("-W", "-X"):
-            i += 2
-            continue
-        if a.startswith("-"):
+        if a == "--":
             i += 1
             continue
-        return  # a script path: the repository's own code, run inside the worktree
+        if a.startswith("--"):
+            name, sep, _ = a.partition("=")
+            if name in PY_LONG_VALUE_FLAGS:
+                i += 1 if sep else 2
+                continue
+            if name in PY_LONG_FLAGS:
+                saw_long_only = True
+                i += 1
+                continue
+            refuse(f"python option {name} is not in the allow-list")
+        if a.startswith("-"):
+            letters = a[1:]
+            for pos, letter in enumerate(letters):
+                rest = letters[pos + 1:]
+                if letter == "c":
+                    refuse("python code on the command line")
+                if letter == "m":
+                    module = rest or (args[i + 1] if i + 1 < len(args) else "")
+                    if module in PY_MODULES:
+                        return
+                    refuse("python -m with a module outside the allow-list")
+                if letter in PY_SKIP_FLAGS:
+                    i += 1 if rest else 2
+                    break
+                if letter not in PY_BOOL_FLAGS:
+                    refuse(f"python option -{letter} is not in the allow-list")
+            else:
+                i += 1
+            continue
+        return check_py_script(a)
+    if saw_long_only:
+        return  # --version / --help print and exit; they run nothing
     refuse("python with no script")
 
 
@@ -264,11 +351,23 @@ def check_find(args):
 
 
 def check_node(args):
+    """Same rule as check_python: node's letters cluster (`-pe`) and carry an
+    attached value (`-e'code'`), so they are split rather than matched whole."""
     for a in args:
-        if a in ("-e", "--eval", "-p", "--print", "-i", "--interactive", "-"):
+        if a == "-":
             refuse("node code on the command line")
-        if not a.startswith("-"):
-            return
+        if a.startswith("--"):
+            if a.partition("=")[0] in NODE_CODE_LONG:
+                refuse("node code on the command line")
+            continue
+        if a.startswith("-"):
+            for letter in a[1:]:
+                if letter in NODE_CODE_FLAGS:
+                    refuse("node code on the command line")
+                if letter == "r":  # --require takes a value; stop reading letters
+                    break
+            continue
+        return
     refuse("node with no script")
 
 
@@ -323,8 +422,14 @@ def check_command(text, depth=0):
     for sub in inner:
         check_command(sub, depth + 1)
     text = SAFE_REDIRECT_RE.sub(" ", text)
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+    # punctuation_chars=True is shlex's "();<>|&"; the newline and carriage return
+    # are added so a second command on a second line is its own segment rather
+    # than an argument to the first (finding S-001). Removing them from the
+    # whitespace set is what makes shlex emit them; a newline inside quotes is
+    # still ordinary data and stays inside its token.
+    lexer = shlex.shlex(text, posix=True, punctuation_chars="();<>|&\n\r")
     lexer.whitespace_split = True
+    lexer.whitespace = " \t"
     try:
         tokens = list(lexer)
     except ValueError:
@@ -359,4 +464,22 @@ print(json.dumps({"hookSpecificOutput": {
 sys.exit(0)
 PY
 
+# The guard program is the heredoc above. If it ever stops reaching this
+# variable, `python3 -c ""` exits 0 and every command is allowed silently.
+if [ -z "${GUARD:-}" ]; then
+  echo "audit-verifier-guard: the guard program is empty; refusing" >&2
+  exit 2
+fi
+
 printf '%s' "$INPUT" | python3 -c "$GUARD"
+STATUS=$?
+# Only two statuses are the guard's answer: 0 allow, 2 refuse. Anything else
+# means it never got to decide — an uncaught exception, a signal, an interpreter
+# that would not start. Claude Code blocks on exit 2 and treats every other
+# status as "no objection", so this hook ending on the interpreter's own status
+# let a crashed guard run the command (finding H-002). Fail closed instead.
+case "$STATUS" in
+  0|2) exit "$STATUS" ;;
+esac
+echo "audit-verifier-guard: the guard itself failed (exit $STATUS); refusing" >&2
+exit 2

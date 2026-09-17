@@ -33,6 +33,12 @@ Checks, in order:
      moved tag runs new code with the workflow's permissions.
  20. Every audit subagent still serializes into the inline JSON a headless run
      needs — a brief that only an interactive run can load is a boundary CI loses.
+ 24. Something runs the validator automatically — a repository that ships this
+     gate must not rely on someone remembering to invoke it.
+ 23. No audit tool builds a child environment out of os.environ — code from the
+     audited tree runs with an allow-list, never the operator's credentials.
+ 22. No workflow job both exposes a secret and runs a script from the checkout —
+     tree code and a credential must not share a runner.
  19. Skill grants stay pinned: no bare Write, Edit, Bash, or NotebookEdit in
      allowed-tools; the audit skill's grants are exactly the audit's four commands
      and its report directory; skills that act outward (push, PR, merge, deploy,
@@ -42,11 +48,14 @@ Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
 """
 
+import ast
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import tokenize
 import sys
 
 ROOT = subprocess.check_output(
@@ -60,19 +69,72 @@ VOCAB_PATH = os.path.join("tools", "audit_vocab.json")
 GIT_CLONE_RE = re.compile(r"\bgit\s+clone\b")
 CLONE_PIN_RE = re.compile(r"(--branch|-b\s|--revision)")
 FETCH_TO_SHELL_RE = re.compile(r"\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(sh|bash|zsh)\b")
+# A skill's `description` is shown to the model in every session's listing,
+# before any invocation, so whatever it says is context nobody asked for
+# (finding R-005). Its job is matching a request: that needs no URL, no
+# backtick, no shell substitution and no pipe. Patterns are kept as strings so
+# tools/audit_facts.py can carry the identical tuple and a test can compare them.
+DESCRIPTION_BANNED = (
+    (r"https?://|\bwww\.", "a URL"),
+    (r"`", "a backtick"),
+    (r"\$\(|\$\{", "a shell substitution"),
+    (r"\||&&", "a shell operator"),
+)
+DESCRIPTION_MAX = 600
+
+
+def description_problems(path: str, description: str) -> list[str]:
+    """Content rules for a frontmatter description, as messages.
+
+    Deliberately not a rule: "no imperative sentences". Every description in
+    this repository is one — "Design system architecture...", "Use when the
+    user asks to..." — so that test would fail all twenty-seven skills and
+    teach the next person to switch the check off.
+    """
+    if not isinstance(description, str):
+        raise TypeError("description must be a string")
+    problems = []
+    for pattern, what in DESCRIPTION_BANNED:
+        if re.search(pattern, description):
+            problems.append(f"{path}: frontmatter 'description' contains {what} — the field loads in every session and is matched against a request, never followed")
+    if len(description) > DESCRIPTION_MAX:
+        problems.append(f"{path}: frontmatter 'description' is {len(description)} characters, over {DESCRIPTION_MAX} — a matcher, not a place to put instructions")
+    return problems
 
 findings: list[str] = []
+cautions: list[str] = []
 
 
 def fail(msg: str) -> None:
     findings.append(msg)
 
 
+def warn(msg: str) -> None:
+    """A configuration that works but gives up a guarantee the repository states.
+
+    Kept out of `findings` on purpose: the exit code is the gate, and a gate
+    that fails on a supported-but-weaker setting stops being a gate people run.
+    A caution is printed every time and never changes the verdict.
+    """
+    cautions.append(msg)
+
+
 def tracked(pattern: str) -> list[str]:
+    """Files git knows or would add: the index plus untracked, minus ignored.
+
+    The index alone made a skill that update.sh had just dropped into
+    .claude/skills/ — real, on disk, listed in the catalog — invisible to the
+    frontmatter checks and "does not exist" to the catalog check, until
+    somebody staged it (MemoMe audit 2026-09-17, H-5). Ignored files stay
+    out, so scratch and build output never count.
+    """
     out = subprocess.check_output(
-        ["git", "ls-files", pattern], cwd=ROOT, text=True, encoding="utf-8"
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", pattern],
+        cwd=ROOT,
+        text=True,
+        encoding="utf-8",
     )
-    return [line for line in out.splitlines() if line]
+    return sorted({line for line in out.splitlines() if line})
 
 
 def strip_code_blocks(lines: list[str]) -> list[str]:
@@ -251,8 +313,19 @@ def fetch_exec_problems(path: str, text: str) -> list[str]:
     return problems
 
 
+def fetch_exec_paths() -> list[str]:
+    """Scripts plus every file whose content reaches the model as instructions.
+
+    An unpinned clone or a download-to-shell pipe is as live in a sentence a
+    skill tells the agent to follow as it is in a hook, and check 14 read only
+    hooks and *.sh files, so a skill body was never looked at (finding R-004,
+    and the one probe the gate was missing, T-005).
+    """
+    return list(dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh") + instruction_files()))
+
+
 def check_fetch_exec() -> None:
-    for path in dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh")):
+    for path in fetch_exec_paths():
         text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
         for problem in fetch_exec_problems(path, text):
             fail(problem)
@@ -294,6 +367,7 @@ def skill_identity_problems(path: str, fields: dict[str, str]) -> list[str]:
     for key in ("name", "description"):
         if not fields.get(key, "").strip("'\" "):
             problems.append(f"{path}: frontmatter '{key}' is empty")
+    problems += description_problems(path, fields.get("description", "").strip("'\" "))
     dirname = os.path.basename(os.path.dirname(path))
     name = fields.get("name", "").strip("'\" ")
     if name and dirname and name != dirname:
@@ -338,6 +412,7 @@ def agent_frontmatter_problems(path: str, fields: dict[str, str]) -> list[str]:
     Every audit agent omits CLAUDE.md: the audited rules are evidence, not orders.
     """
     problems = [f"{path}: frontmatter missing key '{k}'" for k in AGENT_REQUIRED_KEYS if not fields.get(k)]
+    problems += description_problems(path, fields.get("description", "").strip("'\" "))
     name = fields.get("name", "")
     if not name.startswith("audit-"):
         return problems
@@ -460,6 +535,40 @@ def check_context_budget() -> None:
 
 
 ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md")
+# Every tracked file whose content reaches the model as instructions — not only
+# the rule files, but everything the rules tell the agent to open: a skill's
+# companion pages, a decision record recalled before re-deciding, a cached
+# research note, a feature definition. The scan here reached the three
+# always-loaded files and .claude/**/*.md; MEMORY.md, the hooks, decisions/,
+# features/ and knowledge-base/ sat outside it, and the audit's own scan in
+# tools/audit_facts.py was narrower still (findings R-007 and R-014). This is
+# the one home for the set: audit_facts.py carries the identical tuple and
+# tools/test_validate.py compares the two.
+INSTRUCTION_GLOBS = (
+    "CLAUDE.md",
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "MEMORY.md",
+    ".claude/agents/*.md",
+    ".claude/hooks/*",
+    ".claude/references/*.md",
+    ".claude/skills/*.md",
+    "decisions/*.md",
+    "features/*.md",
+    "knowledge-base/*.md",
+)
+# Markdown, not everything: knowledge-base/ also holds research artifacts such as
+# a .pptx, whose compressed bytes are full of control characters and which no
+# rule tells the agent to read as text. Hooks are the exception — every one is a
+# shell script, and what they print reaches the model as context.
+
+
+def instruction_files() -> list[str]:
+    """The tracked files INSTRUCTION_GLOBS names, sorted and deduplicated."""
+    found: set[str] = set()
+    for pattern in INSTRUCTION_GLOBS:
+        found.update(tracked(pattern))
+    return sorted(found)
 VOLATILE_RES = (
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
     re.compile(r"\blast (updated|generated|synced|run)\b", re.I),
@@ -605,30 +714,40 @@ def check_hooks() -> None:
 
 
 # --- 15. hidden characters --------------------------------------------------
-# Zero-width joiners and spaces, bidirectional overrides, Unicode tag characters
-# and C0 controls other than tab, newline and carriage return: invisible in a
-# diff, present in what the model reads.
-HIDDEN_RE = re.compile(
-    "[\u200b-\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069\U000e0000-\U000e007f"
-    "\x00-\x08\x0b\x0c\x0e-\x1f]"
+# Invisible in a diff, present in what the model reads. The two scans in this
+# repository had each caught what the other missed — the audit had no tag
+# characters or C0 controls, this one had no soft hyphen or directional marks
+# (finding S-006) — so the set has one home: tools/audit_facts.py carries this
+# string character-for-character and tools/test_validate.py compares them.
+HIDDEN_PATTERN = (
+    "[\u00ad\u061c\u180e"                 # soft hyphen, Arabic letter mark, Mongolian vowel separator
+    "\u200b-\u200f"                        # zero-width space/non-joiner/joiner, LRM, RLM
+    "\u202a-\u202e\u2066-\u2069"          # bidi embeddings, overrides and isolates
+    "\u2060-\u2064\ufeff"                  # word joiner, invisible operators, BOM
+    "\U000e0000-\U000e007f"                # Unicode tag characters
+    "\x00-\x08\x0b\x0c\x0e-\x1f]"       # C0 controls except tab, newline, carriage return
 )
+HIDDEN_RE = re.compile(HIDDEN_PATTERN)
 
 
 def hidden_characters(text: str) -> list[tuple[int, str]]:
-    """(line number, U+XXXX) for every hidden character in text."""
+    """(line number, U+XXXX) for every hidden character in text.
+
+    Split on "\\n", never str.splitlines(): that treats U+000B, U+000C and
+    U+001C-U+001E as line boundaries and removes them, so the three of them
+    this pattern names could never be reported.
+    """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     found = []
-    for n, line in enumerate(text.splitlines(), 1):
+    for n, line in enumerate(text.split("\n"), 1):
         for m in HIDDEN_RE.finditer(line):
             found.append((n, f"U+{ord(m.group(0)):04X}"))
     return found
 
 
 def check_hidden_characters() -> None:
-    paths = [p for p in ALWAYS_LOADED if os.path.exists(os.path.join(ROOT, p))]
-    paths += tracked(".claude/*.md")
-    for path in paths:
+    for path in instruction_files():
         text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
         for line, code in hidden_characters(text)[:5]:
             fail(f"{path}:{line}: hidden character {code} — invisible to a reviewer, read by the model")
@@ -668,21 +787,64 @@ def check_hook_registration() -> None:
 
 # --- 17. live-sync env --------------------------------------------------------
 SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
+# The hook's own test for an immutable pin: .claude/hooks/session-start.sh's
+# ccgg_is_sha accepts 40 lowercase hex characters and nothing else, so anything
+# this does not match resolves through a name that its owner can move.
+COMMIT_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+ORIGIN_RECORD = os.path.join(".claude", "ccgg-origins")
 
 
-def ccgg_env_problems(env: dict) -> list[str]:
-    """Problems with a settings.json env block that drives the session-start sync."""
+def ccgg_origins(root: str) -> list[str] | None:
+    """The origins this repository has recorded as trusted, or None if it has not.
+
+    One URL per line in .claude/ccgg-origins, `#` comments and blanks ignored.
+    The record lives outside settings.json so that re-pointing the sync at
+    another repository is a named change a reviewer sees, rather than one line
+    inside an env block (finding R-003). None and [] are different answers:
+    no record constrains nothing, an empty record allows nothing.
+    """
+    path = os.path.join(root, ORIGIN_RECORD)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        lines = (line.strip() for line in fh)
+        return [line for line in lines if line and not line.startswith("#")]
+
+
+def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
+    """Problems with a settings.json env block that drives the session-start sync.
+
+    `origins` is the trusted-origin record (None when the repository keeps none).
+    """
     problems = []
     home = str(env.get("CCGG_HOME", "") or "")
     repo = str(env.get("CCGG_REPO", "") or "")
     ref = str(env.get("CCGG_REF", "") or "")
-    if repo and not ref:
+    if home and not repo:
+        problems.append("env sets CCGG_HOME without CCGG_REPO — the hook then runs that clone's update.sh with no origin to check it against, and update.sh syncs skills, hooks, agents and tools/ into this project on every session start; set CCGG_REPO and CCGG_REF, or unset CCGG_HOME")
+    elif repo and not ref:
         problems.append("env sets CCGG_REPO without CCGG_REF — the hook refuses an unpinned clone, so live sync never starts; pin a tag, branch, or commit")
     if home and (home in SHARED_TMP or home.startswith(tuple(t + "/" for t in SHARED_TMP))):
         problems.append("env sets CCGG_HOME under a shared temporary directory — anyone on the host can pre-create it; use a path under your home such as ~/.claude/ccgg-guide")
     if repo.startswith("http://"):
         problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
+    if repo and origins is not None and repo not in origins:
+        problems.append(f"env sets CCGG_REPO to {repo}, which {ORIGIN_RECORD} does not list — add it there deliberately, or correct the env block")
     return problems
+
+
+def ccgg_env_warnings(env: dict, origins: list[str] | None = None) -> list[str]:
+    """Settings that work but give up a guarantee the repository states elsewhere."""
+    cautions_found = []
+    repo = str(env.get("CCGG_REPO", "") or "")
+    ref = str(env.get("CCGG_REF", "") or "")
+    if not repo:
+        return cautions_found
+    if ref and not COMMIT_RE.match(ref):
+        cautions_found.append(f"env pins CCGG_REF to '{ref}', a name its owner can move; session-start.sh calls the 40-hex commit form the only one nobody can move")
+    if origins is None:
+        cautions_found.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record, so nothing cross-checks which repository executes code at every session start")
+    return cautions_found
 
 
 def check_ccgg_env() -> None:
@@ -696,8 +858,11 @@ def check_ccgg_env() -> None:
     env = settings.get("env") if isinstance(settings, dict) else None
     if not isinstance(env, dict):
         return
-    for problem in ccgg_env_problems(env):
+    origins = ccgg_origins(ROOT)
+    for problem in ccgg_env_problems(env, origins):
         fail(f".claude/settings.json: {problem}")
+    for caution in ccgg_env_warnings(env, origins):
+        warn(f".claude/settings.json: {caution}")
 
 
 # --- 18. imports --------------------------------------------------------------
@@ -713,19 +878,33 @@ def import_targets(text: str) -> list[str]:
 
 
 def check_imports() -> None:
+    """Follow @imports from the two roots all the way down.
+
+    An import brings a file into the session as rules, and so does an import
+    inside that file. Checking only CLAUDE.md and AGENTS.md left every level
+    below them unexamined (finding R-008). A `~` target cannot be checked from
+    here, which is the reason to name it, not the reason to pass over it.
+    """
     tracked_all = set(tracked("*"))
-    for path in ("CLAUDE.md", "AGENTS.md"):
-        full = os.path.join(ROOT, path)
-        if not os.path.exists(full):
-            continue
-        for target in import_targets(open(full, encoding="utf-8", errors="replace").read()):
+    seen: set[str] = set()
+    queue = [p for p in ("CLAUDE.md", "AGENTS.md") if os.path.exists(os.path.join(ROOT, p))]
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue  # an import cycle is not an error; reading it twice would be
+        seen.add(path)
+        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        for target in import_targets(text):
             if target.startswith("~"):
-                continue  # a user-level import, outside the repository
+                warn(f"{path}: imports @{target}, outside the repository — it loads every session and nothing here can review it")
+                continue
             dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
             if not os.path.exists(os.path.join(ROOT, dest)):
                 fail(f"{path}: imports @{target}, which does not exist — the rules it holds never load")
             elif dest not in tracked_all:
                 fail(f"{path}: imports @{target}, which is not tracked — every other clone loads nothing there")
+            else:
+                queue.append(dest)
 
 
 # --- 19. skill grants ---------------------------------------------------------
@@ -786,9 +965,51 @@ def check_agents_serialize() -> None:
             fail(f".claude/agents/{name}.md: no brief survives serialization")
 
 
-# --- 21. workflow actions are pinned ------------------------------------------
+# --- 21. workflow actions are pinned, and npm installs name an exact version ------------------------------------------
 USES_RE = re.compile(r"^\s*-?\s*uses:\s*(\S+)", re.M)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+# A global install in a job that later holds a secret is a dependency nobody
+# reviewed. `@latest`, a bare name, or a range all resolve to whatever the registry
+# serves that minute; only an exact version is a decision someone made.
+NPM_INSTALL_RE = re.compile(r"npm\s+(?:install|i|add)\s+(?:-g\s+|--global\s+)?([^\s;&|]+)", re.M)
+EXACT_NPM_VERSION_RE = re.compile(r"^@?[^@]+@\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$")
+
+
+def unpinned_npm_installs(text: str) -> list[str]:
+    """Every npm install target in a workflow that is not pinned to an exact version.
+
+    A value interpolated from the workflow's own env (npm i -g "pkg@${VER}") counts
+    as pinned: the pin has simply been named once instead of twice. The registry
+    never sees the variable, so what matters is that a literal version exists in the
+    file, which check_workflow_pins confirms separately.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    loose = []
+    for raw in NPM_INSTALL_RE.findall(text):
+        spec = raw.strip("\"'")
+        if spec.startswith("-"):
+            continue                       # a flag, not a package
+        if "$" in spec:                    # pinned through a variable; checked below
+            continue
+        if not EXACT_NPM_VERSION_RE.match(spec):
+            loose.append(spec)
+    return loose
+
+
+def unresolved_npm_version_vars(text: str) -> list[str]:
+    """Env names an npm install pins through that the workflow never defines literally."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    missing = []
+    for raw in NPM_INSTALL_RE.findall(text):
+        spec = raw.strip("\"'")
+        for name in re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", spec):
+            if not re.search(rf"^\s*{name}:\s*[\"']?\d+\.\d+\.\d+", text, re.M):
+                missing.append(name)
+    return missing
 
 
 def unpinned_actions(text: str) -> list[str]:
@@ -812,6 +1033,210 @@ def check_workflow_pins() -> None:
             text = fh.read()
         for ref in unpinned_actions(text):
             fail(f"{path}: uses {ref} — pin the action to a commit SHA; a tag can be moved under you")
+        for spec in unpinned_npm_installs(text):
+            fail(f"{path}: installs {spec} — pin it to an exact version; this job holds a secret")
+        for name in unresolved_npm_version_vars(text):
+            fail(f"{path}: installs a package pinned through ${name}, which no env sets to an exact version")
+
+
+# --- 22. tree code and a secret never share a runner ---------------------------
+# The audit workflow once ran the audited head's own Python in the same job that
+# later held ANTHROPIC_API_KEY, so a pull request could execute code on a runner
+# with a credential on it and the whole workspace to rewrite in between. The fix
+# is a job split; this is what keeps it split.
+#
+# GITHUB_TOKEN is deliberately not counted: every workflow has one whether it
+# names it or not, so treating it as a secret to isolate would flag every job
+# that can post a comment while protecting nothing.
+JOB_KEY_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
+SECRET_REF_RE = re.compile(r"\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)")
+# `python tools/x.py` runs a file from the checkout. `python "$LAUNCHER"` runs
+# whatever the job put at that path — by convention here, a trusted copy — so the
+# variable form is not a checkout path and is not counted.
+TREE_SCRIPT_RE = re.compile(r"python3?\s+(?![\"']?\$)([A-Za-z0-9_./-]+\.py)")
+
+
+def workflow_jobs(text: str) -> dict[str, str]:
+    """{job name: the lines belonging to it}, split on the two-space keys under `jobs:`."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    lines = text.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.rstrip() == "jobs:")
+    except StopIteration:
+        return {}
+    jobs: dict[str, list[str]] = {}
+    name: str | None = None
+    for line in lines[start + 1:]:
+        if line.strip() and not line.startswith(" "):
+            break                     # a new top-level key ends the jobs block
+        match = JOB_KEY_RE.match(line)
+        if match:
+            name = match.group(1)
+            jobs[name] = []
+            continue
+        if name is not None:
+            jobs[name].append(line)
+    return {k: "\n".join(v) for k, v in jobs.items()}
+
+
+def secret_jobs_running_tree_code(text: str) -> list[tuple[str, list[str], list[str]]]:
+    """(job, secrets it exposes, scripts it runs from the checkout) for each job doing both."""
+    problems = []
+    for name, body in workflow_jobs(text).items():
+        secrets = sorted({s for s in SECRET_REF_RE.findall(body) if s != "GITHUB_TOKEN"})
+        if not secrets:
+            continue
+        scripts = sorted(set(TREE_SCRIPT_RE.findall(body)))
+        if scripts:
+            problems.append((name, secrets, scripts))
+    return problems
+
+
+# --- 23. audit tools hand out an allow-list, never the operator's environment ---
+# Findings S-004 and S-005: the red-team harness built its probe environment with
+# dict(os.environ, HOME=...) minus three CCGG_* names, and the deterministic gate
+# passed no env at all, so shell code and Python out of the audited tree ran with
+# ANTHROPIC_API_KEY, GITHUB_TOKEN and every cloud credential in scope. The rule
+# now has one home (tools/audit_env.py) and this keeps the tools pointed at it.
+#
+# What this catches is the shape both findings had: a child environment derived
+# from the parent's. It does not catch a subprocess call that passes no env= at
+# all — that one is the unit tests' job (tools/test_audit_env.py checks the
+# environment each harness actually builds), because telling a command that runs
+# tree code from one that runs git apart is not something a regex should try.
+INHERITED_ENV_RE = re.compile(r"\bdict\(\s*os\.environ|\benv\s*=\s*os\.environ\b")
+
+
+def blank_python_literals(text: str) -> str:
+    """The source with string and comment spans blanked, positions preserved.
+
+    tools/audit_env.py documents the defect this check looks for, in prose, and a
+    docstring quoting `dict(os.environ, ...)` is not a use of it. Blanking rather
+    than deleting keeps line numbers pointing at the real line.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    rows = [list(line) for line in text.splitlines(keepends=True)]
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return text            # unparsable is the syntax checker's problem, not this one
+    for token in tokens:
+        if token.type not in (tokenize.STRING, tokenize.COMMENT):
+            continue
+        (start_row, start_col), (end_row, end_col) = token.start, token.end
+        for row in range(start_row, end_row + 1):
+            if row > len(rows):
+                break
+            line = rows[row - 1]
+            first = start_col if row == start_row else 0
+            last = end_col if row == end_row else len(line)
+            for i in range(first, min(last, len(line))):
+                if line[i] != "\n":
+                    line[i] = " "
+    return "".join("".join(row) for row in rows)
+
+
+# --- 24. the gate has an automatic runner ------------------------------------
+# Deleting .github/workflows/validate.yml was a defect the gate could not see:
+# the only check for it lived in tools/audit_facts.py, which no CI step invokes,
+# so a commit removing the workflow left every check green. `audit.yml` is not a
+# substitute — it is label-gated and hand-started — so the property is not "a
+# workflow file exists" but "something runs the validator without being asked".
+#
+# Installed projects are exempt. They receive tools/validate.py and decide their
+# own CI; install.sh is the file that only the guide repository has.
+GATE_COMMAND_RE = re.compile(r"tools/validate\.py")
+AUTOMATIC_TRIGGER_RE = re.compile(r"^\s{2,}(push|pull_request):", re.M)
+
+
+# The validator is not the whole gate. The detectors that exist only in
+# audit_facts.py, and the unit tests that hold every check honest, ran on a
+# manual trigger or not at all (findings T-008 and T-009).
+# The command form, not the path: the step guards itself with
+# `if [ -f tools/audit_facts.py ]`, and a workflow that only mentions the file
+# runs nothing. (GATE_COMMAND_RE stays a bare path — tightening it would fail
+# installed projects whose workflow spells the invocation some other way.)
+FACTS_COMMAND_RE = re.compile(r"python[0-9.]*\s+tools/audit_facts\.py")
+TESTS_COMMAND_RE = re.compile(r"unittest\s+discover[^\n]*\btools\b")
+GATE_RUNNERS = (
+    (GATE_COMMAND_RE, "tools/validate.py", "the gate would run only when someone remembers"),
+    (FACTS_COMMAND_RE, "tools/audit_facts.py",
+     "its hook-stdout, command-resolution and network-exec checks exist nowhere else"),
+    (TESTS_COMMAND_RE, "the unit tests",
+     "every check in this repository would be unproven on the commit that broke it"),
+)
+
+
+# A workflow that reads the event or a label decides for itself whether to do any
+# work. audit.yml triggers on pull_request and then gates every job on an `audit`
+# label — dependable for what it is, and not a runner anything else can rely on.
+EVENT_GATED_RE = re.compile(r"github\.event_name|github\.event\.pull_request\.labels")
+
+
+def runs_automatically(text: str, command: re.Pattern) -> bool:
+    """True when this workflow runs `command` on a trigger nobody has to remember.
+
+    Three things have to hold: the command is invoked, the workflow's own `on:`
+    block names an automatic trigger — `pull_request` inside a job's `if:` is a
+    condition, not a reason it started — and no job reads the event or a label to
+    decide whether to run at all.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if not command.search(text):
+        return False
+    if EVENT_GATED_RE.search(text):
+        return False
+    header = text.split("\njobs:", 1)[0]
+    return bool(AUTOMATIC_TRIGGER_RE.search(header))
+
+
+def runs_gate_automatically(text: str) -> bool:
+    """True when this workflow runs the validator on a trigger nobody has to remember."""
+    return runs_automatically(text, GATE_COMMAND_RE)
+
+
+def check_gate_has_a_runner() -> None:
+    if not tracked("install.sh"):
+        return                      # an installed project chooses its own CI
+    texts = []
+    for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            texts.append(fh.read())
+    for command, name, why in GATE_RUNNERS:
+        if not any(runs_automatically(text, command) for text in texts):
+            fail(f"no workflow runs {name} on push or pull_request — {why}")
+
+
+def inherited_env_uses(text: str) -> list[int]:
+    """Line numbers where a child environment is built out of os.environ."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    code = blank_python_literals(text)
+    return [no for no, line in enumerate(code.splitlines(), 1) if INHERITED_ENV_RE.search(line)]
+
+
+def check_audit_env_allow_list() -> None:
+    for path in tracked("tools/audit_*.py"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for no in inherited_env_uses(text):
+            fail(f"{path}:{no}: builds a child environment from os.environ — code from the audited "
+                 f"tree must get audit_env.sandbox_env(), not the operator's credentials")
+
+
+def check_workflow_secret_isolation() -> None:
+    for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for job, secrets, scripts in secret_jobs_running_tree_code(text):
+            fail(
+                f"{path}: job '{job}' exposes {', '.join(secrets)} and also runs "
+                f"{', '.join(scripts)} from the checkout — split the job so code from the "
+                f"audited tree never shares a runner with a credential"
+            )
 
 
 # --- 22. a headless audit can still invoke its specialists --------------------
@@ -874,6 +1299,232 @@ def check_features() -> None:
                 fail(f"{path}:{finding.line}: {finding.message}")
 
 
+
+# --- the validator's check on itself -----------------------------------------
+# This one is not numbered and is not called from main(), deliberately. A check
+# inside main() cannot catch a main() that returns before calling it, and that
+# was a live blind spot: tools/probes.txt recorded "validator main forced to
+# return 0" as a defect the gate could not see, because the neutered validator
+# is the thing asked whether anything is wrong.
+#
+# Prepending `return 0` to main does not remove the checks — it strands them, so
+# the property worth testing is not "are the checks wired up" (they still parse
+# as called) but "can they be reached". Unreachable code in the gate is a real
+# defect in its own right, which is why this is a rule rather than a trap set
+# for one sed command.
+#
+# It closes blunt neutering, not a determined one: anybody who can edit main()
+# can edit this too. The control that does not share that weakness is CI running
+# the base branch's validator against the head, which is a workflow's job.
+def unreachable_after_return(source: str) -> list[int]:
+    """Line numbers of statements that follow an unconditional return or raise."""
+    if not isinstance(source, str):
+        raise TypeError("source must be a string")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []               # a syntax error is not this check's to report
+    dead: list[int] = []
+    for node in ast.walk(tree):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(node, field, None)
+            if not isinstance(block, list):
+                continue
+            for i, statement in enumerate(block):
+                if isinstance(statement, (ast.Return, ast.Raise)) and i + 1 < len(block):
+                    dead.append(block[i + 1].lineno)
+    return sorted(set(dead))
+
+
+# The scripts that make up the gate. `main forced to return 0` was caught in the
+# validator's own source and nowhere else, so the same mutation one file across —
+# in the harness that measures the gate — passed (finding T-006).
+GATE_SOURCE_GLOBS = ("tools/validate.py", "tools/feature_lint.py", "tools/catalog.py",
+                     "tools/audit_*.py")
+
+
+def gate_sources() -> list[str]:
+    """The tracked scripts self_check reads, sorted; tests excluded."""
+    found: set[str] = set()
+    for pattern in GATE_SOURCE_GLOBS:
+        found.update(p for p in tracked(pattern)
+                     if p.endswith(".py") and not os.path.basename(p).startswith("test_"))
+    return sorted(found)
+
+
+def source_problems(path: str) -> list[str]:
+    """Unreachable code in one gate script, as messages naming the file."""
+    label = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            source = fh.read()
+    except OSError as exc:
+        return [f"{label}: cannot be read: {exc}"]
+    return [f"{label}:{no}: unreachable code — a check that cannot be reached is not a check"
+            for no in unreachable_after_return(source)]
+
+
+def self_check(path: str | None = None) -> list[str]:
+    """What the gate can tell about itself before main() gets a say.
+
+    With no argument it reads every script in gate_sources(); with one it reads
+    that file alone, which is how a test hands it a deliberately broken copy.
+    """
+    if path is not None:
+        return source_problems(path)
+    problems: list[str] = []
+    for rel in gate_sources():
+        problems += source_problems(os.path.join(ROOT, rel))
+    return problems
+
+
+# --- 25. probe contract -------------------------------------------------------
+PROBE_CONTRACTS = (("tools/audit_probes.py", "tools/probes.txt"),
+                   ("tools/audit_redteam.py", "tools/redteam_probes.txt"))
+
+
+def probe_lines(text: str) -> list[str]:
+    """The probe-carrying lines of a probes file: non-blank and not a comment.
+
+    Deliberately not the harness's parser. Importing a module out of the tree to
+    validate the tree would execute it, and the field-level contract is the
+    harness's to enforce — both harnesses now exit 1 on a malformed line. What
+    belongs here is the question neither of them could answer about itself: is
+    there anything to measure at all.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+
+
+def check_probe_contract() -> None:
+    """A repository that ships a probe harness must ship probes for it to run.
+
+    Both harnesses used to treat a missing or empty probes file as "nothing to
+    measure" and exit 0, so the whole measured catch rate could be emptied with
+    every gate still green (finding T-001).
+    """
+    present = set(tracked("tools/*"))
+    for harness, data in PROBE_CONTRACTS:
+        if harness not in present:
+            continue
+        if data not in present:
+            fail(f"{harness} is tracked but {data} is not — the harness would measure nothing")
+            continue
+        with open(os.path.join(ROOT, data), encoding="utf-8", errors="replace") as fh:
+            lines = probe_lines(fh.read())
+        if not lines:
+            fail(f"{data}: no probes — the contract {harness} measures is empty")
+
+
+# --- 26. reference thresholds -------------------------------------------------
+THRESHOLD_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:percent|%)")
+MEASURED_RE = re.compile(r"measured by `[^`]+`|unmeasured")
+
+
+def paragraphs(text: str) -> list[tuple[int, str]]:
+    """Blank-line separated blocks, each with the line number it starts on."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    blocks, start, buf = [], 1, []
+    for no, line in enumerate(text.splitlines(), 1):
+        if line.strip():
+            if not buf:
+                start = no
+            buf.append(line)
+        elif buf:
+            blocks.append((start, "\n".join(buf)))
+            buf = []
+    if buf:
+        blocks.append((start, "\n".join(buf)))
+    return blocks
+
+
+def check_reference_thresholds() -> None:
+    """A number the rules make binding has to name what measures it.
+
+    The gate reference asked for 90 percent coverage on changed lines and AGENTS.md
+    made it binding, while no coverage runner, configuration or threshold existed
+    anywhere in the repository (finding P-003). A threshold states its measuring
+    command in the same paragraph, or says in so many words that it is unmeasured.
+    """
+    for path in tracked(".claude/references/*.md"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for start, block in paragraphs(text):
+            if THRESHOLD_RE.search(block) and not MEASURED_RE.search(block):
+                fail(f"{path}:{start}: states a numeric threshold without naming what measures it "
+                     f"— add \"measured by `<command>`\", or say it is unmeasured")
+
+
+# --- 27. hook stdout, docs vs vocabulary --------------------------------------
+# The guide's hooks chapter said stdout is ignored "for events like SessionStart",
+# while tools/audit_vocab.json, tools/audit_facts.py, the red-team agent brief and
+# this repository's own SessionStart hook all treat that stdout as text the model
+# reads (finding C-CONFLICT-001). The vocabulary is the one source of truth; this
+# check makes the prose answer to it.
+STDOUT_DENIED_RE = re.compile(
+    r"\bstdout\b[^.]{0,40}\b(?:is|are)\s+(?:ignored|discarded|dropped|unused|"
+    r"not\s+read|thrown\s+away)", re.I)
+
+
+def hook_stdout_reaches_model() -> list[str]:
+    """The events whose stdout the product adds to the model's context."""
+    path = os.path.join(ROOT, VOCAB_PATH)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return list(json.load(fh).get("hook_stdout_reaches_model") or [])
+    except (OSError, ValueError):
+        return []
+
+
+def sentences(text: str) -> list[str]:
+    """Sentences, with wrapped lines joined — a claim split across two lines is one claim."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    flat = re.sub(r"\s+", " ", text)
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", flat) if s.strip()]
+
+
+def hook_stdout_conflicts(path: str, text: str) -> list[str]:
+    """Sentences that deny stdout reaches the model for an event where it does.
+
+    Per sentence, not per file: a page may describe both kinds of event, and
+    saying "every other passive event's stdout is ignored" is not a conflict.
+    """
+    reaching = hook_stdout_reaches_model()
+    problems = []
+    for sentence in sentences(text):
+        if not STDOUT_DENIED_RE.search(sentence):
+            continue
+        named = [e for e in reaching if e in sentence]
+        if named:
+            problems.append(
+                f"{path}: says hook stdout is ignored in a sentence naming "
+                f"{', '.join(named)} — tools/audit_vocab.json lists it under "
+                f"hook_stdout_reaches_model, and this repository's SessionStart hook "
+                f"relies on that: \"{sentence[:110]}\"")
+    return problems
+
+
+def check_hook_stdout_docs() -> None:
+    for path in tracked("docs/*.md"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for problem in hook_stdout_conflicts(path, text):
+            fail(problem)
+
+
+def print_cautions() -> None:
+    """Cautions print after the verdict, and never instead of it."""
+    if not cautions:
+        return
+    print(f"caution — {len(cautions)} setting(s) weaker than this repository states:")
+    for caution in cautions:
+        print(f"  {caution}")
+
+
 def main() -> int:
     check_markdown()
     check_skills()
@@ -894,16 +1545,29 @@ def main() -> int:
     check_skill_grants()
     check_agents_serialize()
     check_workflow_pins()
+    check_workflow_secret_isolation()
+    check_audit_env_allow_list()
+    check_gate_has_a_runner()
     check_headless_can_spawn()
     check_features()
+    check_probe_contract()
+    check_reference_thresholds()
+    check_hook_stdout_docs()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
             print(f"  {f}")
+        print_cautions()
         return 1
     print("OK — markdown links, skills and agents frontmatter, configs, and hooks all valid")
+    print_cautions()
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Before main(), never from inside it: a neutered main() must not get to
+    # decide whether the validator is intact.
+    _problems = self_check()
+    for _problem in _problems:
+        print(f"gate self-check: {_problem}", file=sys.stderr)
+    sys.exit(1 if _problems else main())

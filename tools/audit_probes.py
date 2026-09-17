@@ -23,6 +23,10 @@ import os
 import shlex
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import audit_env  # noqa: E402  (same directory, installed together)
 import tempfile
 import time
 from dataclasses import asdict, dataclass
@@ -118,23 +122,14 @@ def _run(cmd: list[str], cwd: str, env: dict) -> subprocess.CompletedProcess:
 def probe_env(scratch: str) -> dict[str, str]:
     """The environment a mutation and the gate run under: minimal, with a private HOME.
 
-    A mutation is a shell snippet from a committed data file. It gets PATH so the
-    gate's interpreters resolve, a HOME of its own beside the scratch copy so
-    nothing it does reaches ~/.claude, a fixed git identity, and nothing else —
-    not the operator's tokens, not the CCGG_* variables that would let it sync
-    from the operator's guide clone.
+    A mutation is a shell snippet from a committed data file, so it gets the
+    allow-list in tools/audit_env.py and nothing else — not the operator's
+    tokens, not the CCGG_* variables that would let it sync from the operator's
+    guide clone. That rule has one home now; this was where it was written first.
     """
     home = os.path.join(scratch, "home")
     os.makedirs(home, exist_ok=True)
-    return {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-        "HOME": home,
-        "LANG": "C.UTF-8",
-        "LC_ALL": "C.UTF-8",
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "GIT_AUTHOR_NAME": "probes", "GIT_AUTHOR_EMAIL": "probes@local",
-        "GIT_COMMITTER_NAME": "probes", "GIT_COMMITTER_EMAIL": "probes@local",
-    }
+    return audit_env.sandbox_env(home, actor="probes")
 
 
 def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
@@ -209,8 +204,11 @@ def main(argv: list[str]) -> int:
     ).strip()
     probes_path = os.path.join(repo, args.probes)
     if not os.path.isfile(probes_path):
-        print(f"audit-probes: no probes file at {args.probes} — nothing to measure")
-        return 0
+        # Not "nothing to measure, all clear": a harness pointed at a file that
+        # is not there measured the gate's whole contract as zero probes, and a
+        # mistyped --probes path was a silent success in CI (finding T-001).
+        print(f"audit-probes: no probes file at {args.probes} — the gate's contract is unmeasured")
+        return 1
     try:
         with open(probes_path, encoding="utf-8") as fh:
             probes = parse_probes(fh.read())
@@ -218,8 +216,8 @@ def main(argv: list[str]) -> int:
         print(f"audit-probes: {args.probes}: {exc}")
         return 1
     if not probes:
-        print(f"audit-probes: {args.probes} lists no probes")
-        return 0
+        print(f"audit-probes: {args.probes} lists no probes — the gate's contract is unmeasured")
+        return 1
 
     gate = shlex.split(args.gate)
     started = time.time()

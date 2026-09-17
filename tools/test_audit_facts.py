@@ -6,8 +6,11 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 
 import json
 import os
+import sys
+import tempfile
 import unittest
 
+import audit_facts
 from audit_facts import (
     Facts,
     command_references,
@@ -46,6 +49,39 @@ class HiddenCharactersTests(unittest.TestCase):
 
     def test_ordinary_unicode_ignored(self):
         self.assertEqual(hidden_characters("café — naïve 中文\n"), [])
+
+
+class InstructionFileTests(unittest.TestCase):
+    """R-007/R-014: the audit's hidden-character scan reads what the agent reads."""
+
+    GUIDE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def setUp(self):
+        self.scanned = set(audit_facts.instruction_files(self.GUIDE))
+
+    def test_covers_more_than_the_old_five_categories(self):
+        """The old set was rule files + references + hooks + agents + SKILL.md."""
+        old_set = set(audit_facts.RULE_FILES)
+        old_set |= set(audit_facts.tracked(self.GUIDE, ".claude/references/*"))
+        old_set |= set(audit_facts.tracked(self.GUIDE, ".claude/hooks/*"))
+        old_set |= set(audit_facts.tracked(self.GUIDE, ".claude/agents/*.md"))
+        old_set |= set(p for p in audit_facts.tracked(self.GUIDE, ".claude/skills/*")
+                       if p.endswith("/SKILL.md"))
+        self.assertTrue(old_set - {"MEMORY.md"} <= self.scanned, "the scan lost a file it used to read")
+        self.assertGreater(len(self.scanned), len(old_set), "the scan did not widen")
+
+    def test_covers_skill_companions_decisions_and_knowledge_base(self):
+        for pattern, label in ((".claude/skills/*.md", "skill companion"),
+                               ("decisions/*.md", "decision record"),
+                               ("knowledge-base/*.md", "research note")):
+            with self.subTest(label=label):
+                paths = [p for p in audit_facts.tracked(self.GUIDE, pattern)
+                         if not p.endswith("/SKILL.md")]
+                self.assertTrue(paths, f"no {label} files to check")
+                self.assertEqual([p for p in paths if p not in self.scanned], [])
+
+    def test_binary_research_artifacts_are_not_scanned(self):
+        self.assertEqual([p for p in self.scanned if not p.endswith((".md", ".sh"))], [])
 
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
@@ -217,6 +253,29 @@ class NetworkPatternTests(unittest.TestCase):
     def test_clean(self):
         self.assertEqual(network_patterns("echo ok\nexit 0\n"), [])
 
+    # T-008: the one finding that stood between this detector and a CI runner.
+    def test_eval_as_a_command_is_found(self):
+        self.assertTrue(network_patterns('eval "$payload"\n'))
+
+    def test_a_long_option_is_not_the_command_it_contains(self):
+        """`--eval` in a flag table is not a shell eval; it fired on the guard hook."""
+        self.assertEqual(network_patterns('NODE_CODE_LONG = {"--eval", "--print"}\n'), [])
+
+    def test_a_short_option_is_not_the_command_either(self):
+        self.assertEqual(network_patterns("run -eval now\n"), [])
+
+    def test_a_hyphen_inside_a_word_still_counts(self):
+        """`x-curl` is a different program, but `foo | sh` after it is still a pipe."""
+        self.assertEqual([h[1] for h in network_patterns("cat f | sh\n")], ["pipe to shell"])
+
+    def test_the_shipped_hooks_and_scripts_are_clean(self):
+        guide = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        dirty = []
+        for path in audit_facts.tracked(guide, ".claude/hooks/*") + audit_facts.tracked(guide, "*.sh"):
+            for no, label, snippet in network_patterns(audit_facts.read(guide, path)):
+                dirty.append(f"{path}:{no} {label}: {snippet[:60]}")
+        self.assertEqual(dirty, [], "a fetch-or-execute pattern this repository does not have")
+
 
 class PermissionSurfaceTests(unittest.TestCase):
     def test_fields_listed(self):
@@ -248,3 +307,60 @@ class ToolingKeysAndRedirectTests(unittest.TestCase):
 
     def test_regex_literal_not_network_call(self):
         self.assertEqual(network_patterns('    (r"\\b(curl|wget)\\b", "network"),\n'), [])
+
+
+class RunGateTests(unittest.TestCase):
+    """run_gate executes code out of the audited tree, so: not by default, and
+    never with the operator's environment attached (finding S-005)."""
+
+    def collect_facts(self):
+        facts = audit_facts.Facts()
+        return facts
+
+    def test_the_default_runs_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "ran")
+            facts = self.collect_facts()
+            audit_facts.run_gate(tmp, "canary", [sys.executable, "-c", f"open({marker!r},'w').write('x')"], facts)
+            self.assertFalse(os.path.exists(marker), "run_gate executed the command without --run-gates")
+        recorded = [f for f in facts.items if f.kind == "gate"]
+        self.assertEqual(len(recorded), 1)
+        self.assertEqual(recorded[0].status, "skipped")
+        self.assertIn("--run-gates", recorded[0].evidence)
+
+    def test_execute_true_actually_runs_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "ran")
+            facts = self.collect_facts()
+            audit_facts.run_gate(tmp, "canary", [sys.executable, "-c", f"open({marker!r},'w').write('x')"], facts,
+                                 execute=True)
+            self.assertTrue(os.path.exists(marker))
+        self.assertEqual([f.status for f in facts.items if f.kind == "gate"], ["ok"])
+
+    def test_the_command_never_sees_the_operators_environment(self):
+        """The canary the audit used to demonstrate the finding, as a test."""
+        os.environ["CCGG_TEST_CANARY"] = "leak-me"
+        self.addCleanup(os.environ.pop, "CCGG_TEST_CANARY", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "seen")
+            facts = self.collect_facts()
+            audit_facts.run_gate(
+                tmp, "canary",
+                [sys.executable, "-c",
+                 f"import os;open({out!r},'w').write(repr(os.environ.get('CCGG_TEST_CANARY')))"],
+                facts, execute=True)
+            with open(out, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "None", "the gate command saw a variable from the operator's shell")
+
+    def test_the_command_gets_a_home_that_is_not_the_operators(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "home")
+            facts = self.collect_facts()
+            audit_facts.run_gate(
+                tmp, "canary",
+                [sys.executable, "-c", f"import os;open({out!r},'w').write(os.environ['HOME'])"],
+                facts, execute=True)
+            with open(out, encoding="utf-8") as fh:
+                seen = fh.read()
+        self.assertNotEqual(seen, os.path.expanduser("~"))
+        self.assertFalse(os.path.exists(seen), "the throwaway HOME outlived the gate run")

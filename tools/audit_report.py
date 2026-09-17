@@ -115,6 +115,22 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
                    + (f" — {len(s['regressions'])} regression(s)" if s.get("regressions") else "")
                    + (f" — {len(s['promotions'])} promotion(s) to record" if s.get("promotions") else "") + ".")
         out.append("")
+    missing = list((evidence or {}).get("stages_missing") or [])
+    if missing:
+        scope = (evidence or {}).get("scope")
+        named = ", ".join(f"`{name}.json`" for name in missing)
+        where = f" for scope `{scope}`" if scope else ""
+        out.append(f"**⚠ Deterministic stage did not complete:** {named} absent{where}.")
+        if "redteam" in missing:
+            out.append("The red-team stage measured no injection channel in this run. "
+                       "That is not the same as finding none.")
+        out.append("")
+    errored = dict((evidence or {}).get("stages_with_errors") or {})
+    if errored:
+        named = ", ".join(f"`{name}.json`: {count} probe(s) errored" for name, count in sorted(errored.items()))
+        out.append(f"**⚠ Deterministic stage reported errors:** {named}. "
+                   "A probe that errored measured its channel no more than one that never ran.")
+        out.append("")
     if facts:
         items = facts.get("facts", [])
         n_find = sum(1 for f in items if f.get("status") == "finding")
@@ -146,6 +162,59 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
     return "\n".join(out)
 
 
+# Which deterministic artifacts a scope is supposed to leave behind. The red-team
+# stage runs for `all` and `harness` only, per the skill's Step 2.
+REQUIRED_STAGES = {
+    "all": ("facts", "probes", "redteam"),
+    "harness": ("facts", "probes", "redteam"),
+    "process": ("facts", "probes"),
+    "product": ("facts", "probes"),
+}
+
+
+# The two harnesses spell their error count differently, and a reader of the
+# report should not have to know that. Finding T-006: a stage in which every
+# probe errored was reported exactly like one that measured every channel and
+# found nothing, because only the file's presence was ever asked about.
+STAGE_ERROR_KEYS = {"probes": "errors", "redteam": "error"}
+
+
+def stage_errors(report_dir: str) -> dict:
+    """Stage name to error count, for the stages that reported any."""
+    found = {}
+    for name, key in STAGE_ERROR_KEYS.items():
+        data = read_json(os.path.join(report_dir, f"{name}.json"))
+        summary = data.get("summary") if isinstance(data, dict) else None
+        count = summary.get(key) if isinstance(summary, dict) else None
+        if isinstance(count, int) and count > 0:
+            found[name] = count
+    return found
+
+
+def deterministic_stages(report_dir: str) -> dict:
+    """Which deterministic artifacts this run left, and which its scope required.
+
+    Finding S-011: the workflow runs the probe and red-team stages with `|| true`
+    and this renderer never read redteam.json, so a red-team stage that failed to
+    run produced a report identical to one that measured every channel and found
+    nothing. A stage that did not run measured nothing, and the report has to say
+    so in its own voice rather than leave a reader to notice an absent file.
+    """
+    facts = read_json(os.path.join(report_dir, "facts.json"))
+    scope = facts.get("scope") if isinstance(facts, dict) else None
+    present = {name: os.path.exists(os.path.join(report_dir, f"{name}.json"))
+               for name in ("facts", "probes", "redteam")}
+    # An unknown scope (no facts.json) cannot require the scope-specific stages;
+    # the missing facts.json is the thing worth reporting in that case.
+    required = REQUIRED_STAGES.get(scope, ("facts",))
+    return {
+        "scope": scope,
+        "stages_present": sorted(n for n, ok in present.items() if ok),
+        "stages_missing": [n for n in required if not present[n]],
+        "stages_with_errors": stage_errors(report_dir),
+    }
+
+
 def run_evidence(report_dir: str) -> dict:
     """What in the report directory proves the model stage ran at all.
 
@@ -169,7 +238,11 @@ def run_evidence(report_dir: str) -> dict:
         "candidates": candidates,
         "revision_stamp": stamped,
         "findings_lines": records,
+        # `complete` is about the model stage. A deterministic stage that did not
+        # run is reported separately: it does not mean nothing was audited, and it
+        # does mean part of the audit measured nothing.
         "complete": bool(candidates or stamped or records),
+        **deterministic_stages(report_dir),
     }
 
 

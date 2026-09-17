@@ -32,11 +32,29 @@ import datetime as _dt
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import audit_env  # noqa: E402  (same directory, installed together)
 from dataclasses import asdict, dataclass
 
-HIDDEN_RE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\u00ad\u2066-\u2069]")
+# Kept character-for-character identical to tools/validate.py's HIDDEN_PATTERN;
+# tools/test_validate.py compares the two. Each scan used to catch what the other
+# missed — no tag characters or C0 controls here, no soft hyphen or directional
+# marks there — so a file could pass one gate and fail the other (finding S-006).
+HIDDEN_PATTERN = (
+    "[\u00ad\u061c\u180e"                 # soft hyphen, Arabic letter mark, Mongolian vowel separator
+    "\u200b-\u200f"                        # zero-width space/non-joiner/joiner, LRM, RLM
+    "\u202a-\u202e\u2066-\u2069"          # bidi embeddings, overrides and isolates
+    "\u2060-\u2064\ufeff"                  # word joiner, invisible operators, BOM
+    "\U000e0000-\U000e007f"                # Unicode tag characters
+    "\x00-\x08\x0b\x0c\x0e-\x1f]"       # C0 controls except tab, newline, carriage return
+)
+HIDDEN_RE = re.compile(HIDDEN_PATTERN)
 COMMAND_REF_RE = re.compile(r"`/([a-z][a-z0-9-]*)`")
 HOOK_PATH_RE = re.compile(r"\.claude/hooks/([\w.-]+)")
 TOOL_ENTRY_RE = re.compile(r"^([A-Za-z_][\w]*)(\(.*\))?$")
@@ -49,6 +67,58 @@ NETWORK_PATTERNS = (
     (re.compile(r"\bsource\s+\$|\.\s+\$"), "source from variable"),
 )
 RULE_FILES = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md", "MEMORY.md")
+# Kept character-for-character identical to tools/validate.py's rules for the
+# same field; tools/test_validate.py compares the two. A skill's description is
+# shown to the model in every session's listing, before any invocation, and the
+# only checks on it were that it is not empty (finding R-005).
+DESCRIPTION_BANNED = (
+    (r"https?://|\bwww\.", "a URL"),
+    (r"`", "a backtick"),
+    (r"\$\(|\$\{", "a shell substitution"),
+    (r"\||&&", "a shell operator"),
+)
+DESCRIPTION_MAX = 600
+
+
+def description_findings(description: str) -> list[str]:
+    """What is wrong with a description's content, as reasons."""
+    reasons = [what for pattern, what in DESCRIPTION_BANNED if re.search(pattern, description)]
+    if len(description) > DESCRIPTION_MAX:
+        reasons.append(f"{len(description)} characters, over {DESCRIPTION_MAX}")
+    return reasons
+# Every tracked file whose content reaches the model as instructions. Kept
+# character-for-character identical to tools/validate.py's INSTRUCTION_GLOBS —
+# the two scans had drifted apart, and the hidden-character scan here saw the
+# rule files, references, hooks, agents and SKILL.md only, so a skill's
+# companion pages, decisions/ and knowledge-base/ went unread (findings R-007
+# and R-014). tools/test_validate.py compares the two tuples.
+INSTRUCTION_GLOBS = (
+    "CLAUDE.md",
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "MEMORY.md",
+    ".claude/agents/*.md",
+    ".claude/hooks/*",
+    ".claude/references/*.md",
+    ".claude/skills/*.md",
+    "decisions/*.md",
+    "features/*.md",
+    "knowledge-base/*.md",
+)
+# Kinds whose `finding` status is a defect a gate should stop for. Two are left
+# out on purpose: permission-surface lists what the committed settings grant — a
+# fact for review, not a defect, and an installed project that grants anything
+# would otherwise go red on its own configuration — and `gate` records how the
+# tree's own gate did, which the workflow's other steps already report.
+GATING_KINDS = ("hook-registration", "hook-stdout", "hidden-characters", "frontmatter",
+                "command-resolution", "network-exec")
+
+
+def gating_findings(facts: list) -> list:
+    """The findings a CI runner should fail on (finding T-008)."""
+    return [f for f in facts if f.status == "finding" and f.kind in GATING_KINDS]
+
+
 STACK_MARKERS = {
     "package.json": "javascript", "pyproject.toml": "python", "requirements.txt": "python",
     "go.mod": "go", "Cargo.toml": "rust", "pom.xml": "java", "build.gradle": "java",
@@ -93,7 +163,9 @@ def hidden_characters(text: str) -> list[tuple[int, list[str]]]:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     hits = []
-    for no, line in enumerate(text.splitlines(), 1):
+    # "\\n", never str.splitlines(): that treats U+000B, U+000C and U+001C-U+001E
+    # as line boundaries and removes them before the pattern can see them.
+    for no, line in enumerate(text.split("\n"), 1):
         found = [f"U+{ord(c):04X}" for c in line if HIDDEN_RE.match(c)]
         if found:
             hits.append((no, found))
@@ -183,6 +255,9 @@ def frontmatter_facts(path: str, text: str, kind: str, vocab: dict, facts: Facts
     if not fields.get("description"):
         facts.add("frontmatter", "finding", path, "description missing or empty",
                   "the product uses the first non-empty content line instead; auto-invocation matches on it")
+    for reason in description_findings(fields.get("description", "")):
+        facts.add("frontmatter", "finding", path, f"description contains {reason}",
+                  "class: injection; the description loads in every session before any invocation")
     for key in fields:
         if key in documented:
             continue
@@ -307,7 +382,14 @@ def network_patterns(text: str) -> list[tuple[int, str, str]]:
         if stripped.startswith("#") or re.search(r"\(r[\"\']", stripped):
             continue  # a comment, or a regex literal that names the pattern rather than running it
         for pattern, label in NETWORK_PATTERNS:
-            if pattern.search(line):
+            match = pattern.search(line)
+            # A token reached through a leading hyphen is an option, not the
+            # command it spells: `--eval` in a flag table is not a shell eval,
+            # and one in this repository's own guard hook was the single finding
+            # standing between this stage and an automatic CI runner (T-008).
+            while match and match.start() and line[match.start() - 1] == "-":
+                match = pattern.search(line, match.end())
+            if match:
                 hits.append((no, label, stripped[:100]))
     return hits
 
@@ -337,6 +419,14 @@ def tracked(repo: str, pattern: str) -> list[str]:
     return [p for p in out.splitlines() if p]
 
 
+def instruction_files(repo: str) -> list[str]:
+    """The tracked files INSTRUCTION_GLOBS names, sorted and deduplicated."""
+    found: set[str] = set()
+    for pattern in INSTRUCTION_GLOBS:
+        found.update(tracked(repo, pattern))
+    return sorted(found)
+
+
 def read(repo: str, path: str) -> str:
     with open(os.path.join(repo, path), encoding="utf-8", errors="replace") as fh:
         return fh.read()
@@ -357,13 +447,37 @@ def tooling_referenced_keys(repo: str) -> set[str]:
     return keys
 
 
-def run_gate(repo: str, label: str, cmd: list[str], facts: Facts) -> None:
+def run_gate(repo: str, label: str, cmd: list[str], facts: Facts, execute: bool = False) -> None:
+    """Run the audited tree's own gate command, or record that it was not run.
+
+    Two things this function is careful about, both audit finding S-005.
+
+    It executes code out of the checkout, so it does not do that by default: the
+    caller passes execute=True, which tools/audit_facts.py only does for
+    --run-gates. Pointing the audit at a repository somebody handed you should
+    not run that repository's Python. A gate that was not run is still recorded,
+    so the omission is visible in facts.json rather than looking like a clean
+    result nobody measured.
+
+    When it does execute, the command gets the allow-list from tools/audit_env.py
+    and a throwaway HOME — previously it inherited os.environ, so the tree's own
+    test suite ran with the operator's tokens in scope.
+    """
+    if not execute:
+        facts.add("gate", "skipped", " ".join(cmd),
+                  f"{label} not run: pass --run-gates to execute the audited tree's own code",
+                  "class: not-measured")
+        return
+    home = tempfile.mkdtemp(prefix="ccgg-gate-home-")
     try:
         proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=900)
+                              errors="replace", timeout=900,
+                              env=audit_env.sandbox_env(home, actor="ccgg-gate"))
     except (OSError, subprocess.TimeoutExpired) as exc:
         facts.add("gate", "finding", " ".join(cmd), f"{label} could not run: {exc}")
         return
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
     tail = "\n".join((proc.stdout + proc.stderr).strip().splitlines()[-5:])
     status = "ok" if proc.returncode == 0 else "finding"
     facts.add("gate", status, " ".join(cmd), f"{label} exited {proc.returncode}", tail[:600])
@@ -399,11 +513,14 @@ def ensure_report_dir(repo: str, out: str | None) -> str:
     ignore = os.path.join(out, ".gitignore")
     if not os.path.exists(ignore):
         with open(ignore, "w", encoding="utf-8") as fh:
-            fh.write("# Audit reports are ignored by default; keep one deliberately with git add -f.\n*\n")
+            fh.write("# Audit reports are ignored by default. `git add -f` keeps one, but a\n"
+                     "# committed report's candidates/ is then present in every later verifier\n"
+                     "# worktree under the same filenames, and a verifier that cannot find its\n"
+                     "# own run's batch has been observed reading the committed one instead.\n*\n")
     return out
 
 
-def collect(repo: str, scope: str, vocab: dict) -> tuple[dict, Facts]:
+def collect(repo: str, scope: str, vocab: dict, run_gates: bool = False) -> tuple[dict, Facts]:
     facts = Facts()
     settings = load_json(repo, ".claude/settings.json")
     inventory = build_inventory(repo, settings)
@@ -421,16 +538,15 @@ def collect(repo: str, scope: str, vocab: dict) -> tuple[dict, Facts]:
         hook_stdout_facts(settings or {}, lambda n: read(repo, f".claude/hooks/{n}") if f".claude/hooks/{n}" in hook_files else None,
                           vocab, facts)
 
-        instruction_files = (inventory["rule_files"] + inventory["references"] + inventory["hooks"]
-                             + inventory["agents"] + [f".claude/skills/{s}/SKILL.md" for s in inventory["skills"]])
+        scanned = instruction_files(repo)
         hidden_total = 0
-        for path in instruction_files:
+        for path in scanned:
             for no, cps in hidden_characters(read(repo, path)):
                 hidden_total += 1
                 facts.add("hidden-characters", "finding", f"{path}:{no}", f"invisible characters {', '.join(cps)}",
                           "class: injection; review the line in a hex view before trusting it")
         if not hidden_total:
-            facts.add("hidden-characters", "ok", "instruction files", f"{len(instruction_files)} file(s) scanned, none found")
+            facts.add("hidden-characters", "ok", "instruction files", f"{len(scanned)} file(s) scanned, none found")
 
         tooling_keys = tooling_referenced_keys(repo)
         for skill in inventory["skills"]:
@@ -471,15 +587,15 @@ def collect(repo: str, scope: str, vocab: dict) -> tuple[dict, Facts]:
 
     if process:
         if os.path.exists(os.path.join(repo, "tools/validate.py")):
-            run_gate(repo, "validator", [sys.executable, "tools/validate.py"], facts)
+            run_gate(repo, "validator", [sys.executable, "tools/validate.py"], facts, execute=run_gates)
         if any(t.startswith("tools/test_") for t in inventory["tests"]):
-            run_gate(repo, "unit tests", [sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"], facts)
+            run_gate(repo, "unit tests", [sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"], facts, execute=run_gates)
         elif inventory["tests"]:
             facts.add("gate", "skipped", "tests", f"{len(inventory['tests'])} test file(s) found but no known runner — run them yourself")
         if inventory["features"] and os.path.exists(os.path.join(repo, "tools/feature_lint.py")):
-            run_gate(repo, "feature lint", [sys.executable, "tools/feature_lint.py", "--strict"], facts)
+            run_gate(repo, "feature lint", [sys.executable, "tools/feature_lint.py", "--strict"], facts, execute=run_gates)
         if os.path.exists(os.path.join(repo, "tools/catalog.py")):
-            run_gate(repo, "catalog", [sys.executable, "tools/catalog.py"], facts)
+            run_gate(repo, "catalog", [sys.executable, "tools/catalog.py"], facts, execute=run_gates)
         if not inventory["ci_workflows"]:
             facts.add("gate", "finding", ".github/workflows", "no CI workflow — the gate runs only when someone remembers")
         if not inventory["tests"]:
@@ -493,7 +609,15 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--repo", default=None)
     parser.add_argument("--out", default=None, help="report directory (default: CCGG-AUDIT-<stamp>/ in the repo)")
     parser.add_argument("--scope", default="all", choices=SCOPES)
+    parser.add_argument("--run-gates", action="store_true",
+                        help="run the audited tree's own validator, tests, feature lint and catalog. "
+                             "Off by default: this executes code from the checkout. On, it runs with "
+                             "a minimal environment and a throwaway HOME, never the operator's.")
     parser.add_argument("--vocab", default=VOCAB_PATH)
+    parser.add_argument("--fail-on-findings", action="store_true",
+                        help="exit 1 when a defect-shaped check reports a finding. For a CI "
+                             "runner: these detectors exist only here, and without this they "
+                             "ran on a manual trigger or not at all.")
     args = parser.parse_args(argv)
     try:
         repo = args.repo or git(os.getcwd(), "rev-parse", "--show-toplevel")
@@ -506,7 +630,7 @@ def main(argv: list[str]) -> int:
         print(f"audit-facts: cannot read vocabulary {args.vocab}: {exc}")
         return 2
     out = ensure_report_dir(repo, args.out)
-    inventory, facts = collect(repo, args.scope, vocab)
+    inventory, facts = collect(repo, args.scope, vocab, run_gates=args.run_gates)
     with open(os.path.join(out, "inventory.json"), "w", encoding="utf-8") as fh:
         json.dump(inventory, fh, indent=2)
         fh.write("\n")
@@ -519,6 +643,12 @@ def main(argv: list[str]) -> int:
     print(f"audit-facts: {len(facts.items)} fact(s) -> {out}")
     for kind, counts in sorted(by_kind.items()):
         print(f"  {kind:20} ok {counts['ok']:3}  finding {counts['finding']:3}  skipped {counts['skipped']:3}")
+    gating = gating_findings(facts.items)
+    if args.fail_on_findings and gating:
+        print(f"audit-facts: {len(gating)} finding(s) in {', '.join(GATING_KINDS)}:")
+        for f in gating:
+            print(f"  {f.kind}: {f.location}: {f.evidence}")
+        return 1
     return 0
 
 

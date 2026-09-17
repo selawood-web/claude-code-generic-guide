@@ -1,10 +1,11 @@
 # Choosing what to reach for — libraries, and the skills that use them
 
-Two triggers, one idea: before leaning on something someone else wrote, decide
+Three triggers, one idea: before leaning on something someone else wrote, decide
 whether it is the right thing *for this job*, not merely a thing that exists.
 
 - **About to build something a library probably already does** → *Picking a dependency*.
 - **About to rely on a skill** → *The Skill Checker*, which is a gate, not advice.
+- **The job needs something this session does not have** → *Closing a capability gap*.
 
 The charter states both rules; they bind whether or not this file was read. What
 lives here is the procedure and the failures each step catches.
@@ -45,6 +46,59 @@ constraint, not a judgment call, and no amount of "it looks fine" overrides it.
 **The web is for facts that change.** Versions, prices, API shapes, model names,
 part numbers — searched, never recalled. A library whose behaviour I already know
 does not need a search; a library's *current version* does.
+
+---
+
+## Closing a capability gap
+
+A gap is the job needing something this session does not have: a connector to a
+service, an MCP server, a plugin or extension, a CLI, a skill from a marketplace.
+Noticing it, researching it and putting a vetted recommendation on the table is my
+work and needs no prompting — a gap left unmentioned is the owner paying for a
+limitation nobody told them about. Installing or authorising it is not mine: that is
+an owner gate (AGENTS.md, *Escalate instead of proceeding*), and no result, deadline
+or "it is only a small one" turns a gap into permission.
+
+**1. Prove the gap is real.** What exactly cannot be done with what is already
+here — the tools in this session, the repo's own scripts, a connector already
+authorised? Most gaps close at this step, and a tool installed because the existing
+one went unread is pure cost.
+
+**2. Search, don't recall.** The product's own connector directory or MCP registry,
+the ecosystem registry for a library, the marketplace the runner ships for a plugin,
+and the vendor's own documentation. What exists, what it costs and what it asks for
+all change — this is the charter's currency rule, and tool listings go stale fast.
+
+**3. Vet before proposing.** The dependency checks above — maintenance, adoption,
+weight, licence, exit — all apply, plus what a *connected* thing adds:
+
+- **Publisher.** The vendor of the service itself, or a name the ecosystem already
+  trusts. An unofficial bridge to an official API is a stranger standing in the
+  middle of the owner's credentials.
+- **Access.** The scopes and permissions it asks for, named explicitly, and whether
+  a narrower set does the job. Read-only beats read-write when reading is the task.
+- **Data.** What leaves the machine, to whom, and under what terms.
+- **Blast radius.** What it can change if it misbehaves or is compromised, whether
+  its credential can be scoped down, and how it is removed.
+
+A candidate that fails publisher or data is not proposed at all — a pick-list is for
+options I would defend, not a menu of everything that exists.
+
+**4. Propose as a pick-list.** Recommendation first, the runner-up, and "keep doing
+it by hand" as a real option with its real cost. Each line says what it grants, what
+it costs, what it replaces, and what it would take to undo. If the standing
+constraints put the candidate out of scope, the proposal says so and asks for that
+constraint to be changed — it never quietly assumes the exception.
+
+**5. Install only on an explicit yes** — the thing that was approved, at the scope
+that was approved, nothing bundled alongside it. "Go ahead" for one connector is not
+standing permission for its ecosystem; approval to use it this session is not
+approval to commit it into the repository. When the choice will outlive the session,
+the grant and its bounds are recorded with it in `decisions/`.
+
+**6. Report what it changed.** After it is in, one line on what is now possible that
+was not, and what to remove if it disappoints. A tool nobody can see the value of is
+the next session's unexplained dependency.
 
 ---
 
