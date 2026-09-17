@@ -69,12 +69,54 @@ VOCAB_PATH = os.path.join("tools", "audit_vocab.json")
 GIT_CLONE_RE = re.compile(r"\bgit\s+clone\b")
 CLONE_PIN_RE = re.compile(r"(--branch|-b\s|--revision)")
 FETCH_TO_SHELL_RE = re.compile(r"\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(sh|bash|zsh)\b")
+# A skill's `description` is shown to the model in every session's listing,
+# before any invocation, so whatever it says is context nobody asked for
+# (finding R-005). Its job is matching a request: that needs no URL, no
+# backtick, no shell substitution and no pipe. Patterns are kept as strings so
+# tools/audit_facts.py can carry the identical tuple and a test can compare them.
+DESCRIPTION_BANNED = (
+    (r"https?://|\bwww\.", "a URL"),
+    (r"`", "a backtick"),
+    (r"\$\(|\$\{", "a shell substitution"),
+    (r"\||&&", "a shell operator"),
+)
+DESCRIPTION_MAX = 600
+
+
+def description_problems(path: str, description: str) -> list[str]:
+    """Content rules for a frontmatter description, as messages.
+
+    Deliberately not a rule: "no imperative sentences". Every description in
+    this repository is one — "Design system architecture...", "Use when the
+    user asks to..." — so that test would fail all twenty-seven skills and
+    teach the next person to switch the check off.
+    """
+    if not isinstance(description, str):
+        raise TypeError("description must be a string")
+    problems = []
+    for pattern, what in DESCRIPTION_BANNED:
+        if re.search(pattern, description):
+            problems.append(f"{path}: frontmatter 'description' contains {what} — the field loads in every session and is matched against a request, never followed")
+    if len(description) > DESCRIPTION_MAX:
+        problems.append(f"{path}: frontmatter 'description' is {len(description)} characters, over {DESCRIPTION_MAX} — a matcher, not a place to put instructions")
+    return problems
 
 findings: list[str] = []
+cautions: list[str] = []
 
 
 def fail(msg: str) -> None:
     findings.append(msg)
+
+
+def warn(msg: str) -> None:
+    """A configuration that works but gives up a guarantee the repository states.
+
+    Kept out of `findings` on purpose: the exit code is the gate, and a gate
+    that fails on a supported-but-weaker setting stops being a gate people run.
+    A caution is printed every time and never changes the verdict.
+    """
+    cautions.append(msg)
 
 
 def tracked(pattern: str) -> list[str]:
@@ -271,8 +313,19 @@ def fetch_exec_problems(path: str, text: str) -> list[str]:
     return problems
 
 
+def fetch_exec_paths() -> list[str]:
+    """Scripts plus every file whose content reaches the model as instructions.
+
+    An unpinned clone or a download-to-shell pipe is as live in a sentence a
+    skill tells the agent to follow as it is in a hook, and check 14 read only
+    hooks and *.sh files, so a skill body was never looked at (finding R-004,
+    and the one probe the gate was missing, T-005).
+    """
+    return list(dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh") + instruction_files()))
+
+
 def check_fetch_exec() -> None:
-    for path in dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh")):
+    for path in fetch_exec_paths():
         text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
         for problem in fetch_exec_problems(path, text):
             fail(problem)
@@ -314,6 +367,7 @@ def skill_identity_problems(path: str, fields: dict[str, str]) -> list[str]:
     for key in ("name", "description"):
         if not fields.get(key, "").strip("'\" "):
             problems.append(f"{path}: frontmatter '{key}' is empty")
+    problems += description_problems(path, fields.get("description", "").strip("'\" "))
     dirname = os.path.basename(os.path.dirname(path))
     name = fields.get("name", "").strip("'\" ")
     if name and dirname and name != dirname:
@@ -358,6 +412,7 @@ def agent_frontmatter_problems(path: str, fields: dict[str, str]) -> list[str]:
     Every audit agent omits CLAUDE.md: the audited rules are evidence, not orders.
     """
     problems = [f"{path}: frontmatter missing key '{k}'" for k in AGENT_REQUIRED_KEYS if not fields.get(k)]
+    problems += description_problems(path, fields.get("description", "").strip("'\" "))
     name = fields.get("name", "")
     if not name.startswith("audit-"):
         return problems
@@ -480,6 +535,40 @@ def check_context_budget() -> None:
 
 
 ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md")
+# Every tracked file whose content reaches the model as instructions — not only
+# the rule files, but everything the rules tell the agent to open: a skill's
+# companion pages, a decision record recalled before re-deciding, a cached
+# research note, a feature definition. The scan here reached the three
+# always-loaded files and .claude/**/*.md; MEMORY.md, the hooks, decisions/,
+# features/ and knowledge-base/ sat outside it, and the audit's own scan in
+# tools/audit_facts.py was narrower still (findings R-007 and R-014). This is
+# the one home for the set: audit_facts.py carries the identical tuple and
+# tools/test_validate.py compares the two.
+INSTRUCTION_GLOBS = (
+    "CLAUDE.md",
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "MEMORY.md",
+    ".claude/agents/*.md",
+    ".claude/hooks/*",
+    ".claude/references/*.md",
+    ".claude/skills/*.md",
+    "decisions/*.md",
+    "features/*.md",
+    "knowledge-base/*.md",
+)
+# Markdown, not everything: knowledge-base/ also holds research artifacts such as
+# a .pptx, whose compressed bytes are full of control characters and which no
+# rule tells the agent to read as text. Hooks are the exception — every one is a
+# shell script, and what they print reaches the model as context.
+
+
+def instruction_files() -> list[str]:
+    """The tracked files INSTRUCTION_GLOBS names, sorted and deduplicated."""
+    found: set[str] = set()
+    for pattern in INSTRUCTION_GLOBS:
+        found.update(tracked(pattern))
+    return sorted(found)
 VOLATILE_RES = (
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
     re.compile(r"\blast (updated|generated|synced|run)\b", re.I),
@@ -646,9 +735,7 @@ def hidden_characters(text: str) -> list[tuple[int, str]]:
 
 
 def check_hidden_characters() -> None:
-    paths = [p for p in ALWAYS_LOADED if os.path.exists(os.path.join(ROOT, p))]
-    paths += tracked(".claude/*.md")
-    for path in paths:
+    for path in instruction_files():
         text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
         for line, code in hidden_characters(text)[:5]:
             fail(f"{path}:{line}: hidden character {code} — invisible to a reviewer, read by the model")
@@ -688,21 +775,64 @@ def check_hook_registration() -> None:
 
 # --- 17. live-sync env --------------------------------------------------------
 SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
+# The hook's own test for an immutable pin: .claude/hooks/session-start.sh's
+# ccgg_is_sha accepts 40 lowercase hex characters and nothing else, so anything
+# this does not match resolves through a name that its owner can move.
+COMMIT_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+ORIGIN_RECORD = os.path.join(".claude", "ccgg-origins")
 
 
-def ccgg_env_problems(env: dict) -> list[str]:
-    """Problems with a settings.json env block that drives the session-start sync."""
+def ccgg_origins(root: str) -> list[str] | None:
+    """The origins this repository has recorded as trusted, or None if it has not.
+
+    One URL per line in .claude/ccgg-origins, `#` comments and blanks ignored.
+    The record lives outside settings.json so that re-pointing the sync at
+    another repository is a named change a reviewer sees, rather than one line
+    inside an env block (finding R-003). None and [] are different answers:
+    no record constrains nothing, an empty record allows nothing.
+    """
+    path = os.path.join(root, ORIGIN_RECORD)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        lines = (line.strip() for line in fh)
+        return [line for line in lines if line and not line.startswith("#")]
+
+
+def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
+    """Problems with a settings.json env block that drives the session-start sync.
+
+    `origins` is the trusted-origin record (None when the repository keeps none).
+    """
     problems = []
     home = str(env.get("CCGG_HOME", "") or "")
     repo = str(env.get("CCGG_REPO", "") or "")
     ref = str(env.get("CCGG_REF", "") or "")
-    if repo and not ref:
+    if home and not repo:
+        problems.append("env sets CCGG_HOME without CCGG_REPO — the hook then runs that clone's update.sh with no origin to check it against, and update.sh syncs skills, hooks, agents and tools/ into this project on every session start; set CCGG_REPO and CCGG_REF, or unset CCGG_HOME")
+    elif repo and not ref:
         problems.append("env sets CCGG_REPO without CCGG_REF — the hook refuses an unpinned clone, so live sync never starts; pin a tag, branch, or commit")
     if home and (home in SHARED_TMP or home.startswith(tuple(t + "/" for t in SHARED_TMP))):
         problems.append("env sets CCGG_HOME under a shared temporary directory — anyone on the host can pre-create it; use a path under your home such as ~/.claude/ccgg-guide")
     if repo.startswith("http://"):
         problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
+    if repo and origins is not None and repo not in origins:
+        problems.append(f"env sets CCGG_REPO to {repo}, which {ORIGIN_RECORD} does not list — add it there deliberately, or correct the env block")
     return problems
+
+
+def ccgg_env_warnings(env: dict, origins: list[str] | None = None) -> list[str]:
+    """Settings that work but give up a guarantee the repository states elsewhere."""
+    cautions_found = []
+    repo = str(env.get("CCGG_REPO", "") or "")
+    ref = str(env.get("CCGG_REF", "") or "")
+    if not repo:
+        return cautions_found
+    if ref and not COMMIT_RE.match(ref):
+        cautions_found.append(f"env pins CCGG_REF to '{ref}', a name its owner can move; session-start.sh calls the 40-hex commit form the only one nobody can move")
+    if origins is None:
+        cautions_found.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record, so nothing cross-checks which repository executes code at every session start")
+    return cautions_found
 
 
 def check_ccgg_env() -> None:
@@ -716,8 +846,11 @@ def check_ccgg_env() -> None:
     env = settings.get("env") if isinstance(settings, dict) else None
     if not isinstance(env, dict):
         return
-    for problem in ccgg_env_problems(env):
+    origins = ccgg_origins(ROOT)
+    for problem in ccgg_env_problems(env, origins):
         fail(f".claude/settings.json: {problem}")
+    for caution in ccgg_env_warnings(env, origins):
+        warn(f".claude/settings.json: {caution}")
 
 
 # --- 18. imports --------------------------------------------------------------
@@ -733,19 +866,33 @@ def import_targets(text: str) -> list[str]:
 
 
 def check_imports() -> None:
+    """Follow @imports from the two roots all the way down.
+
+    An import brings a file into the session as rules, and so does an import
+    inside that file. Checking only CLAUDE.md and AGENTS.md left every level
+    below them unexamined (finding R-008). A `~` target cannot be checked from
+    here, which is the reason to name it, not the reason to pass over it.
+    """
     tracked_all = set(tracked("*"))
-    for path in ("CLAUDE.md", "AGENTS.md"):
-        full = os.path.join(ROOT, path)
-        if not os.path.exists(full):
-            continue
-        for target in import_targets(open(full, encoding="utf-8", errors="replace").read()):
+    seen: set[str] = set()
+    queue = [p for p in ("CLAUDE.md", "AGENTS.md") if os.path.exists(os.path.join(ROOT, p))]
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue  # an import cycle is not an error; reading it twice would be
+        seen.add(path)
+        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        for target in import_targets(text):
             if target.startswith("~"):
-                continue  # a user-level import, outside the repository
+                warn(f"{path}: imports @{target}, outside the repository — it loads every session and nothing here can review it")
+                continue
             dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
             if not os.path.exists(os.path.join(ROOT, dest)):
                 fail(f"{path}: imports @{target}, which does not exist — the rules it holds never load")
             elif dest not in tracked_all:
                 fail(f"{path}: imports @{target}, which is not tracked — every other clone loads nothing there")
+            else:
+                queue.append(dest)
 
 
 # --- 19. skill grants ---------------------------------------------------------
@@ -1152,6 +1299,15 @@ def self_check(path: str | None = None) -> list[str]:
             for no in unreachable_after_return(source)]
 
 
+def print_cautions() -> None:
+    """Cautions print after the verdict, and never instead of it."""
+    if not cautions:
+        return
+    print(f"caution — {len(cautions)} setting(s) weaker than this repository states:")
+    for caution in cautions:
+        print(f"  {caution}")
+
+
 def main() -> int:
     check_markdown()
     check_skills()
@@ -1181,8 +1337,10 @@ def main() -> int:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
             print(f"  {f}")
+        print_cautions()
         return 1
     print("OK — markdown links, skills and agents frontmatter, configs, and hooks all valid")
+    print_cautions()
     return 0
 
 

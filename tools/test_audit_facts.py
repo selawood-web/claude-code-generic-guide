@@ -50,6 +50,39 @@ class HiddenCharactersTests(unittest.TestCase):
     def test_ordinary_unicode_ignored(self):
         self.assertEqual(hidden_characters("café — naïve 中文\n"), [])
 
+
+class InstructionFileTests(unittest.TestCase):
+    """R-007/R-014: the audit's hidden-character scan reads what the agent reads."""
+
+    GUIDE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def setUp(self):
+        self.scanned = set(audit_facts.instruction_files(self.GUIDE))
+
+    def test_covers_more_than_the_old_five_categories(self):
+        """The old set was rule files + references + hooks + agents + SKILL.md."""
+        old_set = set(audit_facts.RULE_FILES)
+        old_set |= set(audit_facts.tracked(self.GUIDE, ".claude/references/*"))
+        old_set |= set(audit_facts.tracked(self.GUIDE, ".claude/hooks/*"))
+        old_set |= set(audit_facts.tracked(self.GUIDE, ".claude/agents/*.md"))
+        old_set |= set(p for p in audit_facts.tracked(self.GUIDE, ".claude/skills/*")
+                       if p.endswith("/SKILL.md"))
+        self.assertTrue(old_set - {"MEMORY.md"} <= self.scanned, "the scan lost a file it used to read")
+        self.assertGreater(len(self.scanned), len(old_set), "the scan did not widen")
+
+    def test_covers_skill_companions_decisions_and_knowledge_base(self):
+        for pattern, label in ((".claude/skills/*.md", "skill companion"),
+                               ("decisions/*.md", "decision record"),
+                               ("knowledge-base/*.md", "research note")):
+            with self.subTest(label=label):
+                paths = [p for p in audit_facts.tracked(self.GUIDE, pattern)
+                         if not p.endswith("/SKILL.md")]
+                self.assertTrue(paths, f"no {label} files to check")
+                self.assertEqual([p for p in paths if p not in self.scanned], [])
+
+    def test_binary_research_artifacts_are_not_scanned(self):
+        self.assertEqual([p for p in self.scanned if not p.endswith((".md", ".sh"))], [])
+
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
             hidden_characters(b"bytes")

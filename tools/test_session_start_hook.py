@@ -64,8 +64,14 @@ class PinFollowingTests(unittest.TestCase):
         return subprocess.check_output(["git", *args], cwd=cwd, env=self.env, text=True, encoding="utf-8")
 
     def run_hook(self, ref):
-        env = dict(self.env, CCGG_HOME=self.clone, CCGG_REPO=self.origin, CCGG_REF=ref,
-                   CLAUDE_PROJECT_DIR=self.project)
+        return self.run_hook_with(CCGG_REPO=self.origin, CCGG_REF=ref)
+
+    def run_hook_with(self, **overrides):
+        """Run the hook with CCGG_HOME set, and CCGG_REPO/CCGG_REF only where named."""
+        env = dict(self.env, CCGG_HOME=self.clone, CLAUDE_PROJECT_DIR=self.project)
+        for name in ("CCGG_REPO", "CCGG_REF"):
+            env.pop(name, None)
+        env.update(overrides)
         return subprocess.run([bash(), HOOK], cwd=self.project, env=env,
                               capture_output=True, text=True, encoding="utf-8", errors="replace")
 
@@ -101,6 +107,27 @@ class PinFollowingTests(unittest.TestCase):
         proc = self.run_hook("0" * 40)
         self.assertIn("could not be moved to CCGG_REF; live sync skipped", proc.stdout)
         self.assertEqual(self.head(), self.commits[0])
+        self.assertIsNone(self.ran())
+
+    def test_home_alone_refuses_to_run_update_sh(self):
+        """R-001/S-004: an unset CCGG_REPO was read as a check that passed.
+
+        ccgg_origin_ok returned 0 the moment its expected URL was empty, and the
+        pin check was gated on CCGG_REF being set, so CCGG_HOME on its own left
+        only the ownership test between a planted clone and update.sh.
+        """
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        proc = self.run_hook_with()
+        self.assertIn("needs CCGG_REPO and CCGG_REF", proc.stdout)
+        self.assertIsNone(self.ran())
+
+    def test_repo_without_ref_refuses_to_run_update_sh(self):
+        """An existing clone used to sync unpinned, whatever its HEAD had become."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        proc = self.run_hook_with(CCGG_REPO=self.origin)
+        self.assertIn("needs CCGG_REPO and CCGG_REF", proc.stdout)
         self.assertIsNone(self.ran())
 
     def test_a_clone_from_another_origin_is_refused_before_any_move(self):

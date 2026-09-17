@@ -55,6 +55,44 @@ NETWORK_PATTERNS = (
     (re.compile(r"\bsource\s+\$|\.\s+\$"), "source from variable"),
 )
 RULE_FILES = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md", "MEMORY.md")
+# Kept character-for-character identical to tools/validate.py's rules for the
+# same field; tools/test_validate.py compares the two. A skill's description is
+# shown to the model in every session's listing, before any invocation, and the
+# only checks on it were that it is not empty (finding R-005).
+DESCRIPTION_BANNED = (
+    (r"https?://|\bwww\.", "a URL"),
+    (r"`", "a backtick"),
+    (r"\$\(|\$\{", "a shell substitution"),
+    (r"\||&&", "a shell operator"),
+)
+DESCRIPTION_MAX = 600
+
+
+def description_findings(description: str) -> list[str]:
+    """What is wrong with a description's content, as reasons."""
+    reasons = [what for pattern, what in DESCRIPTION_BANNED if re.search(pattern, description)]
+    if len(description) > DESCRIPTION_MAX:
+        reasons.append(f"{len(description)} characters, over {DESCRIPTION_MAX}")
+    return reasons
+# Every tracked file whose content reaches the model as instructions. Kept
+# character-for-character identical to tools/validate.py's INSTRUCTION_GLOBS —
+# the two scans had drifted apart, and the hidden-character scan here saw the
+# rule files, references, hooks, agents and SKILL.md only, so a skill's
+# companion pages, decisions/ and knowledge-base/ went unread (findings R-007
+# and R-014). tools/test_validate.py compares the two tuples.
+INSTRUCTION_GLOBS = (
+    "CLAUDE.md",
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "MEMORY.md",
+    ".claude/agents/*.md",
+    ".claude/hooks/*",
+    ".claude/references/*.md",
+    ".claude/skills/*.md",
+    "decisions/*.md",
+    "features/*.md",
+    "knowledge-base/*.md",
+)
 STACK_MARKERS = {
     "package.json": "javascript", "pyproject.toml": "python", "requirements.txt": "python",
     "go.mod": "go", "Cargo.toml": "rust", "pom.xml": "java", "build.gradle": "java",
@@ -189,6 +227,9 @@ def frontmatter_facts(path: str, text: str, kind: str, vocab: dict, facts: Facts
     if not fields.get("description"):
         facts.add("frontmatter", "finding", path, "description missing or empty",
                   "the product uses the first non-empty content line instead; auto-invocation matches on it")
+    for reason in description_findings(fields.get("description", "")):
+        facts.add("frontmatter", "finding", path, f"description contains {reason}",
+                  "class: injection; the description loads in every session before any invocation")
     for key in fields:
         if key in documented:
             continue
@@ -343,6 +384,14 @@ def tracked(repo: str, pattern: str) -> list[str]:
     return [p for p in out.splitlines() if p]
 
 
+def instruction_files(repo: str) -> list[str]:
+    """The tracked files INSTRUCTION_GLOBS names, sorted and deduplicated."""
+    found: set[str] = set()
+    for pattern in INSTRUCTION_GLOBS:
+        found.update(tracked(repo, pattern))
+    return sorted(found)
+
+
 def read(repo: str, path: str) -> str:
     with open(os.path.join(repo, path), encoding="utf-8", errors="replace") as fh:
         return fh.read()
@@ -454,16 +503,15 @@ def collect(repo: str, scope: str, vocab: dict, run_gates: bool = False) -> tupl
         hook_stdout_facts(settings or {}, lambda n: read(repo, f".claude/hooks/{n}") if f".claude/hooks/{n}" in hook_files else None,
                           vocab, facts)
 
-        instruction_files = (inventory["rule_files"] + inventory["references"] + inventory["hooks"]
-                             + inventory["agents"] + [f".claude/skills/{s}/SKILL.md" for s in inventory["skills"]])
+        scanned = instruction_files(repo)
         hidden_total = 0
-        for path in instruction_files:
+        for path in scanned:
             for no, cps in hidden_characters(read(repo, path)):
                 hidden_total += 1
                 facts.add("hidden-characters", "finding", f"{path}:{no}", f"invisible characters {', '.join(cps)}",
                           "class: injection; review the line in a hex view before trusting it")
         if not hidden_total:
-            facts.add("hidden-characters", "ok", "instruction files", f"{len(instruction_files)} file(s) scanned, none found")
+            facts.add("hidden-characters", "ok", "instruction files", f"{len(scanned)} file(s) scanned, none found")
 
         tooling_keys = tooling_referenced_keys(repo)
         for skill in inventory["skills"]:
