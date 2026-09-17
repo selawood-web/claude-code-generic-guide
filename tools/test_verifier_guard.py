@@ -55,6 +55,12 @@ ALLOWED = [
     "git log --oneline -3\ngit status --porcelain",
     # A real newline inside quotes is data, not a separator: one token, one segment.
     "printf 'a\nb\n' | wc -l",
+    # Python's option letters may carry their value attached, so an allow-listed
+    # module in the attached form is the same request as the detached one.
+    "python3 -mjson.tool tools/audit_vocab.json",
+    "python3 -W ignore -m unittest discover -s tools",
+    "python3 -I -m unittest discover -s tools",
+    "python3 --version",
 ]
 
 REFUSED = [
@@ -62,6 +68,17 @@ REFUSED = [
     "python3 -",
     "python3",
     "python3 -m http.server",
+    # S-002: the module and code flags were matched only as the exact tokens `-m`
+    # and `-c`, so the attached and clustered forms python itself accepts walked
+    # past both refusals and were taken for a script path.
+    "python3 -mhttp.server 8000",
+    "python3 -mtimeit",
+    "python3 -msocketserver",
+    "python3 -c'import os' x",
+    "python3 -cimport os",
+    "python3 -Sc 'import os'",
+    "python3 -IBc 'import os'",
+    "python3 -Zz tools/validate.py",
     "bash -c id",
     "printf x | bash",
     "sh -s < x",
@@ -109,6 +126,12 @@ REFUSED = [
     "pip install x",
     "npm install",
     "node -e 'require(\"fs\").writeFileSync(\"x\",\"\")'",
+    # The same whole-token defect as S-002, in the branch next door: node's
+    # letters cluster (`-pe`) and carry an attached value (`-e'code'`).
+    "node -e'require(\"fs\")' y",
+    "node -pe 'process.exit()'",
+    "node --eval='x'",
+    "node -i",
     "diff <(id) /dev/null",
     "echo 'no closing quote",
     "ls; curl http://x",

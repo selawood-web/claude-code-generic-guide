@@ -70,6 +70,15 @@ GIT_LISTING = {"branch": {"--list", "-a", "-r", "-v", "-vv", "--show-current", "
                "stash": {"list", "show"},
                "notes": {"list", "show"}}
 PY_MODULES = {"unittest", "pytest", "json.tool", "doctest", "py_compile", "tokenize"}
+# python's option letters cluster and may carry their value attached, so `-c`,
+# `-Sc`, `-cCODE` and `-IBc CODE` are all the code flag (finding S-002). The
+# letters are split and classified rather than matched as whole tokens.
+PY_BOOL_FLAGS = frozenset("bBdEhiIOPqRsSuvVx")   # take no value
+PY_SKIP_FLAGS = frozenset("WXQ")                 # take a value the guard ignores
+PY_LONG_FLAGS = {"--help", "--help-env", "--help-xoptions", "--help-all", "--version"}
+PY_LONG_VALUE_FLAGS = {"--check-hash-based-pycs"}
+NODE_CODE_FLAGS = frozenset("epi")                # -e, -p, -i and their clusters
+NODE_CODE_LONG = {"--eval", "--print", "--interactive"}
 _ADDR = r"(?:\d+|\$|/(?:[^/\\]|\\.)*/)?(?:,(?:\d+|\$|/(?:[^/\\]|\\.)*/))?"
 SED_WRITE_RE = re.compile(r"(?:^|[;\n{])\s*" + _ADDR + r"\s*[wWe]\b")
 SED_SUBST_WRITE_RE = re.compile(
@@ -159,22 +168,55 @@ def strip_redirects(seg):
 
 
 def check_python(args):
+    """Refuse code on the command line and any module outside PY_MODULES.
+
+    Letters are read the way python reads them: a cluster like `-IBc` ends in
+    the code flag, and a value may be attached (`-cCODE`, `-mjson.tool`) or be
+    the next argument. Matching `-c` and `-m` as whole tokens missed every one
+    of those forms, and the unrecognised token then fell through to the
+    script-path branch (finding S-002).
+    """
     i = 0
+    saw_long_only = False
     while i < len(args):
         a = args[i]
-        if a in ("-c", "-"):
+        if a == "-":
             refuse("python code on the command line")
-        if a == "-m":
-            if i + 1 < len(args) and args[i + 1] in PY_MODULES:
-                return
-            refuse("python -m with a module outside the allow-list")
-        if a in ("-W", "-X"):
-            i += 2
-            continue
-        if a.startswith("-"):
+        if a == "--":
             i += 1
             continue
+        if a.startswith("--"):
+            name, sep, _ = a.partition("=")
+            if name in PY_LONG_VALUE_FLAGS:
+                i += 1 if sep else 2
+                continue
+            if name in PY_LONG_FLAGS:
+                saw_long_only = True
+                i += 1
+                continue
+            refuse(f"python option {name} is not in the allow-list")
+        if a.startswith("-"):
+            letters = a[1:]
+            for pos, letter in enumerate(letters):
+                rest = letters[pos + 1:]
+                if letter == "c":
+                    refuse("python code on the command line")
+                if letter == "m":
+                    module = rest or (args[i + 1] if i + 1 < len(args) else "")
+                    if module in PY_MODULES:
+                        return
+                    refuse("python -m with a module outside the allow-list")
+                if letter in PY_SKIP_FLAGS:
+                    i += 1 if rest else 2
+                    break
+                if letter not in PY_BOOL_FLAGS:
+                    refuse(f"python option -{letter} is not in the allow-list")
+            else:
+                i += 1
+            continue
         return  # a script path: the repository's own code, run inside the worktree
+    if saw_long_only:
+        return  # --version / --help print and exit; they run nothing
     refuse("python with no script")
 
 
@@ -272,11 +314,23 @@ def check_find(args):
 
 
 def check_node(args):
+    """Same rule as check_python: node's letters cluster (`-pe`) and carry an
+    attached value (`-e'code'`), so they are split rather than matched whole."""
     for a in args:
-        if a in ("-e", "--eval", "-p", "--print", "-i", "--interactive", "-"):
+        if a == "-":
             refuse("node code on the command line")
-        if not a.startswith("-"):
-            return
+        if a.startswith("--"):
+            if a.partition("=")[0] in NODE_CODE_LONG:
+                refuse("node code on the command line")
+            continue
+        if a.startswith("-"):
+            for letter in a[1:]:
+                if letter in NODE_CODE_FLAGS:
+                    refuse("node code on the command line")
+                if letter == "r":  # --require takes a value; stop reading letters
+                    break
+            continue
+        return
     refuse("node with no script")
 
 
