@@ -48,8 +48,11 @@ one — add the keys):
     "CCGG_REF": "<a tag, branch, or 40-hex commit of the guide the owner controls — the pin the hook trusts; a commit is the only pin nobody can move>"
 } }
 ```
-Every future session start then auto-clones the guide if absent and syncs the
-CCGG-owned files.
+All three are required: the hook runs nothing when any is missing, and
+`tools/validate.py` fails the target. Record the same URL in the target's
+`.claude/ccgg-origins` (one per line) so the origin is checked from outside the
+env block. Every future session start then auto-clones the guide if absent and
+syncs the CCGG-owned files.
 
 ### Step 5 — Verify
 - `python3 tools/validate.py` in the target → OK.

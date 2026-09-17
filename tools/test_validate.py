@@ -387,7 +387,13 @@ class CcggEnvTests(unittest.TestCase):
                 self.assertTrue(any("shared temporary" in p for p in validate.ccgg_env_problems({"CCGG_HOME": home})))
 
     def test_tmp_lookalike_ok(self):
-        self.assertEqual(validate.ccgg_env_problems({"CCGG_HOME": "/tmpfs/x"}), [])
+        """/tmpfs is not /tmp: the shared-temp rule matches a path, not a prefix.
+
+        The block is otherwise complete, because CCGG_HOME on its own is now a
+        finding of its own and would mask what this row is here to measure.
+        """
+        env = {"CCGG_HOME": "/tmpfs/x", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
+        self.assertEqual(validate.ccgg_env_problems(env), [])
 
     def test_plain_http(self):
         problems = validate.ccgg_env_problems({"CCGG_REPO": "http://example.org/g.git", "CCGG_REF": "v1"})
@@ -395,6 +401,79 @@ class CcggEnvTests(unittest.TestCase):
 
     def test_empty_and_null_values(self):
         self.assertEqual(validate.ccgg_env_problems({"CCGG_REPO": None, "CCGG_HOME": ""}), [])
+
+    def test_home_without_repo(self):
+        """R-001/S-004: CCGG_HOME alone runs update.sh from a clone nothing verifies."""
+        problems = validate.ccgg_env_problems({"CCGG_HOME": "~/.claude/ccgg-guide"})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("without CCGG_REPO", problems[0])
+
+    def test_home_without_repo_reported_once_not_per_missing_name(self):
+        problems = validate.ccgg_env_problems({"CCGG_HOME": "~/g", "CCGG_REF": "v1"})
+        self.assertEqual(len(problems), 1)
+
+    def test_repo_outside_the_trusted_record(self):
+        """R-003: with a record on disk, an unlisted origin is a finding."""
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://evil.example/g.git", "CCGG_REF": "v1"}
+        problems = validate.ccgg_env_problems(env, origins=["https://example.org/g.git"])
+        self.assertTrue(any("ccgg-origins" in p for p in problems), problems)
+
+    def test_repo_inside_the_trusted_record(self):
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
+        self.assertEqual(validate.ccgg_env_problems(env, origins=["https://example.org/g.git"]), [])
+
+    def test_empty_record_allows_nothing(self):
+        """A record that lists no origin is an allow-list of zero, not of everything."""
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
+        self.assertTrue(any("ccgg-origins" in p for p in validate.ccgg_env_problems(env, origins=[])))
+
+    def test_no_record_is_not_a_hard_failure(self):
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
+        self.assertEqual(validate.ccgg_env_problems(env, origins=None), [])
+
+
+class CcggOriginRecordTests(unittest.TestCase):
+    def _record(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            claude = os.path.join(tmp, ".claude")
+            os.makedirs(claude)
+            with open(os.path.join(claude, "ccgg-origins"), "w", encoding="utf-8") as fh:
+                fh.write(text)
+            return validate.ccgg_origins(tmp)
+
+    def test_absent_record_reads_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertIsNone(validate.ccgg_origins(tmp))
+
+    def test_comments_and_blanks_are_not_origins(self):
+        self.assertEqual(self._record("# the guide\n\n  \n"), [])
+
+    def test_urls_are_stripped_and_kept_in_order(self):
+        self.assertEqual(self._record("  https://a/g.git  \n# note\nhttps://b/g.git\n"),
+                         ["https://a/g.git", "https://b/g.git"])
+
+
+class CcggEnvWarningTests(unittest.TestCase):
+    """R-002/R-003: shapes that work but weaken the trust boundary."""
+
+    GOOD = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
+
+    def test_movable_ref_warns(self):
+        for ref in ("main", "master", "v1", "HEAD", "a" * 39, "a" * 41, "A" * 40, "deadbeef"):
+            with self.subTest(ref=ref):
+                env = dict(self.GOOD, CCGG_REF=ref)
+                warnings = validate.ccgg_env_warnings(env, origins=[env["CCGG_REPO"]])
+                self.assertTrue(any("CCGG_REF" in w for w in warnings), f"{ref}: {warnings}")
+
+    def test_commit_ref_with_a_record_is_silent(self):
+        self.assertEqual(validate.ccgg_env_warnings(self.GOOD, origins=[self.GOOD["CCGG_REPO"]]), [])
+
+    def test_missing_origin_record_warns(self):
+        warnings = validate.ccgg_env_warnings(self.GOOD, origins=None)
+        self.assertTrue(any("ccgg-origins" in w for w in warnings), warnings)
+
+    def test_no_repo_configured_warns_about_nothing(self):
+        self.assertEqual(validate.ccgg_env_warnings({}, origins=None), [])
 
 
 class ImportTargetTests(unittest.TestCase):

