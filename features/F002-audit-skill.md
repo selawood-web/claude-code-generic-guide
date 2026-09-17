@@ -259,6 +259,13 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   when nobody can be asked. The Write tool takes an **absolute** `file_path` and the grant
   was relative, so the run now carries both forms, each naming this run's directory and
   nothing else — [in]
+- 2026-09-17 — The absolute form did not help either, so the guessing stopped and the CLI's
+  own permission code answered it: `Write`'s check calls the rule lookup with the kind
+  `"edit"`, and that kind resolves to the tool name **`Edit`** — a `Write(<path>)` rule is
+  never consulted for the Write tool, nothing matches, and the call falls through to "ask",
+  which headless is a refusal. The run now emits `Edit(<dir>/**)` in both path forms, and
+  the tool set is derived from the skill's own grants rather than from the rules, so naming
+  `Edit` in a rule cannot hand the audit the Edit tool — [in]
 - 2026-09-17 — A probe's answer is repeated by the gate step, because reading it meant
   paging back through the install step every time — [in]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every

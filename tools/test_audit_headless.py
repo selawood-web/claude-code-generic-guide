@@ -93,7 +93,7 @@ class SkillGrantTests(unittest.TestCase):
 class RetargetWriteGrantTests(unittest.TestCase):
     def test_pins_write_to_this_runs_directory(self):
         out = retarget_write_grant(["Read", "Write(CCGG-AUDIT-*/**)"], "CCGG-AUDIT-X/")
-        self.assertEqual(out, ["Read", "Write(CCGG-AUDIT-X/**)"])
+        self.assertEqual(out, ["Read", "Edit(CCGG-AUDIT-X/**)"])
 
     def test_no_write_grant_is_an_error(self):
         with self.assertRaises(HeadlessError):
@@ -123,27 +123,39 @@ class ToolNamesTests(unittest.TestCase):
 
 
 class WriteGrantPathFormTests(unittest.TestCase):
-    """The Write tool takes an absolute path; a relative grant never matches one."""
+    """The Write tool asks for `Edit` rules, and takes an absolute path.
+
+    Read from the CLI's own permission code after two probe runs watched the
+    orchestrator's only write refused with nothing in the grant set to match it.
+    """
 
     GRANTS = ["Read", "Write(CCGG-AUDIT-*/**)"]
 
-    def test_both_forms_are_granted_when_the_root_is_known(self):
+    def test_the_rule_is_an_edit_rule_because_that_is_what_write_consults(self):
         out = retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X", "/home/runner/work/r/r")
-        self.assertIn("Write(CCGG-AUDIT-X/**)", out)
-        self.assertIn("Write(//home/runner/work/r/r/CCGG-AUDIT-X/**)", out)
+        self.assertIn("Edit(CCGG-AUDIT-X/**)", out)
+        self.assertIn("Edit(//home/runner/work/r/r/CCGG-AUDIT-X/**)", out)
+        self.assertFalse([g for g in out if g.startswith("Write(")],
+                         "a Write rule is never consulted for the Write tool")
 
     def test_neither_form_reaches_outside_this_run_s_directory(self):
         for grant in retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X", "/repo"):
-            if grant.startswith("Write("):
+            if grant.startswith("Edit("):
                 self.assertTrue(grant.endswith("CCGG-AUDIT-X/**)"), grant)
 
     def test_without_a_root_the_relative_form_stands_alone(self):
         out = retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X")
-        self.assertEqual([g for g in out if g.startswith("Write")], ["Write(CCGG-AUDIT-X/**)"])
+        self.assertEqual([g for g in out if g.startswith("Edit")], ["Edit(CCGG-AUDIT-X/**)"])
 
-    def test_the_tool_set_still_names_write_once(self):
+    def test_the_rule_does_not_hand_back_the_edit_tool(self):
+        # The run denies Edit outright. A rule that names it must not put it in
+        # the tool set, or the audit could rewrite the tree it is auditing.
         names = tool_names(retarget_write_grant(self.GRANTS, "d", "/x"))
-        self.assertEqual(names.count("Write"), 1)
+        self.assertNotIn("Edit", names)
+
+    def test_the_tool_set_comes_from_the_skill_not_from_the_rules(self):
+        # Two different questions: what the run has, and what it may do with it.
+        self.assertIn("Write", tool_names(self.GRANTS))
 
 
 class OrchestratorPromptTests(unittest.TestCase):

@@ -419,6 +419,11 @@ Measured again on 2026-09-17, by a probe that spawned the verifier for about a d
 - **`isolation: worktree` appears to be honoured too.** `git status --porcelain` came back
   empty, which the main checkout could not have produced — the report directory is
   untracked there. Indirect, but it is evidence rather than an assumption.
+- **A `Write(<path>)` permission rule does nothing.** The Write tool's check asks the rule
+  lookup for the kind `"edit"`, and that kind resolves to the tool name `Edit`, so the run
+  grants `Edit(<report dir>/**)` — in both the relative and the `//` absolute form, because
+  the tool takes an absolute `file_path`. The tool set is derived from the skill's grants
+  and not from the rules, so the `Edit` tool stays out of the run.
 - **The guard now approves, not merely permits.** Headless there is no prompt to answer and
   the skill grants only its four report scripts, so every reproduction command the verifier
   needs was refused before it ran. The hook returns a PreToolUse `allow` for what its

@@ -116,18 +116,22 @@ def skill_grants(text: str) -> list[str]:
 def retarget_write_grant(grants: list[str], report_dir: str, root: str = "") -> list[str]:
     """Pin the skill's report-directory Write grant to this run's actual directory.
 
-    Two forms, because the Write tool takes an absolute `file_path` and a
-    relative pattern never matched one: a probe run watched the orchestrator's
-    only write refused with "this session has no approval surface", which is
-    what a grant that does not match looks like when nobody can be asked. The
-    `//` form is the absolute pattern; the relative one stays for a run whose
-    cwd is the anchor. Neither widens the scope — both name this run's own
-    directory and nothing else.
+    Expressed as `Edit(...)` rules, which is what the Write tool actually asks
+    for. Read from the CLI's own code (2.1.273) after two probe runs watched the
+    orchestrator's only write refused: `Write`'s permission check calls the rule
+    lookup with the kind `"edit"`, and that kind resolves to the tool name
+    `Edit` — so a `Write(<path>)` rule is never consulted, nothing matches, and
+    the call falls through to "ask", which headless means denied.
+
+    Both path forms are emitted because the Write tool takes an absolute
+    `file_path` while the pattern may be anchored at the working directory.
+    Neither widens the scope: both name this run's own directory and nothing
+    else, and the `Edit` tool itself stays out of the run's tool set.
     """
     directory = report_dir.rstrip("/")
-    pinned = [f"Write({directory}/**)"]
+    pinned = [f"Edit({directory}/**)"]
     if root:
-        pinned.append(f"Write(//{os.path.join(root, directory).lstrip('/')}/**)")
+        pinned.append(f"Edit(//{os.path.join(root, directory).lstrip('/')}/**)")
     out, replaced = [], False
     for grant in grants:
         if WRITE_GRANT_RE.fullmatch(grant):
@@ -154,6 +158,8 @@ def tool_names(grants: list[str]) -> list[str]:
     for grant in grants:
         name = grant.split("(", 1)[0].strip()
         name = TOOL_ALIASES.get(name, name)
+        if name in DENIED_TOOLS:
+            continue  # a grant that names a denied tool must not hand it back
         if name and name not in names:
             names.append(name)
     if not names:
@@ -184,7 +190,7 @@ def orchestrator_prompt(skill_text: str, scope: str, report_dir: str) -> str:
 
 def build_command(agents_json: str, prompt_file: str, grants: list[str], scope: str,
                   report_dir: str, max_turns: int, budget_usd: float,
-                  model: str | None = None) -> list[str]:
+                  model: str | None = None, tools: list[str] | None = None) -> list[str]:
     """The argv for the headless run."""
     # The prompt is the value of -p, not a trailing positional. Two reasons, both
     # learned from a run that failed in seconds: -p takes the prompt as its
@@ -194,12 +200,13 @@ def build_command(agents_json: str, prompt_file: str, grants: list[str], scope: 
     # last list flag.
     return _command(
         f"Audit this repository at HEAD. Scope: {scope}. Report directory: {report_dir}.",
-        agents_json, prompt_file, grants, str(max_turns), str(budget_usd), model,
+        agents_json, prompt_file, grants, str(max_turns), str(budget_usd), model, tools,
     )
 
 
 def _command(prompt: str, agents_json: str, prompt_file: str, grants: list[str],
-             max_turns: str, budget_usd: str, model: str | None) -> list[str]:
+             max_turns: str, budget_usd: str, model: str | None,
+             tools: list[str] | None = None) -> list[str]:
     """Every flag both the audit and the tool probe share, assembled once.
 
     One function so the probe cannot answer a question about a command nobody
@@ -209,7 +216,7 @@ def _command(prompt: str, agents_json: str, prompt_file: str, grants: list[str],
         "claude",
         "-p", prompt,
         *ISOLATION,
-        "--tools", ",".join(tool_names(grants)),
+        "--tools", ",".join(tools if tools else tool_names(grants)),
         "--agents", agents_json,
         "--append-system-prompt-file", prompt_file,
         "--permission-prompts", "none",  # nobody is here to answer one
@@ -350,7 +357,7 @@ PROBE_BUDGET_USD = 0.50
 
 
 def probe_command(agents_json: str, prompt_file: str, grants: list[str],
-                  model: str | None = None) -> list[str]:
+                  model: str | None = None, tools: list[str] | None = None) -> list[str]:
     """The same run, one turn, asking only what tools it was given.
 
     A run that spawns no subagent and reports no Agent tool leaves one question
@@ -359,7 +366,7 @@ def probe_command(agents_json: str, prompt_file: str, grants: list[str],
     identical — change the real command and this changes with it.
     """
     return _command(PROBE_PROMPT, agents_json, prompt_file, grants, "1",
-                    str(PROBE_BUDGET_USD), model)
+                    str(PROBE_BUDGET_USD), model, tools)
 
 
 VERIFIER_PROBE_BUDGET_USD = 1.50
@@ -418,7 +425,8 @@ GUARD_PROBE_SYSTEM_PROMPT = (
 
 
 def probe_verifier_command(agents_json: str, prompt_file: str, grants: list[str],
-                           model: str | None = None, report_dir: str = "") -> list[str]:
+                           model: str | None = None, report_dir: str = "",
+                           tools: list[str] | None = None) -> list[str]:
     """The guard probe's argv: the audit's own flags and the audit's own grants.
 
     The first version of this probe widened Bash so that a refusal could only
@@ -429,7 +437,7 @@ def probe_verifier_command(agents_json: str, prompt_file: str, grants: list[str]
     """
     return _command(verifier_probe_prompt(guard_probe_marker(), report_dir), agents_json,
                     prompt_file, list(grants), str(VERIFIER_PROBE_TURNS),
-                    str(VERIFIER_PROBE_BUDGET_USD), model)
+                    str(VERIFIER_PROBE_BUDGET_USD), model, tools)
 
 
 def guard_probe_marker() -> str:
@@ -510,7 +518,9 @@ def main(argv: list[str]) -> int:
             raise HeadlessError(f"--guard {args.guard} does not exist")
         with open(os.path.join(root, SKILL_PATH), encoding="utf-8") as fh:
             skill_text = fh.read()
-        grants = retarget_write_grant(skill_grants(skill_text), report_dir, root)
+        declared = skill_grants(skill_text)
+        exposed = tool_names(declared)        # what the run has: the skill's own tools
+        grants = retarget_write_grant(declared, report_dir, root)  # what it may do with them
         definitions = audit_agents_json.build(
             root, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, args.guard, None
         )
@@ -536,7 +546,7 @@ def main(argv: list[str]) -> int:
         print("audit-headless: pick one probe, not both", file=sys.stderr)
         return 2
     if args.probe_tools:
-        command = probe_command(agents_json, prompt_file, grants, args.model)
+        command = probe_command(agents_json, prompt_file, grants, args.model, exposed)
     elif args.probe_verifier:
         marker = guard_probe_marker()
         try:
@@ -548,10 +558,10 @@ def main(argv: list[str]) -> int:
         with open(probe_prompt_file, "w", encoding="utf-8") as fh:
             fh.write(GUARD_PROBE_SYSTEM_PROMPT)
         command = probe_verifier_command(agents_json, probe_prompt_file, grants, args.model,
-                                         report_dir)
+                                         report_dir, exposed)
     else:
         command = build_command(agents_json, prompt_file, grants, scope, report_dir,
-                                args.max_turns, args.budget_usd, args.model)
+                                args.max_turns, args.budget_usd, args.model, exposed)
     # The record of what ran, with the agents JSON named rather than inlined: it is
     # already beside this file, and a 40 KB argument helps nobody read the command.
     readable = [("@headless/agents.json" if a is agents_json else a) for a in command]
