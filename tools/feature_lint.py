@@ -24,10 +24,22 @@ a definition cannot reach `shipped` while any of them still reads [open]. That
 is the difference between an idea consciously cut and one quietly forgotten —
 after the fact, the two are indistinguishable without this.
 
+Shipping is not where the ledger ends. A live feature keeps collecting ideas,
+and the file is append-only, so [next] carries the ones that arrive after
+`shipped` and belong to a later definition. It is listed, never failed — and
+it is an error before shipping, where [open] is the honest word.
+
+`features/README.md` is the index of those definitions, and it is derived: its
+table is rendered from the same frontmatter this script already parses. Kept by
+hand it conflicted on every pair of parallel definition branches — both append a
+row to the same table — and its `status` column drifted from the files it
+describes. Generated, it can do neither.
+
 Usage:
   python3 tools/feature_lint.py                    # every features/*.md
   python3 tools/feature_lint.py features/F001-x.md # named files
   python3 tools/feature_lint.py --strict           # gaps fail in drafts too
+  python3 tools/feature_lint.py --write-index      # regenerate features/README.md
 """
 from __future__ import annotations
 
@@ -69,8 +81,21 @@ EMPTY_ANSWER_RE = re.compile(r"^(none|none yet|n/a|nothing)\.?$", re.I)
 # The ledger's disposition tag. Bracketed on purpose: "in" as a bare word
 # appears in half the sentences people write, and a tag that can be confused
 # with prose is a tag that silently passes when it should fail.
-DISPOSITION_RE = re.compile(r"\[(open|in|deferred|dropped)\]", re.I)
-NEEDS_REASON = ("deferred", "dropped")
+#
+# An entry may carry its own words in brackets too — [accepted], [added],
+# [decided: fold], [verified] — as long as one canonical tag is also present.
+# This is a `.search`, so position does not matter and the extra brackets are
+# simply not seen. The house style is canonical first: `[in] [accepted] ...`,
+# so the word a reader scans for is the leftmost one.
+DISPOSITION_RE = re.compile(r"\[(open|in|next|deferred|dropped)\]", re.I)
+DISPOSITION_LIST = "open|in|next|deferred|dropped"
+NEEDS_REASON = ("next", "deferred", "dropped")
+
+# `[next]` is the post-ship disposition: raised after the definition shipped,
+# and belonging to a later one. Before shipping there is no such thing — an
+# idea not yet decided is [open], and letting a live definition say [next]
+# instead would be the close-out rule dodged by spelling.
+PRE_SHIP_STATUSES = ("draft", "ready", "building")
 
 
 class Finding(NamedTuple):
@@ -249,7 +274,7 @@ def lint_text(text: str, filename: str = "") -> list[Finding]:
             tag = DISPOSITION_RE.search(item)
             if not tag:
                 findings.append(
-                    Finding("gap", no, f"idea has no [open|in|deferred|dropped] tag: {item[:50]}")
+                    Finding("gap", no, f"idea has no [{DISPOSITION_LIST}] tag: {item[:50]}")
                 )
                 continue
             disposition = tag.group(1).lower()
@@ -262,6 +287,14 @@ def lint_text(text: str, filename: str = "") -> list[Finding]:
             if disposition == "open" and status == "shipped":
                 findings.append(
                     Finding("error", no, f"status 'shipped' with an undecided idea: {item[:50]}")
+                )
+            # The other half of the close-out. A shipped definition keeps
+            # receiving ideas and the file is append-only, so they need a legal
+            # home — but only after shipping. Used earlier, [next] would be
+            # [open] with the blocking filed off.
+            if disposition == "next" and status in PRE_SHIP_STATUSES:
+                findings.append(
+                    Finding("error", no, f"status '{status}' with a [next] idea — use [open] until it ships: {item[:50]}")
                 )
 
     return sorted(findings, key=lambda f: (f.line, f.level))
@@ -280,6 +313,95 @@ def lint_file(path: str, strict: bool) -> tuple[list[Finding], bool]:
     return findings, failed
 
 
+INDEX_PATH = os.path.join("features", "README.md")
+INDEX_COLUMNS = ("id", "title", "status", "owner", "target")
+DEFAULT_INDEX_HEADER = """# Feature Definitions
+
+Definitions of what we are building, written by the `/feature` skill and checked by
+`tools/feature_lint.py`. Schema and lifecycle live with the skill.
+"""
+
+
+def index_header(existing: str) -> str:
+    """Everything the index says before its table, kept exactly as written.
+
+    The prose is a human's; only the table is derived. Splitting on the header
+    row rather than rewriting it means a team can explain their own conventions
+    up top and never have that explanation regenerated away.
+    """
+    head = existing.split("\n| Id |", 1)[0].rstrip() if "\n| Id |" in existing else ""
+    return (head or DEFAULT_INDEX_HEADER.rstrip()) + "\n"
+
+
+def cell(value: str) -> str:
+    """A frontmatter value made safe to sit in a markdown table cell."""
+    return value.replace("|", "\\|").strip()
+
+
+def render_index(paths: list[str], existing: str = "") -> str:
+    """The index as the definitions themselves say it should read.
+
+    Derived data maintained by hand drifts and, worse, conflicts: every new
+    definition appends to the same table, so two definition branches collide by
+    construction rather than by bad luck. Rendering it from the frontmatter the
+    linter already parses removes both — nobody edits the rows, so nobody
+    conflicts over them, and the table cannot disagree with its own sources.
+    """
+    rows = []
+    for path in paths:
+        fields = frontmatter_of(path)
+        ident = fields.get("id", "") or os.path.basename(path)
+        link = f"[{cell(ident)}]({os.path.basename(path)})"
+        rest = " | ".join(cell(fields.get(key, "")) for key in INDEX_COLUMNS[1:])
+        # Keyed on the id, not on the rendered line: sorting whole rows would
+        # let a retitled definition move in the table without changing id.
+        rows.append((ident.lower(), f"| {link} | {rest} |"))
+
+    return "\n".join([
+        index_header(existing),
+        "| Id | Title | Status | Owner | Target |",
+        "|----|-------|--------|-------|--------|",
+        *[row for _, row in sorted(rows)],
+        "",
+    ])
+
+
+def frontmatter_of(path: str) -> dict[str, str]:
+    """The frontmatter of one definition, with the file closed behind us."""
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        return parse_frontmatter(handle.read())[0]
+
+
+def read_index() -> str:
+    try:
+        with open(INDEX_PATH, encoding="utf-8", errors="replace") as handle:
+            return handle.read()
+    except FileNotFoundError:
+        return ""
+
+
+def check_index(paths: list[str]) -> list[Finding]:
+    """One finding if the committed index is not what the frontmatter renders.
+
+    Reported against the index, not against any one definition — the drift
+    belongs to the table. It is a gap while every definition is still a draft
+    and an error once any of them has left it, which matches how the rest of
+    the linter treats a file that has stopped being a sketch.
+    """
+    if not paths:
+        return []
+    want = render_index(paths, read_index())
+    if read_index() == want:
+        return []
+    statuses = [frontmatter_of(p).get("status", "").lower() for p in paths]
+    level = "gap" if all(s in ("", "draft") for s in statuses) else "error"
+    return [Finding(
+        level, 1,
+        "features/README.md does not match the definitions' frontmatter — "
+        "run `python3 tools/feature_lint.py --write-index` (the table is generated; do not hand-edit it)",
+    )]
+
+
 def default_paths() -> list[str]:
     return [
         p for p in sorted(glob.glob("features/*.md"))
@@ -289,9 +411,20 @@ def default_paths() -> list[str]:
 
 def main(argv: list[str]) -> int:
     strict = "--strict" in argv
-    paths = [a for a in argv if not a.startswith("-")] or default_paths()
+    named = [a for a in argv if not a.startswith("-")]
+    paths = named or default_paths()
     if not paths:
         print("feature-lint: no feature definitions found (features/*.md)")
+        return 0
+
+    if "--write-index" in argv:
+        rendered = render_index(default_paths(), read_index())
+        if rendered == read_index():
+            print(f"feature-lint: {INDEX_PATH} already matches the frontmatter")
+            return 0
+        with open(INDEX_PATH, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+        print(f"feature-lint: wrote {INDEX_PATH} from {len(default_paths())} definition(s)")
         return 0
 
     failures = 0
@@ -309,6 +442,14 @@ def main(argv: list[str]) -> int:
             print(f"{path}: draft with {len(findings)} gap(s) — allowed while status is draft")
         else:
             print(f"{path}: OK")
+    # Only on a whole-repo run: an index cannot be rendered from a subset of
+    # the definitions, and checking it against one would report false drift.
+    if not named:
+        for level, line, message in check_index(paths):
+            print(f"{INDEX_PATH}:{line}: {level}: {message}")
+            if level == "error" or strict:
+                failures += 1
+
     print(f"feature-lint: {len(paths)} file(s), {failures} failing")
     return 1 if failures else 0
 

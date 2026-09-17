@@ -70,6 +70,7 @@ here in the turn it is raised, each carrying a bracketed disposition.
 - [date] — [the idea] — [deferred] until [what has to happen first]
 - [date] — [the idea] — [dropped] [why]
 - [date] — [the idea] — [open]
+- [date] — [an idea raised after this shipped] — [next] [which later definition takes it]
 ```
 
 ## Field rules
@@ -97,11 +98,55 @@ idea survives all three.
 | `[in]` | Folded into the work | The Scope and Acceptance criteria above should now reflect it. |
 | `[deferred]` | Real, but not now | Must say what it waits on, so it can be found again. |
 | `[dropped]` | Not doing it | Must say why — that reason is the answer when the idea returns. |
+| `[next]` | Raised after shipping; belongs to a later definition | Allowed **only** on `shipped` and `dropped`. Must name where it goes. An error before shipping, where the honest word is `[open]`. |
 
 Capture is not a decision. Writing `[open]` in the turn an idea is raised takes seconds
 and never interrupts the build; the deciding happens at the next natural pause. What is
 not allowed is the third option people actually take — nodding at the idea in
 conversation and moving on, which is indistinguishable from forgetting it.
+
+### Shipping does not close the ledger
+
+`[open]` blocks `shipped` because an idea nobody decided before shipping is the failure
+this ledger exists to catch. But a live feature keeps receiving ideas, and this file is
+append-only, so they have to land somewhere legal. That is `[next]`: it says the idea is
+real, it is not this definition's, and here is the one that takes it. Before shipping it
+is an error — a `draft` writing `[next]` is `[open]` with the blocking filed off, and the
+linter says so.
+
+An idea raised after shipping and then *built* is not `[next]`. It is `[in]`, like any
+other change folded into the work, and Scope and Acceptance criteria are updated with it.
+`[next]` is for what is going somewhere else.
+
+### Your own words, alongside the canonical tag
+
+Real ledgers record decisions in a richer vocabulary than five words — `[accepted]`,
+`[added]`, `[decided: fold]`, `[reversed the 2026-03-01 drop]`. Keep them. An entry may
+carry any bracketed words it likes **as long as one canonical tag is also there**. House
+style is canonical first, so the word a reader scans down the column for is the leftmost:
+
+```
+- 2026-03-04 — Owner asked for reactions — [in] [added] `comment_reactions`, a fixed set,
+  mirrored web ↔ server with a selftest.
+```
+
+The linter searches for the canonical tag anywhere in the entry and ignores the rest.
+
+### Verification records live in the ledger
+
+"Verified on prod", and its honest companion "not exercised from this seat", are not
+ideas — but they are exactly what a ledger should hold, and a separate section would be
+one more thing to forget. They stay here as an `[in]` entry, with the verification detail
+as the reason:
+
+```
+- 2026-03-06 — [in] Shipped in three PRs (`abc1234` … ), each verified on prod.
+  [verified] the anchor rule, the size and count checks, the browser spec.
+  [not exercised from this seat] the email arriving (the sandbox org has one user).
+```
+
+Say what was *not* exercised as plainly as what was. A verification record that only
+lists successes is a claim, not a record.
 
 ## Status lifecycle
 
@@ -110,7 +155,7 @@ conversation and moving on, which is indistinguishable from forgetting it.
 | `draft` | Being written; gaps expected | Created |
 | `ready` | Buildable as written | Linter clean and no `blocks: yes` question remains |
 | `building` | Implementation in progress | Work started; scope changes are edits to this file, in the same commit |
-| `shipped` | Live, outcome being measured | Acceptance criteria all verified in a deployed environment, and no idea left `[open]` — the close-out the linter enforces |
+| `shipped` | Live, outcome being measured | Acceptance criteria all verified in a deployed environment, and no idea left `[open]` — the close-out the linter enforces. Ideas that arrive afterwards are `[next]`, or `[in]` if they get built. |
 | `dropped` | Not being built | Reason recorded in Summary; the file stays as the record |
 
 ## Sizing — when a definition is not warranted

@@ -1368,6 +1368,18 @@ def check_features() -> None:
             if feature_lint.counts_as_failure(finding, status, strict=False):
                 fail(f"{path}:{finding.line}: {finding.message}")
 
+    # The index is derived from the same frontmatter. Checked here rather than
+    # only in the linter's own main() because this is what CI runs.
+    if hasattr(feature_lint, "check_index"):
+        cwd = os.getcwd()
+        os.chdir(ROOT)
+        try:
+            for finding in feature_lint.check_index(feature_lint.default_paths()):
+                if finding.level == "error":
+                    fail(f"{feature_lint.INDEX_PATH}: {finding.message}")
+        finally:
+            os.chdir(cwd)
+
 
 
 # --- the validator's check on itself -----------------------------------------

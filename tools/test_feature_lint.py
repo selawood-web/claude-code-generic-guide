@@ -4,14 +4,22 @@
 Run: python -m unittest discover -s tools -p "test_*.py"
 """
 
+import os
+import tempfile
 import unittest
+from contextlib import contextmanager
 
 from feature_lint import (
     Finding,
+    PRE_SHIP_STATUSES,
     bullets,
+    check_index,
     counts_as_failure,
+    default_paths,
     lint_text,
     parse_frontmatter,
+    read_index,
+    render_index,
     split_sections,
     strip_code_blocks,
 )
@@ -198,7 +206,7 @@ class LedgerTests(unittest.TestCase):
     # every idea carries a decision, so nothing sits in the file undecided by accident
     def test_untagged_idea_is_a_gap(self):
         text = COMPLETE.replace("Also export the credit notes — [in]", "Also export the credit notes")
-        self.assertTrue(any("no [open|in|deferred|dropped] tag" in m for m in messages(text)))
+        self.assertTrue(any("no [open|in|next|deferred|dropped] tag" in m for m in messages(text)))
 
     # a cut without a reason is the same as a forgotten one, six months later
     def test_dropped_without_reason_is_a_gap(self):
@@ -238,7 +246,7 @@ class LedgerTests(unittest.TestCase):
         text = COMPLETE.replace(
             "Also export the credit notes — [in]", "Also export the credit notes, in the same file"
         )
-        self.assertTrue(any("no [open|in|deferred|dropped] tag" in m for m in messages(text)))
+        self.assertTrue(any("no [open|in|next|deferred|dropped] tag" in m for m in messages(text)))
 
     def test_missing_ledger_section_is_an_error(self):
         text = COMPLETE.split("## Ideas and changes")[0]
@@ -247,6 +255,221 @@ class LedgerTests(unittest.TestCase):
             any(f.level == "error" and "Ideas and changes" in f.message for f in findings)
         )
 
+
+
+def with_status(status):
+    return COMPLETE.replace("status: ready", f"status: {status}")
+
+
+def with_ledger(entry, status="ready"):
+    """COMPLETE with its ledger replaced by one entry."""
+    head = with_status(status).split("## Ideas and changes")[0]
+    return head + "## Ideas and changes\n" + entry + "\n"
+
+
+class PostShipLedgerTests(unittest.TestCase):
+    """[next] — the disposition for an idea raised after the definition shipped.
+
+    Before this there was no tag that was both truthful and passing for such an
+    idea: [open] is an error at `shipped`, and leaving it untagged is a gap. So
+    authors took the third option, which is the one the ledger exists to stop.
+    """
+
+    # happy path — the case the tag was added for
+    def test_next_passes_on_shipped(self):
+        text = with_ledger("- 2026-09-16 — reactions on a message — [next] F011 takes it", "shipped")
+        self.assertEqual(messages(text), [])
+
+    # edge: `dropped` is terminal too — a dropped definition may still collect ideas
+    def test_next_passes_on_dropped(self):
+        text = with_ledger("- 2026-09-16 — reactions — [next] F011 takes it", "dropped")
+        self.assertEqual([f for f in lint_text(text, "F009-x.md") if f.level == "error"], [])
+
+    # edge: like [deferred] and [dropped], it must say where the idea went
+    def test_next_needs_a_reason(self):
+        text = with_ledger("- 2026-09-16 — reactions — [next]", "shipped")
+        self.assertTrue(any("gives no reason" in m for m in messages(text)))
+
+    # edge: tag matching stays case-insensitive across the new word
+    def test_next_case_insensitive(self):
+        text = with_ledger("- 2026-09-16 — reactions — [NEXT] F011", "shipped")
+        self.assertEqual(messages(text), [])
+
+    # failure mode — before shipping, [next] is [open] with the blocking filed off
+    def test_next_is_an_error_before_shipping(self):
+        for status in PRE_SHIP_STATUSES:
+            with self.subTest(status=status):
+                text = with_ledger("- 2026-09-16 — reactions — [next] F011 takes it", status)
+                self.assertTrue(any("use [open] until it ships" in m for m in messages(text)))
+
+    # failure mode — and it fails the run, including in a draft, where gaps are forgiven
+    def test_next_in_draft_actually_fails_the_run(self):
+        text = with_ledger("- 2026-09-16 — reactions — [next] F011 takes it", "draft")
+        errors = [f for f in lint_text(text, "F009-x.md") if f.level == "error"]
+        self.assertTrue(any(counts_as_failure(f, "draft", strict=False) for f in errors))
+
+    # the close-out itself is untouched — the whole point of adding a tag rather
+    # than loosening the rule that catches an idea shipped over
+    def test_open_at_shipped_still_errors(self):
+        text = with_ledger("- 2026-09-16 — a thought — [open]", "shipped")
+        self.assertTrue(any("undecided idea" in m for m in messages(text)))
+
+
+class FreeTextBracketTests(unittest.TestCase):
+    """An entry may carry its own words in brackets beside the canonical tag.
+
+    Real ledgers record decisions in a richer vocabulary than five words. The
+    tag is found by search, so the extra brackets are simply not seen — but one
+    canonical tag still has to be there.
+    """
+
+    def test_canonical_first_then_free_text(self):
+        text = with_ledger("- 2026-09-16 — reactions — [in] [added] a fixed set, selftested")
+        self.assertEqual(messages(text), [])
+
+    def test_free_text_first_then_canonical(self):
+        text = with_ledger("- 2026-09-16 — reactions — [added] a fixed set — [in]")
+        self.assertEqual(messages(text), [])
+
+    def test_bracketed_phrase_is_not_a_tag(self):
+        text = with_ledger("- 2026-09-16 — seen marks — [in] [reversed the 2026-09-15 drop] ticks")
+        self.assertEqual(messages(text), [])
+
+    def test_verification_record_passes(self):
+        text = with_ledger(
+            "- 2026-09-16 — [in] Shipped in three PRs, each verified on prod. "
+            "[verified] the anchor rule. [not exercised from this seat] the email.",
+            "shipped",
+        )
+        self.assertEqual(messages(text), [])
+
+    # failure mode — free text alone is still not a disposition
+    def test_free_text_without_canonical_is_still_a_gap(self):
+        text = with_ledger("- 2026-09-16 — reactions — [accepted] a fixed set")
+        self.assertTrue(any("no [open|in|next|deferred|dropped] tag" in m for m in messages(text)))
+
+
+@contextmanager
+def repo(definitions, index=None):
+    """A throwaway repo root with a features/ directory, as the linter sees it."""
+    with tempfile.TemporaryDirectory() as root:
+        os.mkdir(os.path.join(root, "features"))
+        for name, text in definitions.items():
+            with open(os.path.join(root, "features", name), "w", encoding="utf-8") as fh:
+                fh.write(text)
+        if index is not None:
+            with open(os.path.join(root, "features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write(index)
+        was = os.getcwd()
+        os.chdir(root)
+        try:
+            yield root
+        finally:
+            os.chdir(was)
+
+
+def named(ident, title, status="draft"):
+    text = with_status(status)
+    text = text.replace("id: F009", f"id: {ident}")
+    text = text.replace("title: Bulk invoice export", f"title: {title}")
+    return text.replace("# F009 —", f"# {ident} —")
+
+
+class IndexRenderTests(unittest.TestCase):
+    """features/README.md is derived data, rendered from the frontmatter.
+
+    Hand-maintained it conflicted by construction — every new definition appends
+    a row to the same table — and its status column drifted from the files it
+    describes. Generated, it can do neither.
+    """
+
+    def test_two_definitions_render_two_rows(self):
+        with repo({"F002-b.md": named("F002", "Second"), "F001-a.md": named("F001", "First")}):
+            out = render_index(default_paths())
+        rows = [line for line in out.splitlines() if line.startswith("| [")]
+        self.assertEqual(len(rows), 2)
+        self.assertIn("[F001](F001-a.md)", rows[0])
+        self.assertIn("[F002](F002-b.md)", rows[1])
+
+    def test_rows_sort_by_id_not_title(self):
+        with repo({"F001-a.md": named("F001", "Zebra"), "F002-b.md": named("F002", "Aardvark")}):
+            out = render_index(default_paths())
+        rows = [line for line in out.splitlines() if line.startswith("| [")]
+        self.assertIn("F001", rows[0])
+        self.assertIn("F002", rows[1])
+
+    def test_header_paragraph_kept_verbatim(self):
+        header = "# Our Features\n\nHouse rule: every definition names an owner.\n"
+        existing = header + "\n| Id | Title | Status | Owner | Target |\n|--|--|--|--|--|\n| stale |\n"
+        with repo({"F001-a.md": named("F001", "First")}, index=existing):
+            out = render_index(default_paths(), read_index())
+        self.assertTrue(out.startswith("# Our Features"))
+        self.assertIn("House rule: every definition names an owner.", out)
+        self.assertNotIn("stale", out)
+
+    def test_missing_index_gets_a_default_header(self):
+        with repo({"F001-a.md": named("F001", "First")}):
+            out = render_index(default_paths(), read_index())
+        self.assertTrue(out.startswith("# Feature Definitions"))
+
+    def test_pipe_in_a_title_is_escaped(self):
+        with repo({"F001-a.md": named("F001", "Plan | Elevation")}):
+            out = render_index(default_paths())
+        row = next(line for line in out.splitlines() if line.startswith("| ["))
+        self.assertIn("Plan \\| Elevation", row)
+        self.assertEqual(row.count(" | "), 4)
+
+    def test_render_is_stable(self):
+        with repo({"F001-a.md": named("F001", "First")}):
+            once = render_index(default_paths(), read_index())
+            with open(os.path.join("features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write(once)
+            self.assertEqual(render_index(default_paths(), read_index()), once)
+            self.assertEqual(check_index(default_paths()), [])
+
+
+class IndexDriftTests(unittest.TestCase):
+    # failure mode — a status hand-copied into the index and left behind
+    def test_stale_status_in_the_index_fails(self):
+        with repo({"F001-a.md": named("F001", "First", status="shipped")}):
+            fresh = render_index(default_paths(), read_index())
+            with open(os.path.join("features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write(fresh.replace("| shipped |", "| draft |"))
+            findings = check_index(default_paths())
+            self.assertEqual([f.level for f in findings], ["error"])
+            self.assertIn("--write-index", findings[0].message)
+
+            with open(os.path.join("features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write(render_index(default_paths(), read_index()))
+            self.assertEqual(check_index(default_paths()), [])
+
+    # edge: while everything is still a draft, drift is a gap like any other
+    def test_drift_is_only_a_gap_while_all_drafts(self):
+        with repo({"F001-a.md": named("F001", "First", status="draft")}):
+            with open(os.path.join("features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write("# Feature Definitions\n\n| Id | Title | Status | Owner | Target |\n")
+            self.assertEqual([f.level for f in check_index(default_paths())], ["gap"])
+
+    # edge: an added definition is drift too, which is the conflict case itself
+    def test_a_definition_missing_from_the_index_fails(self):
+        with repo({"F001-a.md": named("F001", "First", status="ready")}):
+            with open(os.path.join("features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write(render_index(default_paths(), read_index()))
+            with open(os.path.join("features", "F002-b.md"), "w", encoding="utf-8") as fh:
+                fh.write(named("F002", "Second", status="ready"))
+            self.assertEqual([f.level for f in check_index(default_paths())], ["error"])
+
+    # edge: no definitions at all is not drift — a project may simply have none
+    def test_no_definitions_is_not_drift(self):
+        with repo({}):
+            self.assertEqual(check_index(default_paths()), [])
+
+    # README.md is the index, never itself a definition to be linted
+    def test_readme_is_not_linted_as_a_definition(self):
+        with repo({"F001-a.md": named("F001", "First")}):
+            with open(os.path.join("features", "README.md"), "w", encoding="utf-8") as fh:
+                fh.write("# Feature Definitions\n")
+            self.assertNotIn("README.md", " ".join(default_paths()))
 
 class SeverityPolicyTests(unittest.TestCase):
     gap = Finding("gap", 1, "gap")
