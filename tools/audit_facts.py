@@ -32,8 +32,14 @@ import datetime as _dt
 import json
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import audit_env  # noqa: E402  (same directory, installed together)
 from dataclasses import asdict, dataclass
 
 HIDDEN_RE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\u00ad\u2066-\u2069]")
@@ -357,13 +363,37 @@ def tooling_referenced_keys(repo: str) -> set[str]:
     return keys
 
 
-def run_gate(repo: str, label: str, cmd: list[str], facts: Facts) -> None:
+def run_gate(repo: str, label: str, cmd: list[str], facts: Facts, execute: bool = False) -> None:
+    """Run the audited tree's own gate command, or record that it was not run.
+
+    Two things this function is careful about, both audit finding S-005.
+
+    It executes code out of the checkout, so it does not do that by default: the
+    caller passes execute=True, which tools/audit_facts.py only does for
+    --run-gates. Pointing the audit at a repository somebody handed you should
+    not run that repository's Python. A gate that was not run is still recorded,
+    so the omission is visible in facts.json rather than looking like a clean
+    result nobody measured.
+
+    When it does execute, the command gets the allow-list from tools/audit_env.py
+    and a throwaway HOME — previously it inherited os.environ, so the tree's own
+    test suite ran with the operator's tokens in scope.
+    """
+    if not execute:
+        facts.add("gate", "skipped", " ".join(cmd),
+                  f"{label} not run: pass --run-gates to execute the audited tree's own code",
+                  "class: not-measured")
+        return
+    home = tempfile.mkdtemp(prefix="ccgg-gate-home-")
     try:
         proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, encoding="utf-8",
-                              errors="replace", timeout=900)
+                              errors="replace", timeout=900,
+                              env=audit_env.sandbox_env(home, actor="ccgg-gate"))
     except (OSError, subprocess.TimeoutExpired) as exc:
         facts.add("gate", "finding", " ".join(cmd), f"{label} could not run: {exc}")
         return
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
     tail = "\n".join((proc.stdout + proc.stderr).strip().splitlines()[-5:])
     status = "ok" if proc.returncode == 0 else "finding"
     facts.add("gate", status, " ".join(cmd), f"{label} exited {proc.returncode}", tail[:600])
@@ -403,7 +433,7 @@ def ensure_report_dir(repo: str, out: str | None) -> str:
     return out
 
 
-def collect(repo: str, scope: str, vocab: dict) -> tuple[dict, Facts]:
+def collect(repo: str, scope: str, vocab: dict, run_gates: bool = False) -> tuple[dict, Facts]:
     facts = Facts()
     settings = load_json(repo, ".claude/settings.json")
     inventory = build_inventory(repo, settings)
@@ -471,15 +501,15 @@ def collect(repo: str, scope: str, vocab: dict) -> tuple[dict, Facts]:
 
     if process:
         if os.path.exists(os.path.join(repo, "tools/validate.py")):
-            run_gate(repo, "validator", [sys.executable, "tools/validate.py"], facts)
+            run_gate(repo, "validator", [sys.executable, "tools/validate.py"], facts, execute=run_gates)
         if any(t.startswith("tools/test_") for t in inventory["tests"]):
-            run_gate(repo, "unit tests", [sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"], facts)
+            run_gate(repo, "unit tests", [sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"], facts, execute=run_gates)
         elif inventory["tests"]:
             facts.add("gate", "skipped", "tests", f"{len(inventory['tests'])} test file(s) found but no known runner — run them yourself")
         if inventory["features"] and os.path.exists(os.path.join(repo, "tools/feature_lint.py")):
-            run_gate(repo, "feature lint", [sys.executable, "tools/feature_lint.py", "--strict"], facts)
+            run_gate(repo, "feature lint", [sys.executable, "tools/feature_lint.py", "--strict"], facts, execute=run_gates)
         if os.path.exists(os.path.join(repo, "tools/catalog.py")):
-            run_gate(repo, "catalog", [sys.executable, "tools/catalog.py"], facts)
+            run_gate(repo, "catalog", [sys.executable, "tools/catalog.py"], facts, execute=run_gates)
         if not inventory["ci_workflows"]:
             facts.add("gate", "finding", ".github/workflows", "no CI workflow — the gate runs only when someone remembers")
         if not inventory["tests"]:
@@ -493,6 +523,10 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--repo", default=None)
     parser.add_argument("--out", default=None, help="report directory (default: CCGG-AUDIT-<stamp>/ in the repo)")
     parser.add_argument("--scope", default="all", choices=SCOPES)
+    parser.add_argument("--run-gates", action="store_true",
+                        help="run the audited tree's own validator, tests, feature lint and catalog. "
+                             "Off by default: this executes code from the checkout. On, it runs with "
+                             "a minimal environment and a throwaway HOME, never the operator's.")
     parser.add_argument("--vocab", default=VOCAB_PATH)
     args = parser.parse_args(argv)
     try:
@@ -506,7 +540,7 @@ def main(argv: list[str]) -> int:
         print(f"audit-facts: cannot read vocabulary {args.vocab}: {exc}")
         return 2
     out = ensure_report_dir(repo, args.out)
-    inventory, facts = collect(repo, args.scope, vocab)
+    inventory, facts = collect(repo, args.scope, vocab, run_gates=args.run_gates)
     with open(os.path.join(out, "inventory.json"), "w", encoding="utf-8") as fh:
         json.dump(inventory, fh, indent=2)
         fh.write("\n")

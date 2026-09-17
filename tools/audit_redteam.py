@@ -20,6 +20,10 @@ import json
 import os
 import subprocess
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import audit_env  # noqa: E402  (same directory, installed together)
 import tempfile
 import time
 from dataclasses import asdict, dataclass
@@ -99,11 +103,11 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict]:
     os.makedirs(home)
     archive = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=repo, capture_output=True, check=True)
     subprocess.run(["tar", "-xf", "-", "-C", dest], input=archive.stdout, check=True)
-    env = dict(os.environ, HOME=home, GIT_AUTHOR_NAME="redteam", GIT_AUTHOR_EMAIL="r@local",
-               GIT_COMMITTER_NAME="redteam", GIT_COMMITTER_EMAIL="r@local")
-    env.pop("CCGG_HOME", None)  # never let a probe sync from the operator's guide clone
-    env.pop("CCGG_REPO", None)
-    env.pop("CCGG_REF", None)
+    # An allow-list, not os.environ minus the three names somebody thought of.
+    # A plant and an observe are shell snippets from a committed data file in the
+    # audited tree; under dict(os.environ, ...) they ran with the operator's
+    # ANTHROPIC_API_KEY, GITHUB_TOKEN and cloud credentials (finding S-004).
+    env = audit_env.sandbox_env(home, actor="redteam")
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "baseline"]):
         proc = _run(cmd, dest, env)
         if proc.returncode != 0:
