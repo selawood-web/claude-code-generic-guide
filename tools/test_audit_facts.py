@@ -6,8 +6,11 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 
 import json
 import os
+import sys
+import tempfile
 import unittest
 
+import audit_facts
 from audit_facts import (
     Facts,
     command_references,
@@ -248,3 +251,60 @@ class ToolingKeysAndRedirectTests(unittest.TestCase):
 
     def test_regex_literal_not_network_call(self):
         self.assertEqual(network_patterns('    (r"\\b(curl|wget)\\b", "network"),\n'), [])
+
+
+class RunGateTests(unittest.TestCase):
+    """run_gate executes code out of the audited tree, so: not by default, and
+    never with the operator's environment attached (finding S-005)."""
+
+    def collect_facts(self):
+        facts = audit_facts.Facts()
+        return facts
+
+    def test_the_default_runs_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "ran")
+            facts = self.collect_facts()
+            audit_facts.run_gate(tmp, "canary", [sys.executable, "-c", f"open({marker!r},'w').write('x')"], facts)
+            self.assertFalse(os.path.exists(marker), "run_gate executed the command without --run-gates")
+        recorded = [f for f in facts.items if f.kind == "gate"]
+        self.assertEqual(len(recorded), 1)
+        self.assertEqual(recorded[0].status, "skipped")
+        self.assertIn("--run-gates", recorded[0].evidence)
+
+    def test_execute_true_actually_runs_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            marker = os.path.join(tmp, "ran")
+            facts = self.collect_facts()
+            audit_facts.run_gate(tmp, "canary", [sys.executable, "-c", f"open({marker!r},'w').write('x')"], facts,
+                                 execute=True)
+            self.assertTrue(os.path.exists(marker))
+        self.assertEqual([f.status for f in facts.items if f.kind == "gate"], ["ok"])
+
+    def test_the_command_never_sees_the_operators_environment(self):
+        """The canary the audit used to demonstrate the finding, as a test."""
+        os.environ["CCGG_TEST_CANARY"] = "leak-me"
+        self.addCleanup(os.environ.pop, "CCGG_TEST_CANARY", None)
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "seen")
+            facts = self.collect_facts()
+            audit_facts.run_gate(
+                tmp, "canary",
+                [sys.executable, "-c",
+                 f"import os;open({out!r},'w').write(repr(os.environ.get('CCGG_TEST_CANARY')))"],
+                facts, execute=True)
+            with open(out, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "None", "the gate command saw a variable from the operator's shell")
+
+    def test_the_command_gets_a_home_that_is_not_the_operators(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = os.path.join(tmp, "home")
+            facts = self.collect_facts()
+            audit_facts.run_gate(
+                tmp, "canary",
+                [sys.executable, "-c", f"import os;open({out!r},'w').write(os.environ['HOME'])"],
+                facts, execute=True)
+            with open(out, encoding="utf-8") as fh:
+                seen = fh.read()
+        self.assertNotEqual(seen, os.path.expanduser("~"))
+        self.assertFalse(os.path.exists(seen), "the throwaway HOME outlived the gate run")

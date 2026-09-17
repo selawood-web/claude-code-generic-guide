@@ -14,6 +14,7 @@ import validate
 
 from validate import (
     frontmatter_scalar_problem,
+    inherited_env_uses,
     secret_jobs_running_tree_code,
     unpinned_npm_installs,
     unresolved_npm_version_vars,
@@ -591,6 +592,50 @@ class SecretIsolationTests(unittest.TestCase):
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
             validate.workflow_jobs(None)
+
+
+class InheritedEnvTests(unittest.TestCase):
+    """The audit's tools hand out an allow-list, never the operator's environment
+    (findings S-004 and S-005)."""
+
+    def test_a_dict_of_os_environ_is_reported(self):
+        self.assertEqual(inherited_env_uses("env = dict(os.environ, HOME=home)\n"), [1])
+
+    def test_passing_os_environ_straight_through_is_reported(self):
+        self.assertEqual(inherited_env_uses("subprocess.run(cmd, env=os.environ)\n"), [1])
+
+    def test_reading_one_variable_is_fine(self):
+        self.assertEqual(inherited_env_uses('path = os.environ.get("PATH", "/bin")\n'), [])
+
+    def test_prose_describing_the_defect_is_not_a_use(self):
+        """audit_env.py documents the shape it exists to prevent."""
+        source = '"""A docstring naming dict(os.environ, HOME=...) as the defect."""\nx = 1\n'
+        self.assertEqual(inherited_env_uses(source), [])
+
+    def test_a_comment_describing_the_defect_is_not_a_use(self):
+        self.assertEqual(inherited_env_uses("# never dict(os.environ, ...) here\nx = 1\n"), [])
+
+    def test_the_line_number_points_at_the_code(self):
+        source = '"""doc"""\nimport os\n\nenv = dict(os.environ)\n'
+        self.assertEqual(inherited_env_uses(source), [4])
+
+    def test_unparsable_source_still_scans(self):
+        self.assertEqual(inherited_env_uses("def broken(\nenv = dict(os.environ)\n"), [2])
+
+    def test_the_shipped_audit_tools_are_clean(self):
+        tools = os.path.join(validate.ROOT, "tools")
+        names = sorted(n for n in os.listdir(tools) if n.startswith("audit_") and n.endswith(".py"))
+        self.assertTrue(names, "no audit tools found to check")
+        for name in names:
+            with self.subTest(tool=name):
+                with open(os.path.join(tools, name), encoding="utf-8") as fh:
+                    self.assertEqual(inherited_env_uses(fh.read()), [])
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            inherited_env_uses(None)
+        with self.assertRaises(TypeError):
+            validate.blank_python_literals(None)
 
 
 class GateIntegrationTests(unittest.TestCase):

@@ -121,7 +121,7 @@ copy_file tools/feature_lint.py
 copy_file tools/catalog.py
 
 # The audit's deterministic stage, probe harness, renderer, vocabulary, and probe list
-for f in tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_agents_json.py tools/audit_headless.py tools/audit_pr_comment.py tools/audit_vocab.json tools/probes.txt tools/redteam_probes.txt; do
+for f in tools/audit_env.py tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_agents_json.py tools/audit_headless.py tools/audit_pr_comment.py tools/audit_vocab.json tools/probes.txt tools/redteam_probes.txt; do
   copy_file "$f"
 done
 

@@ -116,7 +116,11 @@ jobs:
           SCOPE: ${{ steps.settings.outputs.scope }}
         run: |
           set -euo pipefail
-          python tools/audit_facts.py --out "$STAMP" --scope "$SCOPE"
+          # --run-gates executes the audited head's own validator and tests. Safe
+          # here and nowhere else in this workflow: this job holds no secret (the
+          # split is the point), the runner is ephemeral, and the commands get a
+          # minimal environment with a throwaway HOME rather than the job's.
+          python tools/audit_facts.py --out "$STAMP" --scope "$SCOPE" --run-gates
           python tools/audit_probes.py --out "$STAMP" || true
           case "$SCOPE" in
             all|harness) python tools/audit_redteam.py --out "$STAMP" || true ;;

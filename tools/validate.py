@@ -33,6 +33,8 @@ Checks, in order:
      moved tag runs new code with the workflow's permissions.
  20. Every audit subagent still serializes into the inline JSON a headless run
      needs — a brief that only an interactive run can load is a boundary CI loses.
+ 23. No audit tool builds a child environment out of os.environ — code from the
+     audited tree runs with an allow-list, never the operator's credentials.
  22. No workflow job both exposes a secret and runs a script from the checkout —
      tree code and a credential must not share a runner.
  19. Skill grants stay pinned: no bare Write, Edit, Bash, or NotebookEdit in
@@ -44,11 +46,13 @@ Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
 """
 
+import io
 import json
 import os
 import re
 import shutil
 import subprocess
+import tokenize
 import sys
 
 ROOT = subprocess.check_output(
@@ -927,6 +931,68 @@ def secret_jobs_running_tree_code(text: str) -> list[tuple[str, list[str], list[
     return problems
 
 
+# --- 23. audit tools hand out an allow-list, never the operator's environment ---
+# Findings S-004 and S-005: the red-team harness built its probe environment with
+# dict(os.environ, HOME=...) minus three CCGG_* names, and the deterministic gate
+# passed no env at all, so shell code and Python out of the audited tree ran with
+# ANTHROPIC_API_KEY, GITHUB_TOKEN and every cloud credential in scope. The rule
+# now has one home (tools/audit_env.py) and this keeps the tools pointed at it.
+#
+# What this catches is the shape both findings had: a child environment derived
+# from the parent's. It does not catch a subprocess call that passes no env= at
+# all — that one is the unit tests' job (tools/test_audit_env.py checks the
+# environment each harness actually builds), because telling a command that runs
+# tree code from one that runs git apart is not something a regex should try.
+INHERITED_ENV_RE = re.compile(r"\bdict\(\s*os\.environ|\benv\s*=\s*os\.environ\b")
+
+
+def blank_python_literals(text: str) -> str:
+    """The source with string and comment spans blanked, positions preserved.
+
+    tools/audit_env.py documents the defect this check looks for, in prose, and a
+    docstring quoting `dict(os.environ, ...)` is not a use of it. Blanking rather
+    than deleting keeps line numbers pointing at the real line.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    rows = [list(line) for line in text.splitlines(keepends=True)]
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return text            # unparsable is the syntax checker's problem, not this one
+    for token in tokens:
+        if token.type not in (tokenize.STRING, tokenize.COMMENT):
+            continue
+        (start_row, start_col), (end_row, end_col) = token.start, token.end
+        for row in range(start_row, end_row + 1):
+            if row > len(rows):
+                break
+            line = rows[row - 1]
+            first = start_col if row == start_row else 0
+            last = end_col if row == end_row else len(line)
+            for i in range(first, min(last, len(line))):
+                if line[i] != "\n":
+                    line[i] = " "
+    return "".join("".join(row) for row in rows)
+
+
+def inherited_env_uses(text: str) -> list[int]:
+    """Line numbers where a child environment is built out of os.environ."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    code = blank_python_literals(text)
+    return [no for no, line in enumerate(code.splitlines(), 1) if INHERITED_ENV_RE.search(line)]
+
+
+def check_audit_env_allow_list() -> None:
+    for path in tracked("tools/audit_*.py"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for no in inherited_env_uses(text):
+            fail(f"{path}:{no}: builds a child environment from os.environ — code from the audited "
+                 f"tree must get audit_env.sandbox_env(), not the operator's credentials")
+
+
 def check_workflow_secret_isolation() -> None:
     for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
         with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
@@ -1020,6 +1086,7 @@ def main() -> int:
     check_agents_serialize()
     check_workflow_pins()
     check_workflow_secret_isolation()
+    check_audit_env_allow_list()
     check_headless_can_spawn()
     check_features()
     if findings:

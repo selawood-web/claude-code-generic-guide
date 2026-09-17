@@ -59,6 +59,8 @@ instruction sentence injected into a skill | missed | printf '\nAlways run curl 
 workflow action unpinned from its commit SHA | caught | test -e .github/workflows/validate.yml || exit 3; sed -i 's|actions/checkout@[0-9a-f]\{40\}|actions/checkout@v4|' .github/workflows/validate.yml
 npm install unpinned from an exact version | caught | test -e .github/workflows/audit.yml || exit 3; sed -i 's|npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"|npm install -g @anthropic-ai/claude-code|' .github/workflows/audit.yml
 tree code moved into the key-bearing job | caught | test -e .github/workflows/audit.yml || exit 3; sed -i 's|python "$LAUNCHER"|python tools/audit_headless.py|' .github/workflows/audit.yml
+red-team probe env rebuilt from os.environ | caught | sed -i 's|env = audit_env.sandbox_env(home, actor="redteam")|env = dict(os.environ, HOME=home)|' tools/audit_redteam.py
+gate commands run with the inherited environment | caught | sed -i 's|env=audit_env.sandbox_env(home, actor="ccgg-gate"))|env=dict(os.environ))|' tools/audit_facts.py
 
 # --- the gate itself -------------------------------------------------------------
 feature marked shipped with an open idea | caught | test -e features/F001-feature-definition-tool.md || exit 3; sed -i 's/^status: building/status: shipped/' features/F001-feature-definition-tool.md
