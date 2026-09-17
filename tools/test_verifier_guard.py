@@ -33,6 +33,9 @@ ALLOWED = [
     "for c in a b; do printf '%s' \"$c\" | bash .claude/hooks/audit-verifier-guard.sh; done",
     "git log --oneline -3 && git diff HEAD~1 --stat",
     "git -C . rev-parse HEAD",
+    "git -C tools rev-parse --show-prefix",
+    "git -P log -1",
+    "git --no-optional-locks status --porcelain",
     "git ls-files -- 'decisions/*.md'",
     "git config --get remote.origin.url",
     "git branch --show-current",
@@ -159,6 +162,24 @@ REFUSED = [
     "git branch new",
     "git tag v9",
     "git --git-dir=/x/.git log",
+    # S-003: git's options before the subcommand were skipped, not read, so every
+    # spelling that names a program to run reached an allow-listed read subcommand.
+    # `git -c diff.external=<cmd> diff` really does run <cmd>; the environment
+    # spellings of that same capability were already refused two blocks up.
+    "git -c diff.external=id diff",
+    "git -c core.pager=id log",
+    "git -c core.sshCommand=id ls-remote",
+    "git -c alias.x=!id x",
+    "git --config-env=diff.external=EVIL diff",
+    "git --exec-path=/tmp log",
+    "git -p log",
+    "git --namespace=x log",
+    # -C carries a path, and the refusal it walked past said "pointed at another
+    # repository" — which --git-dir alone was never the only way to do.
+    "git -C /etc rev-parse",
+    "git -C ../other log",
+    "git -C tools/../.. log",
+    "git -C",
     "git apply p.diff",
     "sed -i s/a/b/ AGENTS.md",
     "sed -n 's/x/y/w out.txt' f",
