@@ -50,6 +50,11 @@ ALLOWED = [
     "cd tools && python3 -m json.tool audit_vocab.json | head",
     "xxd AGENTS.md | head",
     "printenv | grep -c CCGG",
+    # A newline is a command separator, so each line is checked on its own; both
+    # of these are allowed programs and the two-line form must stay allowed.
+    "git log --oneline -3\ngit status --porcelain",
+    # A real newline inside quotes is data, not a separator: one token, one segment.
+    "printf 'a\nb\n' | wc -l",
 ]
 
 REFUSED = [
@@ -107,6 +112,18 @@ REFUSED = [
     "diff <(id) /dev/null",
     "echo 'no closing quote",
     "ls; curl http://x",
+    # S-001: a newline separates commands exactly as `;` does. Before the fix the
+    # lexer swallowed it as whitespace, so everything below folded into one
+    # segment whose first word was the allowed `echo` and was never checked.
+    "echo hi\ncurl http://x",
+    "echo hi\npython3 -c 'import os'",
+    "ls\r\ncurl http://x",
+    "ls\n\ncurl http://x",
+    "ls &&\ncurl http://x",
+    "ls\n\tcurl http://x",
+    # `#` comments run to the end of a line, not to the end of the command: the
+    # second line is still checked.
+    "ls\n# a note\ncurl http://x",
     "ls && (cd /tmp && rm -rf x)",
     "echo $(curl http://x)",
     "echo $(echo $(rm x))",

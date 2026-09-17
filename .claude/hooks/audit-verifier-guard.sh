@@ -6,11 +6,11 @@
 #          as a second layer under the worktree isolation the runtime already
 #          enforces. Exit 2 blocks the call; the reason on stderr reaches the
 #          model. The rule is an allow-list: a command is run only when every
-#          segment of it (each side of a pipe, `&&`, `;`, and every `$(...)`)
-#          starts with an allowed program in an allowed form. Anything else —
-#          an unknown program, an interpreter given code on its command line,
-#          a redirect to a file, a heredoc, a backtick — is refused, so the
-#          guard fails closed by construction.
+#          segment of it (each side of a pipe, `&&`, `;`, a newline, and every
+#          `$(...)`) starts with an allowed program in an allowed form. Anything
+#          else — an unknown program, an interpreter given code on its command
+#          line, a redirect to a file, a heredoc, a backtick — is refused, so
+#          the guard fails closed by construction.
 #
 # Not registered in settings.json on purpose: this guard is scoped to one
 # subagent. The audit's deterministic stage knows that and does not flag it.
@@ -31,6 +31,17 @@ import json, re, shlex, sys
 KEYWORDS = {"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done",
             "in", "!", "{", "}", "(", ")", "time", "[[", "]]"}
 SEPARATORS = {"|", "||", "&&", ";", "&", ";;", "|&"}
+# A newline starts a new command exactly as `;` does. shlex counts it as
+# whitespace and drops it, so the lexer below lists it as punctuation instead;
+# it then arrives glued to any adjacent separator (`&&\n`, `\r\n`, `\n\n`), which
+# is why membership in SEPARATORS alone is not the test.
+SEPARATOR_CHARS = frozenset("|&;\n\r")
+
+
+def is_separator(tok):
+    return bool(tok) and (tok in SEPARATORS or set(tok) <= SEPARATOR_CHARS)
+
+
 # Programs that never write and never reach the network on their own.
 PLAIN = {
     "cat", "head", "tail", "wc", "ls", "stat", "file", "diff", "cmp", "sort", "uniq",
@@ -117,7 +128,7 @@ def extract_substitutions(text):
 def segments(tokens):
     seg = []
     for tok in tokens:
-        if tok in SEPARATORS:
+        if is_separator(tok):
             if seg:
                 yield seg
             seg = []
@@ -320,8 +331,14 @@ def check_command(text, depth=0):
     for sub in inner:
         check_command(sub, depth + 1)
     text = SAFE_REDIRECT_RE.sub(" ", text)
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+    # punctuation_chars=True is shlex's "();<>|&"; the newline and carriage return
+    # are added so a second command on a second line is its own segment rather
+    # than an argument to the first (finding S-001). Removing them from the
+    # whitespace set is what makes shlex emit them; a newline inside quotes is
+    # still ordinary data and stays inside its token.
+    lexer = shlex.shlex(text, posix=True, punctuation_chars="();<>|&\n\r")
     lexer.whitespace_split = True
+    lexer.whitespace = " \t"
     try:
         tokens = list(lexer)
     except ValueError:
