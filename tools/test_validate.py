@@ -1072,6 +1072,39 @@ class HiddenCharacterParityTests(unittest.TestCase):
                 self.assertEqual(facts.hidden_characters(text), [])
 
 
+class GuardCanaryWiringTests(unittest.TestCase):
+    """R-008: a run stops measuring the guard the moment the canary leaves the brief."""
+
+    def test_the_shipped_brief_carries_the_canary(self):
+        del validate.findings[:]
+        try:
+            validate.check_guard_canary()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_brief_without_the_canary_is_reported(self):
+        problems = validate.guard_canary_problems(
+            ".claude/agents/audit-verifier.md",
+            "---\nname: audit-verifier\n---\n\nVerify things. No canary here.\n")
+        self.assertTrue(problems)
+        self.assertIn("canary", problems[0].lower())
+
+    def test_a_brief_that_names_a_different_command_is_reported(self):
+        text = "GUARD-CANARY: refused\n\n```\nls -la\n```\n"
+        problems = validate.guard_canary_problems(".claude/agents/audit-verifier.md", text)
+        self.assertTrue(any(validate.GUARD_CANARY in p for p in problems), problems)
+
+    def test_the_canary_matches_the_renderers(self):
+        sys.path.insert(0, os.path.dirname(validate.__file__))
+        import audit_report
+        self.assertEqual(validate.GUARD_CANARY, audit_report.GUARD_CANARY)
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.guard_canary_problems("x", None)
+
+
 class AutomaticRunnerTests(unittest.TestCase):
     """T-008/T-009: detectors and tests that ran only when somebody remembered."""
 

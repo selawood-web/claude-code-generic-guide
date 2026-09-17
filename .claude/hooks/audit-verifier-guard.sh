@@ -15,6 +15,13 @@
 # Not registered in settings.json on purpose: this guard is scoped to one
 # subagent. The audit's deterministic stage knows that and does not flag it.
 # The table of allowed forms is tested by tools/test_verifier_guard.py.
+#
+# What that table proves is this program's verdicts, not that anything consults
+# them. A 2026-09-17 run measured the wiring from inside a live verifier and the
+# hook did not fire: the commands below were refused here, with exit 2, and ran
+# as Bash tool calls (finding R-008). Every audit run now starts its verifiers
+# with a canary and records the answer; until it comes back refused, treat this
+# file as a description of an intended boundary rather than an enforced one.
 set -uo pipefail
 
 if ! command -v python3 >/dev/null 2>&1; then

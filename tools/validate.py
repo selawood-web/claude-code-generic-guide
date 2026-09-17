@@ -1516,6 +1516,40 @@ def check_hook_stdout_docs() -> None:
             fail(problem)
 
 
+# --- 28. the verifier's guard canary ------------------------------------------
+# The guard hook on the verifier was assumed to fire until a run measured it and
+# found it did not (finding R-008). What replaced the assumption is a canary the
+# verifier runs first and the report records. Delete it from the brief and every
+# later run silently stops measuring, so the gate holds the wiring in place.
+# Kept identical to tools/audit_report.py's GUARD_CANARY; a test compares them.
+GUARD_CANARY = "uname -a"
+GUARD_CANARY_MARKER = "GUARD-CANARY"
+VERIFIER_BRIEF = os.path.join(".claude", "agents", "audit-verifier.md")
+
+
+def guard_canary_problems(path: str, text: str) -> list[str]:
+    """The verifier brief must tell the verifier to run the canary and report it."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    problems = []
+    if GUARD_CANARY_MARKER not in text:
+        problems.append(f"{path}: no {GUARD_CANARY_MARKER} line — the run would stop measuring "
+                        "whether the verifier's guard fires, and nothing would say so")
+    elif GUARD_CANARY not in text:
+        problems.append(f"{path}: names a canary but not `{GUARD_CANARY}`, the command "
+                        "tools/audit_report.py counts as proof the guard fired")
+    return problems
+
+
+def check_guard_canary() -> None:
+    if VERIFIER_BRIEF not in tracked(VERIFIER_BRIEF):
+        return                      # a project without the audit verifier
+    with open(os.path.join(ROOT, VERIFIER_BRIEF), encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    for problem in guard_canary_problems(VERIFIER_BRIEF, text):
+        fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1553,6 +1587,7 @@ def main() -> int:
     check_probe_contract()
     check_reference_thresholds()
     check_hook_stdout_docs()
+    check_guard_canary()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

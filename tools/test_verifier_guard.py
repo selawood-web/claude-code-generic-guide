@@ -9,12 +9,15 @@ verifier may do, and belongs in the same pull request as its justification.
 
 import json
 import os
+import sys
 import re
 import shutil
 import stat
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     ".claude", "hooks", "audit-verifier-guard.sh")
@@ -220,6 +223,25 @@ class AllowListTests(unittest.TestCase):
     def test_non_json_input_refused(self):
         proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
+
+
+class CanaryTests(unittest.TestCase):
+    """R-008: the canary only means something while the guard still refuses it."""
+
+    def canary(self):
+        import audit_report
+        return audit_report.GUARD_CANARY
+
+    def test_the_canary_is_refused_by_the_guard(self):
+        rc, err = run_guard(self.canary())
+        self.assertEqual(rc, 2, "the canary command is no longer refused — it proves nothing")
+        self.assertIn("audit-verifier-guard: refused", err)
+
+    def test_the_canary_is_harmless(self):
+        """A canary that changed something would be a poor thing to run every time."""
+        self.assertNotIn(">", self.canary())
+        self.assertNotIn("rm", self.canary())
+        self.assertNotIn("|", self.canary())
 
 
 class GuardFailureTests(unittest.TestCase):

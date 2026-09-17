@@ -125,6 +125,18 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
             out.append("The red-team stage measured no injection channel in this run. "
                        "That is not the same as finding none.")
         out.append("")
+    guard = (evidence or {}).get("guard")
+    if guard and not guard.get("proven"):
+        if guard.get("refused") is False:
+            out.append(f"**⚠ The verifier ran unguarded:** the canary `{guard['canary']}` was not "
+                       "refused, so the PreToolUse allow-list did not fire for this run. What "
+                       "bounded the verifier instead: the runtime's worktree isolation, the write "
+                       "tools removed from its brief, and the constraints in its task message.")
+        else:
+            out.append(f"**⚠ The verifier's guard was not measured:** no run of the canary "
+                       f"`{guard['canary']}` was recorded, so whether the PreToolUse allow-list "
+                       "fired is unknown. Treat the verifier as bounded only by worktree isolation.")
+        out.append("")
     errored = dict((evidence or {}).get("stages_with_errors") or {})
     if errored:
         named = ", ".join(f"`{name}.json`: {count} probe(s) errored" for name, count in sorted(errored.items()))
@@ -170,6 +182,32 @@ REQUIRED_STAGES = {
     "process": ("facts", "probes"),
     "product": ("facts", "probes"),
 }
+
+
+# The verifier's brief declares a PreToolUse guard hook, and until finding R-008 the
+# whole design took it on trust. A 2026-09-17 run measured it from inside: the guard
+# SCRIPT refuses `uname -a` with exit 2, and the same command issued as a Bash tool
+# call by the live verifier ran. The product documents frontmatter hooks as firing for
+# the subagent that declares them; in that dispatch path they did not. So the run has
+# to measure it rather than assume it. One command, refused by the allow-list and
+# harmless if it ever runs.
+GUARD_CANARY = "uname -a"
+
+
+def guard_state(report_dir: str) -> dict:
+    """What this run established about the verifier's guard, from guard.json.
+
+    Three answers, not two: refused (the guard fired), ran (it did not), and no
+    record at all. Only a refusal OF THE CANARY COMMAND counts — a refusal of
+    something else says nothing about the allow-list.
+    """
+    data = read_json(os.path.join(report_dir, "guard.json"))
+    if not isinstance(data, dict):
+        return {"canary": GUARD_CANARY, "refused": None, "proven": False}
+    refused = data.get("refused")
+    refused = refused if isinstance(refused, bool) else None
+    proven = refused is True and data.get("canary") == GUARD_CANARY
+    return {"canary": data.get("canary", GUARD_CANARY), "refused": refused, "proven": proven}
 
 
 # The two harnesses spell their error count differently, and a reader of the
@@ -242,6 +280,7 @@ def run_evidence(report_dir: str) -> dict:
         # run is reported separately: it does not mean nothing was audited, and it
         # does mean part of the audit measured nothing.
         "complete": bool(candidates or stamped or records),
+        "guard": guard_state(report_dir),
         **deterministic_stages(report_dir),
     }
 
