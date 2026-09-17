@@ -491,6 +491,40 @@ def check_context_budget() -> None:
 
 
 ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md")
+# Every tracked file whose content reaches the model as instructions — not only
+# the rule files, but everything the rules tell the agent to open: a skill's
+# companion pages, a decision record recalled before re-deciding, a cached
+# research note, a feature definition. The scan here reached the three
+# always-loaded files and .claude/**/*.md; MEMORY.md, the hooks, decisions/,
+# features/ and knowledge-base/ sat outside it, and the audit's own scan in
+# tools/audit_facts.py was narrower still (findings R-007 and R-014). This is
+# the one home for the set: audit_facts.py carries the identical tuple and
+# tools/test_validate.py compares the two.
+INSTRUCTION_GLOBS = (
+    "CLAUDE.md",
+    "AGENTS.md",
+    "WORKING-CHARTER.md",
+    "MEMORY.md",
+    ".claude/agents/*.md",
+    ".claude/hooks/*",
+    ".claude/references/*.md",
+    ".claude/skills/*.md",
+    "decisions/*.md",
+    "features/*.md",
+    "knowledge-base/*.md",
+)
+# Markdown, not everything: knowledge-base/ also holds research artifacts such as
+# a .pptx, whose compressed bytes are full of control characters and which no
+# rule tells the agent to read as text. Hooks are the exception — every one is a
+# shell script, and what they print reaches the model as context.
+
+
+def instruction_files() -> list[str]:
+    """The tracked files INSTRUCTION_GLOBS names, sorted and deduplicated."""
+    found: set[str] = set()
+    for pattern in INSTRUCTION_GLOBS:
+        found.update(tracked(pattern))
+    return sorted(found)
 VOLATILE_RES = (
     re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
     re.compile(r"\blast (updated|generated|synced|run)\b", re.I),
@@ -657,9 +691,7 @@ def hidden_characters(text: str) -> list[tuple[int, str]]:
 
 
 def check_hidden_characters() -> None:
-    paths = [p for p in ALWAYS_LOADED if os.path.exists(os.path.join(ROOT, p))]
-    paths += tracked(".claude/*.md")
-    for path in paths:
+    for path in instruction_files():
         text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
         for line, code in hidden_characters(text)[:5]:
             fail(f"{path}:{line}: hidden character {code} — invisible to a reviewer, read by the model")
@@ -790,19 +822,33 @@ def import_targets(text: str) -> list[str]:
 
 
 def check_imports() -> None:
+    """Follow @imports from the two roots all the way down.
+
+    An import brings a file into the session as rules, and so does an import
+    inside that file. Checking only CLAUDE.md and AGENTS.md left every level
+    below them unexamined (finding R-008). A `~` target cannot be checked from
+    here, which is the reason to name it, not the reason to pass over it.
+    """
     tracked_all = set(tracked("*"))
-    for path in ("CLAUDE.md", "AGENTS.md"):
-        full = os.path.join(ROOT, path)
-        if not os.path.exists(full):
-            continue
-        for target in import_targets(open(full, encoding="utf-8", errors="replace").read()):
+    seen: set[str] = set()
+    queue = [p for p in ("CLAUDE.md", "AGENTS.md") if os.path.exists(os.path.join(ROOT, p))]
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue  # an import cycle is not an error; reading it twice would be
+        seen.add(path)
+        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        for target in import_targets(text):
             if target.startswith("~"):
-                continue  # a user-level import, outside the repository
+                warn(f"{path}: imports @{target}, outside the repository — it loads every session and nothing here can review it")
+                continue
             dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
             if not os.path.exists(os.path.join(ROOT, dest)):
                 fail(f"{path}: imports @{target}, which does not exist — the rules it holds never load")
             elif dest not in tracked_all:
                 fail(f"{path}: imports @{target}, which is not tracked — every other clone loads nothing there")
+            else:
+                queue.append(dest)
 
 
 # --- 19. skill grants ---------------------------------------------------------

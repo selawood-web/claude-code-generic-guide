@@ -7,6 +7,7 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -474,6 +475,113 @@ class CcggEnvWarningTests(unittest.TestCase):
 
     def test_no_repo_configured_warns_about_nothing(self):
         self.assertEqual(validate.ccgg_env_warnings({}, origins=None), [])
+
+
+class TransitiveImportTests(unittest.TestCase):
+    """R-008: an @import inside an imported file was never examined."""
+
+    def _check(self, files):
+        return self._check_with_untracked(files, untracked={})
+
+    def _check_with_untracked(self, files, untracked):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+            for name, text in untracked.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            if untracked:
+                with open(os.path.join(tmp, ".gitignore"), "w", encoding="utf-8") as fh:
+                    fh.write("\n".join(untracked) + "\n")
+            old_root, validate.ROOT = validate.ROOT, tmp
+            old_cwd = os.getcwd()
+            del validate.findings[:]
+            del validate.cautions[:]
+            try:
+                os.chdir(tmp)
+                validate.check_imports()
+                return list(validate.findings), list(validate.cautions)
+            finally:
+                os.chdir(old_cwd)
+                validate.ROOT = old_root
+                del validate.findings[:]
+                del validate.cautions[:]
+
+    # CLAUDE.md and AGENTS.md are both roots, so a chain has to reach past them
+    # to prove anything: AGENTS.md -> rules/mid.md -> rules/deep.md.
+    CHAIN = {"CLAUDE.md": "@AGENTS.md\n", "AGENTS.md": "@rules/mid.md\n",
+             "rules/mid.md": "@deep.md\n"}
+
+    def test_an_import_below_the_roots_that_is_missing_is_reported(self):
+        findings, _ = self._check(dict(self.CHAIN))
+        self.assertTrue(any("rules/mid.md" in f and "deep.md" in f for f in findings), findings)
+
+    def test_an_import_below_the_roots_that_exists_is_accepted(self):
+        findings, _ = self._check(dict(self.CHAIN, **{"rules/deep.md": "no imports here\n"}))
+        self.assertEqual(findings, [])
+
+    def test_an_untracked_file_below_the_roots_is_reported(self):
+        files = dict(self.CHAIN)
+        findings, _ = self._check_with_untracked(files, untracked={"rules/deep.md": "hi\n"})
+        self.assertTrue(any("not tracked" in f for f in findings), findings)
+
+    def test_an_import_cycle_terminates(self):
+        findings, _ = self._check({"CLAUDE.md": "@AGENTS.md\n", "AGENTS.md": "@rules/mid.md\n",
+                                   "rules/mid.md": "@../CLAUDE.md\n"})
+        self.assertEqual(findings, [])
+
+    def test_a_user_level_import_is_reported_not_skipped(self):
+        findings, cautions = self._check({"CLAUDE.md": "@~/.claude/private.md\n"})
+        self.assertEqual(findings, [])
+        self.assertTrue(any("~/.claude/private.md" in c for c in cautions), cautions)
+
+
+class InstructionFileTests(unittest.TestCase):
+    """R-007/R-014: the scanned set must cover what the rules tell the agent to read."""
+
+    def setUp(self):
+        self.scanned = set(validate.instruction_files())
+
+    def test_covers_skill_companion_files_not_just_skill_md(self):
+        companions = [p for p in validate.tracked(".claude/skills/*")
+                      if not p.endswith("/SKILL.md")]
+        self.assertTrue(companions, "no companion files to check")
+        self.assertEqual([p for p in companions if p not in self.scanned], [])
+
+    def test_covers_decisions_and_knowledge_base(self):
+        for pattern in ("decisions/*.md", "knowledge-base/*"):
+            with self.subTest(pattern=pattern):
+                paths = [p for p in validate.tracked(pattern) if p.endswith(".md")]
+                self.assertTrue(paths, f"no files matched {pattern}")
+                self.assertEqual([p for p in paths if p not in self.scanned], [])
+
+    def test_still_covers_what_it_always_did(self):
+        for path in ("AGENTS.md", "WORKING-CHARTER.md", ".claude/agents/audit-verifier.md",
+                     ".claude/hooks/session-start.sh", ".claude/skills/commit/SKILL.md"):
+            with self.subTest(path=path):
+                self.assertIn(path, self.scanned)
+
+    def test_no_duplicates_and_sorted(self):
+        listed = validate.instruction_files()
+        self.assertEqual(listed, sorted(set(listed)))
+
+    def test_the_audit_scans_the_same_set(self):
+        """One home for the rule: audit_facts and validate share the glob list.
+
+        R-007 found the two scans had drifted apart, so the tuples are compared
+        directly rather than the resolved paths — the two tracked() helpers
+        differ on untracked files by design.
+        """
+        sys.path.insert(0, os.path.dirname(validate.__file__))
+        import audit_facts
+        self.assertEqual(validate.INSTRUCTION_GLOBS, audit_facts.INSTRUCTION_GLOBS)
 
 
 class ImportTargetTests(unittest.TestCase):

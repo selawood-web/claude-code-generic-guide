@@ -23,6 +23,10 @@ always-loaded file over its byte budget | caught | yes 'padding that no reader n
 stated skill count drifted in a catalog | caught | test -e README.md || exit 3; grep -q '27 skill' README.md || exit 3; sed -i 's/27 skill/26 skill/' README.md
 catalog row for a skill that does not exist | caught | grep -q '^| `/architecture` |' AGENTS.md || exit 3; sed -i '0,/^| `\/architecture` |/s//| `\/phantom` | Nothing |\n&/' AGENTS.md
 CLAUDE.md imports a file that does not exist | caught | printf '@notes/private.md\n' >> CLAUDE.md
+an import below the two roots points at a file that does not exist | caught | python3 -c "open('.claude/references/code-gate.md','a').write('\n@rules/deep.md\n');open('AGENTS.md','a').write('\n@.claude/references/code-gate.md\n')"
+hidden character planted in a skill companion page | caught | python3 -c "open('.claude/skills/decide/decision-record.md','a').write('review this\u200b line\n')"
+hidden character planted in a decision record | caught | python3 -c "import glob;open(sorted(glob.glob('decisions/*.md'))[0],'a').write('note\u202eflip\n')"
+hidden character planted in a cached research note | caught | python3 -c "import glob;open(sorted(glob.glob('knowledge-base/*/*.md'))[0],'a').write('as of\u200b today\n')"
 CLAUDE.md bridge removed | caught | echo '# nothing' > CLAUDE.md
 
 # --- skill frontmatter -----------------------------------------------------------
