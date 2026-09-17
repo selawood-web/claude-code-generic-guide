@@ -33,6 +33,8 @@ Checks, in order:
      moved tag runs new code with the workflow's permissions.
  20. Every audit subagent still serializes into the inline JSON a headless run
      needs — a brief that only an interactive run can load is a boundary CI loses.
+ 22. No workflow job both exposes a secret and runs a script from the checkout —
+     tree code and a credential must not share a runner.
  19. Skill grants stay pinned: no bare Write, Edit, Bash, or NotebookEdit in
      allowed-tools; the audit skill's grants are exactly the audit's four commands
      and its report directory; skills that act outward (push, PR, merge, deploy,
@@ -871,6 +873,72 @@ def check_workflow_pins() -> None:
             fail(f"{path}: installs a package pinned through ${name}, which no env sets to an exact version")
 
 
+# --- 22. tree code and a secret never share a runner ---------------------------
+# The audit workflow once ran the audited head's own Python in the same job that
+# later held ANTHROPIC_API_KEY, so a pull request could execute code on a runner
+# with a credential on it and the whole workspace to rewrite in between. The fix
+# is a job split; this is what keeps it split.
+#
+# GITHUB_TOKEN is deliberately not counted: every workflow has one whether it
+# names it or not, so treating it as a secret to isolate would flag every job
+# that can post a comment while protecting nothing.
+JOB_KEY_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
+SECRET_REF_RE = re.compile(r"\$\{\{\s*secrets\.([A-Za-z_][A-Za-z0-9_]*)")
+# `python tools/x.py` runs a file from the checkout. `python "$LAUNCHER"` runs
+# whatever the job put at that path — by convention here, a trusted copy — so the
+# variable form is not a checkout path and is not counted.
+TREE_SCRIPT_RE = re.compile(r"python3?\s+(?![\"']?\$)([A-Za-z0-9_./-]+\.py)")
+
+
+def workflow_jobs(text: str) -> dict[str, str]:
+    """{job name: the lines belonging to it}, split on the two-space keys under `jobs:`."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    lines = text.splitlines()
+    try:
+        start = next(i for i, line in enumerate(lines) if line.rstrip() == "jobs:")
+    except StopIteration:
+        return {}
+    jobs: dict[str, list[str]] = {}
+    name: str | None = None
+    for line in lines[start + 1:]:
+        if line.strip() and not line.startswith(" "):
+            break                     # a new top-level key ends the jobs block
+        match = JOB_KEY_RE.match(line)
+        if match:
+            name = match.group(1)
+            jobs[name] = []
+            continue
+        if name is not None:
+            jobs[name].append(line)
+    return {k: "\n".join(v) for k, v in jobs.items()}
+
+
+def secret_jobs_running_tree_code(text: str) -> list[tuple[str, list[str], list[str]]]:
+    """(job, secrets it exposes, scripts it runs from the checkout) for each job doing both."""
+    problems = []
+    for name, body in workflow_jobs(text).items():
+        secrets = sorted({s for s in SECRET_REF_RE.findall(body) if s != "GITHUB_TOKEN"})
+        if not secrets:
+            continue
+        scripts = sorted(set(TREE_SCRIPT_RE.findall(body)))
+        if scripts:
+            problems.append((name, secrets, scripts))
+    return problems
+
+
+def check_workflow_secret_isolation() -> None:
+    for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for job, secrets, scripts in secret_jobs_running_tree_code(text):
+            fail(
+                f"{path}: job '{job}' exposes {', '.join(secrets)} and also runs "
+                f"{', '.join(scripts)} from the checkout — split the job so code from the "
+                f"audited tree never shares a runner with a credential"
+            )
+
+
 # --- 22. a headless audit can still invoke its specialists --------------------
 def check_headless_can_spawn() -> None:
     """The briefs are worth nothing if the orchestrator has no tool to call them.
@@ -951,6 +1019,7 @@ def main() -> int:
     check_skill_grants()
     check_agents_serialize()
     check_workflow_pins()
+    check_workflow_secret_isolation()
     check_headless_can_spawn()
     check_features()
     if findings:

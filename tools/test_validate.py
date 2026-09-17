@@ -14,6 +14,7 @@ import validate
 
 from validate import (
     frontmatter_scalar_problem,
+    secret_jobs_running_tree_code,
     unpinned_npm_installs,
     unresolved_npm_version_vars,
     link_leaves_install_set,
@@ -506,6 +507,90 @@ class NpmPinTests(unittest.TestCase):
             unpinned_npm_installs(None)
         with self.assertRaises(TypeError):
             unresolved_npm_version_vars(None)
+
+
+class SecretIsolationTests(unittest.TestCase):
+    """Tree code and a credential must not share a runner. The audit workflow
+    ran the audited head's Python in the job that held ANTHROPIC_API_KEY until
+    the job split; this is what stops it collapsing back."""
+
+    SPLIT = """jobs:
+  deterministic:
+    steps:
+      - run: python tools/audit_facts.py --out x
+  model:
+    steps:
+      - name: Headless
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python "$LAUNCHER" --report-dir x
+  report:
+    steps:
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/audit_report.py --dir x
+"""
+
+    def test_a_split_workflow_is_clean(self):
+        self.assertEqual(secret_jobs_running_tree_code(self.SPLIT), [])
+
+    def test_tree_code_beside_a_secret_is_reported(self):
+        collapsed = self.SPLIT.replace('python "$LAUNCHER"', "python tools/audit_headless.py")
+        self.assertEqual(
+            secret_jobs_running_tree_code(collapsed),
+            [("model", ["ANTHROPIC_API_KEY"], ["tools/audit_headless.py"])],
+        )
+
+    def test_order_within_the_job_does_not_matter(self):
+        """A secret later in the job is still a secret on that runner: the tree
+        code ran first and had the whole workspace to rewrite."""
+        job = """jobs:
+  one:
+    steps:
+      - run: python tools/audit_facts.py --out x
+      - env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: echo later
+"""
+        self.assertEqual(len(secret_jobs_running_tree_code(job)), 1)
+
+    def test_github_token_alone_is_not_counted(self):
+        """Every workflow has one whether it names it or not, so counting it
+        would flag the report job while protecting nothing."""
+        job = """jobs:
+  report:
+    steps:
+      - env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python tools/audit_pr_comment.py --file x
+"""
+        self.assertEqual(secret_jobs_running_tree_code(job), [])
+
+    def test_a_secret_job_running_no_tree_script_is_clean(self):
+        job = """jobs:
+  model:
+    steps:
+      - env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: npm install -g pkg@1.2.3
+"""
+        self.assertEqual(secret_jobs_running_tree_code(job), [])
+
+    def test_a_top_level_key_ends_the_jobs_block(self):
+        text = self.SPLIT + "\non:\n  push:\n"
+        self.assertEqual(sorted(validate.workflow_jobs(text)), ["deterministic", "model", "report"])
+
+    def test_the_shipped_workflows_keep_the_split(self):
+        for name in sorted(os.listdir(os.path.join(validate.ROOT, ".github", "workflows"))):
+            if not name.endswith((".yml", ".yaml")):
+                continue
+            with self.subTest(workflow=name):
+                with open(os.path.join(validate.ROOT, ".github", "workflows", name), encoding="utf-8") as fh:
+                    self.assertEqual(secret_jobs_running_tree_code(fh.read()), [])
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.workflow_jobs(None)
 
 
 class GateIntegrationTests(unittest.TestCase):
