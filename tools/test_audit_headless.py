@@ -439,6 +439,21 @@ class MainTests(unittest.TestCase):
             code = audit_headless.main(["--repo", ROOT, "--report-dir", self.repo_report, *extra])
         return code, out.getvalue(), err.getvalue()
 
+    def test_each_probe_mode_assembles_end_to_end(self):
+        # The unit tests covered every pure function this path uses and still let a
+        # deleted constant reach CI: nothing had run main() for these flags.
+        for flag, extra in (("--probe-tools", "orchestrator.md"), ("--probe-verifier", "guard-probe.md")):
+            with self.subTest(flag=flag):
+                code, out, err = self.run_main("--guard", self.guard, flag, "--dry-run")
+                self.assertEqual(code, 0, err)
+                self.assertIn("nothing executed", out)
+                self.assertTrue(os.path.exists(os.path.join(ROOT, self.repo_report, "headless", extra)), extra)
+
+    def test_the_two_probes_are_mutually_exclusive(self):
+        code, _, err = self.run_main("--guard", self.guard, "--probe-tools", "--probe-verifier", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("one probe", err)
+
     def test_dry_run_writes_the_artifacts_and_executes_nothing(self):
         code, out, _ = self.run_main("--scope", "harness", "--guard", self.guard, "--dry-run")
         self.assertEqual(code, 0)

@@ -394,6 +394,17 @@ def verifier_probe_prompt(marker: str, report_dir: str = "") -> str:
     )
 
 
+GUARD_PROBE_SYSTEM_PROMPT = (
+    "# Guard probe\n\n"
+    "This run is not an audit. It exists to observe two things: whether the report\n"
+    "directory can be written, and whether the verifier subagent's guard hook decides\n"
+    "its Bash. Do exactly what the task message says, in the order it says, report what\n"
+    "came back, and stop. Do not read the repository, write nothing the task message does\n"
+    "not name, and do not retry a refused command or a refused write in another form — a\n"
+    "refusal is the result this run is looking for, not an obstacle.\n"
+)
+
+
 def probe_verifier_command(agents_json: str, prompt_file: str, grants: list[str],
                            model: str | None = None, report_dir: str = "") -> list[str]:
     """The guard probe's argv: the audit's own flags and the audit's own grants.

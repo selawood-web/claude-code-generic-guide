@@ -243,7 +243,8 @@ jobs:
           set -euo pipefail
           npm install -g @anthropic-ai/claude-code
           python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools \
+            2>&1 | tee "$STAMP/probe.log"
 
       # Two facts a ten-dollar audit run could not establish: whether the verifier's
       # Bash is reachable at all, and whether the guard hook carried inline in its
@@ -261,7 +262,8 @@ jobs:
           set -euo pipefail
           npm install -g @anthropic-ai/claude-code
           python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-verifier
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-verifier \
+            2>&1 | tee "$STAMP/probe.log"
 
       # The same launcher a maintainer runs locally, with the same assembled command:
       # the tree's settings, hooks, agents, skills and CLAUDE.md excluded, agents
@@ -339,6 +341,7 @@ jobs:
           BLOCKERS: ${{ steps.report.outputs.blockers }}
           COMPLETE: ${{ steps.report.outputs.complete }}
           FINDINGS: ${{ steps.report.outputs.findings }}
+          STAMP: ${{ steps.settings.outputs.stamp }}
           DRY_RUN: ${{ inputs.dry_run }}
           PROBE: ${{ inputs.probe_tools }}
           GUARD_PROBE: ${{ inputs.probe_verifier }}
@@ -353,6 +356,13 @@ jobs:
             fi
             if [ "$PROBE" = "true" ] || [ "$GUARD_PROBE" = "true" ]; then
               echo "Probe run: asked the run one question and stopped. Nothing was audited, as asked."
+              # Repeated here on purpose: the answer is what the run was for, and a
+              # reader (or an agent reading the tail of this log) should not have to
+              # scroll back past the install step to find it.
+              if [ -f "$STAMP/probe.log" ]; then
+                grep -E "the tools this run|'Agent' present|the guard|report directory is writable|last words" \
+                  "$STAMP/probe.log" | tee -a "$GITHUB_STEP_SUMMARY" || true
+              fi
               echo "Probe run — nothing audited, by request; the answer is in the step log." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
