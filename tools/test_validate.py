@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import validate
 
@@ -1621,6 +1622,61 @@ class GateIntegrationTests(unittest.TestCase):
         os.remove(os.path.join(self.repo, ".claude/hooks/pre-compact.sh"))
         proc = self.run_gate()
         self.assertIn("pre-compact.sh, which is not a tracked file", proc.stdout)
+
+
+class PinnedGrantRescueTests(unittest.TestCase):
+    """S-007: a grant that pre-approves a path is a promise about whose copy runs."""
+
+    def test_the_shipped_workflow_rescues_every_grant_target(self):
+        del validate.findings[:]
+        try:
+            validate.check_pinned_grants_are_rescued()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_grant_targets_are_read_from_the_launcher(self):
+        with open(os.path.join(validate.ROOT, validate.HEADLESS_PATH), encoding="utf-8") as fh:
+            scripts = validate.pinned_grant_scripts(fh.read())
+        self.assertEqual(scripts, ["tools/audit_facts.py", "tools/audit_probes.py",
+                                   "tools/audit_redteam.py", "tools/audit_report.py"])
+
+    def test_non_bash_grants_name_no_script(self):
+        text = 'PINNED_GRANTS = ("Read", "Glob", "Write(CCGG-AUDIT-*/**)")\n'
+        self.assertEqual(validate.pinned_grant_scripts(text), [])
+
+    def test_a_grant_target_outside_the_rescue_list_is_reported(self):
+        problems = validate.pinned_grant_rescue_problems(
+            ["tools/audit_report.py"], {"tools/audit_headless.py"})
+        self.assertTrue(any("tools/audit_report.py" in p for p in problems), problems)
+
+    def test_a_rescued_target_passes(self):
+        self.assertEqual(validate.pinned_grant_rescue_problems(
+            ["tools/audit_report.py"], {"tools/audit_report.py"}), [])
+
+    def test_what_a_grant_target_imports_is_rescued_too(self):
+        """audit_facts.py imports audit_env.py; rescuing only the first leaves the gap."""
+        problems = validate.pinned_grant_rescue_problems(
+            ["tools/audit_facts.py"], {"tools/audit_facts.py"})
+        self.assertTrue(any("tools/audit_env.py" in p for p in problems), problems)
+
+    def test_the_rescue_list_is_read_from_the_workflow(self):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            rescued = validate.rescued_paths(fh.read())
+        self.assertIn("tools/audit_headless.py", rescued)
+        self.assertIn("tools/audit_report.py", rescued)
+        self.assertIn(".claude/hooks/audit-verifier-guard.sh", rescued)
+
+    def test_an_unreadable_pin_fails_rather_than_passing_quietly(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "pinned_grant_scripts", return_value=[]):
+                validate.check_pinned_grants_are_rescued()
+            self.assertTrue(any("stopped being readable" in f for f in validate.findings),
+                            list(validate.findings))
+        finally:
+            del validate.findings[:]
+
 
 
 if __name__ == "__main__":

@@ -95,6 +95,48 @@ class SkillGrantTests(unittest.TestCase):
             skill_grants(None)
 
 
+class TrustedGrantTests(unittest.TestCase):
+    """S-007: the granted scripts came from the audited head, in the job with the key."""
+
+    SOURCE = "/runner/temp/trusted"
+
+    def rewritten(self, root="/work/head"):
+        return audit_headless.grants_for(list(audit_headless.PINNED_GRANTS), self.SOURCE, root)
+
+    def test_bash_grants_point_at_the_trusted_copies(self):
+        for grant in self.rewritten():
+            if grant.startswith("Bash("):
+                with self.subTest(grant=grant):
+                    self.assertIn(self.SOURCE, grant)
+
+    def test_every_pinned_bash_grant_is_rewritten(self):
+        before = [g for g in audit_headless.PINNED_GRANTS if g.startswith("Bash(")]
+        after = [g for g in self.rewritten() if g.startswith("Bash(")]
+        self.assertEqual(len(before), len(after))
+        self.assertTrue(all(self.SOURCE in g for g in after))
+
+    def test_the_other_grants_are_untouched(self):
+        rewritten = self.rewritten()
+        for grant in audit_headless.PINNED_GRANTS:
+            if not grant.startswith("Bash("):
+                with self.subTest(grant=grant):
+                    self.assertIn(grant, rewritten)
+
+    def test_trusting_the_checkout_changes_nothing(self):
+        """--trust-checkout is the deliberate opt-out; source and root are the same tree."""
+        same = audit_headless.grants_for(list(audit_headless.PINNED_GRANTS), "/work/head", "/work/head")
+        self.assertEqual(same, list(audit_headless.PINNED_GRANTS))
+
+    def test_the_run_is_told_where_to_run_them_from(self):
+        prompt = audit_headless.orchestrator_prompt("skill body here", "harness", "CCGG-AUDIT-x",
+                                                    tools_root=self.SOURCE)
+        self.assertIn(self.SOURCE, prompt)
+
+    def test_a_trusted_checkout_prompt_names_no_other_root(self):
+        prompt = audit_headless.orchestrator_prompt("skill body here", "harness", "CCGG-AUDIT-x")
+        self.assertNotIn("/runner/temp", prompt)
+
+
 class GrantPinningTests(unittest.TestCase):
     """The audited tree must not choose the permissions of the run auditing it.
 

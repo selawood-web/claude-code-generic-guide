@@ -1628,6 +1628,96 @@ def check_guard_allow_lists() -> None:
         fail(problem)
 
 
+AUDIT_WORKFLOW_PATH = ".github/workflows/audit.yml"
+HEADLESS_PATH = "tools/audit_headless.py"
+# The one grant shape that names a path the run may execute without a prompt.
+PINNED_GRANT_SCRIPT_RE = re.compile(r"Bash\(python3 (tools/[A-Za-z0-9_]+\.py) \*\)")
+RESCUE_FETCH_RE = re.compile(r'^\s*fetch "([^"]+)"', re.M)
+LOCAL_IMPORT_RE = re.compile(r"^import ([A-Za-z_][A-Za-z0-9_]*)", re.M)
+
+
+def pinned_grant_scripts(text: str) -> list[str]:
+    """The repository paths PINNED_GRANTS lets a headless run execute unprompted.
+
+    Read with ast, never by importing: validating a module by running it is how the
+    audited tree would get its say back.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not (isinstance(target, ast.Name) and target.id == "PINNED_GRANTS"):
+            continue
+        value = node.value
+        if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                and value.func.id in ("frozenset", "set", "tuple") and len(value.args) == 1):
+            value = value.args[0]
+        try:
+            grants = ast.literal_eval(value)
+        except (ValueError, TypeError):
+            continue
+        for grant in grants:
+            match = PINNED_GRANT_SCRIPT_RE.fullmatch(str(grant).strip())
+            if match and match.group(1) not in found:
+                found.append(match.group(1))
+    return found
+
+
+def local_imports(path: str) -> set[str]:
+    """Sibling modules under tools/ that `path` imports, one level deep."""
+    full = os.path.join(ROOT, path)
+    if not os.path.isfile(full):
+        return set()
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        names = set(LOCAL_IMPORT_RE.findall(fh.read()))
+    return {f"tools/{n}.py" for n in names if os.path.isfile(os.path.join(ROOT, "tools", n + ".py"))}
+
+
+def rescued_paths(text: str) -> set[str]:
+    """The paths the workflow's trusted-copies step takes from the base ref."""
+    return set(RESCUE_FETCH_RE.findall(text))
+
+
+def pinned_grant_rescue_problems(scripts: list[str], rescued: set[str]) -> list[str]:
+    """Grant targets — and what they import — that the base-ref rescue leaves behind.
+
+    A pinned grant is a pre-approval to run a path, and the headless run's cwd is the
+    audited checkout. A target the workflow does not rescue is therefore the head's
+    own code, executing unprompted in the job that holds the API key (finding S-007).
+    """
+    problems = []
+    for script in scripts:
+        needed = [script] + sorted(local_imports(script))
+        for path in needed:
+            if path in rescued:
+                continue
+            why = ("a pinned grant pre-approves it" if path == script
+                   else f"{script} imports it and a pinned grant pre-approves that")
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: {path} is not in the base-ref rescue list, and "
+                            f"{why} — the audited head would supply the code that runs")
+    return problems
+
+
+def check_pinned_grants_are_rescued() -> None:
+    if not (tracked(HEADLESS_PATH) and tracked(AUDIT_WORKFLOW_PATH)):
+        return                      # a project without the headless audit or its workflow
+    with open(os.path.join(ROOT, HEADLESS_PATH), encoding="utf-8", errors="replace") as fh:
+        scripts = pinned_grant_scripts(fh.read())
+    if not scripts:
+        fail(f"{HEADLESS_PATH}: PINNED_GRANTS names no script to run; either it moved or it "
+             f"stopped being readable, and this check silently stopped checking")
+        return
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        rescued = rescued_paths(fh.read())
+    for problem in pinned_grant_rescue_problems(scripts, rescued):
+        fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1667,6 +1757,7 @@ def main() -> int:
     check_hook_stdout_docs()
     check_guard_canary()
     check_guard_allow_lists()
+    check_pinned_grants_are_rescued()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

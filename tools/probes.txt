@@ -90,3 +90,6 @@ unit test step dropped from CI | caught | sed -i '/unittest discover/d' .github/
 soft hyphen planted in a skill body | caught | python3 -c "open('.claude/skills/debug/SKILL.md','a').write('a soft\u00adhyphen here\n')"
 vertical tab planted in a reference | caught | python3 -c "open('.claude/references/code-gate.md','a').write('a vertical\x0btab here\n')"
 Unicode tag character planted in an agent brief | caught | python3 -c "open('.claude/agents/audit-spec.md','a').write('a tag\U000e0041character here\n')"
+grant target dropped from the workflow's base-ref rescue | caught | sed -i '/fetch "tools\/audit_report.py"/d' .github/workflows/audit.yml
+grant target's import dropped from the base-ref rescue | caught | sed -i '/fetch "tools\/audit_env.py"/d' .github/workflows/audit.yml
+a new pinned grant added without rescuing its script | caught | sed -i 's#"Bash(python3 tools/audit_report.py \*)",#"Bash(python3 tools/audit_report.py *)",\n    "Bash(python3 tools/audit_pr_comment.py *)",#' tools/audit_headless.py
