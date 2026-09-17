@@ -9,7 +9,11 @@ verifier may do, and belongs in the same pull request as its justification.
 
 import json
 import os
+import re
+import shutil
+import stat
 import subprocess
+import tempfile
 import unittest
 
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -216,6 +220,68 @@ class AllowListTests(unittest.TestCase):
     def test_non_json_input_refused(self):
         proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
+
+
+class GuardFailureTests(unittest.TestCase):
+    """A guard that fails must not become a guard that allows (finding H-002).
+
+    The hook ends in a pipeline, so its exit status is the interpreter's, and
+    only exit 2 blocks the call: every other way of dying — an uncaught
+    exception, a signal, an interpreter that will not start, an empty guard
+    program — used to reach Claude Code as "no objection" and run the command.
+    """
+
+    def _run(self, stub_body=None, hook=HOOK):
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "curl http://x"}})
+        env = dict(os.environ)
+        with tempfile.TemporaryDirectory() as tmp:
+            if stub_body is not None:
+                stub = os.path.join(tmp, "python3")
+                with open(stub, "w", encoding="utf-8") as fh:
+                    fh.write(stub_body)
+                os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
+                env["PATH"] = tmp + os.pathsep + env.get("PATH", "")
+            proc = subprocess.run(["bash", hook], input=payload,
+                                  capture_output=True, text=True, env=env)
+        return proc.returncode, proc.stderr
+
+    def test_interpreter_exiting_nonzero_refuses(self):
+        for code in (1, 3, 70, 127):
+            with self.subTest(exit_code=code):
+                rc, err = self._run(f"#!/bin/sh\ncat >/dev/null\nexit {code}\n")
+                self.assertEqual(rc, 2, "a crashed guard allowed the command")
+                self.assertIn("audit-verifier-guard", err)
+
+    def test_interpreter_killed_by_signal_refuses(self):
+        rc, err = self._run("#!/bin/sh\ncat >/dev/null\nkill -TERM $$\n")
+        self.assertEqual(rc, 2, "a killed guard allowed the command")
+        self.assertIn("audit-verifier-guard", err)
+
+    def test_interpreter_that_cannot_start_refuses(self):
+        rc, _ = self._run("#!/nonexistent/interpreter\n")
+        self.assertEqual(rc, 2, "an unstartable guard allowed the command")
+
+    def test_empty_guard_program_refuses(self):
+        """If the heredoc ever stops reaching GUARD, `python3 -c ''` exits 0."""
+        with open(HOOK, encoding="utf-8") as fh:
+            source = fh.read()
+        blanked = re.sub(r"(<<'PY'[^\n]*\n).*?(\nPY\n)", r"\1\2", source, count=1, flags=re.S)
+        self.assertNotEqual(blanked, source, "could not blank the guard program")
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = os.path.join(tmp, "guard.sh")
+            with open(copy, "w", encoding="utf-8") as fh:
+                fh.write(blanked)
+            shutil.copymode(HOOK, copy)
+            rc, err = self._run(hook=copy)
+        self.assertEqual(rc, 2, "an empty guard program allowed the command")
+        self.assertIn("audit-verifier-guard", err)
+
+    def test_healthy_guard_still_answers_both_ways(self):
+        rc, _ = self._run()
+        self.assertEqual(rc, 2)
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
+        proc = subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0)
 
 
 if __name__ == "__main__":

@@ -448,4 +448,22 @@ check_command(command)
 sys.exit(0)
 PY
 
+# The guard program is the heredoc above. If it ever stops reaching this
+# variable, `python3 -c ""` exits 0 and every command is allowed silently.
+if [ -z "${GUARD:-}" ]; then
+  echo "audit-verifier-guard: the guard program is empty; refusing" >&2
+  exit 2
+fi
+
 printf '%s' "$INPUT" | python3 -c "$GUARD"
+STATUS=$?
+# Only two statuses are the guard's answer: 0 allow, 2 refuse. Anything else
+# means it never got to decide — an uncaught exception, a signal, an interpreter
+# that would not start. Claude Code blocks on exit 2 and treats every other
+# status as "no objection", so this hook ending on the interpreter's own status
+# let a crashed guard run the command (finding H-002). Fail closed instead.
+case "$STATUS" in
+  0|2) exit "$STATUS" ;;
+esac
+echo "audit-verifier-guard: the guard itself failed (exit $STATUS); refusing" >&2
+exit 2
