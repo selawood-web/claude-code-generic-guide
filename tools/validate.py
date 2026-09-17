@@ -1409,6 +1409,64 @@ def check_reference_thresholds() -> None:
                      f"— add \"measured by `<command>`\", or say it is unmeasured")
 
 
+# --- 27. hook stdout, docs vs vocabulary --------------------------------------
+# The guide's hooks chapter said stdout is ignored "for events like SessionStart",
+# while tools/audit_vocab.json, tools/audit_facts.py, the red-team agent brief and
+# this repository's own SessionStart hook all treat that stdout as text the model
+# reads (finding C-CONFLICT-001). The vocabulary is the one source of truth; this
+# check makes the prose answer to it.
+STDOUT_DENIED_RE = re.compile(
+    r"\bstdout\b[^.]{0,40}\b(?:is|are)\s+(?:ignored|discarded|dropped|unused|"
+    r"not\s+read|thrown\s+away)", re.I)
+
+
+def hook_stdout_reaches_model() -> list[str]:
+    """The events whose stdout the product adds to the model's context."""
+    path = os.path.join(ROOT, VOCAB_PATH)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return list(json.load(fh).get("hook_stdout_reaches_model") or [])
+    except (OSError, ValueError):
+        return []
+
+
+def sentences(text: str) -> list[str]:
+    """Sentences, with wrapped lines joined — a claim split across two lines is one claim."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    flat = re.sub(r"\s+", " ", text)
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", flat) if s.strip()]
+
+
+def hook_stdout_conflicts(path: str, text: str) -> list[str]:
+    """Sentences that deny stdout reaches the model for an event where it does.
+
+    Per sentence, not per file: a page may describe both kinds of event, and
+    saying "every other passive event's stdout is ignored" is not a conflict.
+    """
+    reaching = hook_stdout_reaches_model()
+    problems = []
+    for sentence in sentences(text):
+        if not STDOUT_DENIED_RE.search(sentence):
+            continue
+        named = [e for e in reaching if e in sentence]
+        if named:
+            problems.append(
+                f"{path}: says hook stdout is ignored in a sentence naming "
+                f"{', '.join(named)} — tools/audit_vocab.json lists it under "
+                f"hook_stdout_reaches_model, and this repository's SessionStart hook "
+                f"relies on that: \"{sentence[:110]}\"")
+    return problems
+
+
+def check_hook_stdout_docs() -> None:
+    for path in tracked("docs/*.md"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for problem in hook_stdout_conflicts(path, text):
+            fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1445,6 +1503,7 @@ def main() -> int:
     check_features()
     check_probe_contract()
     check_reference_thresholds()
+    check_hook_stdout_docs()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

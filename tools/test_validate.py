@@ -1109,6 +1109,60 @@ class ProbeCountDriftTests(unittest.TestCase):
                             "F002 states no probe count, so nothing pins it to the list")
 
 
+class HookStdoutDocTests(unittest.TestCase):
+    """C-CONFLICT-001: the guide said SessionStart stdout is ignored; everything
+    else in the repository treats it as a trust boundary."""
+
+    def test_a_sentence_denying_a_reaching_event_is_reported(self):
+        bad = "For events like `SessionStart` or `PostToolUse`, stdout is ignored."
+        self.assertTrue(validate.hook_stdout_conflicts("docs/x.md", bad))
+
+    def test_the_other_spellings_are_caught_too(self):
+        for phrase in ("stdout is discarded", "stdout is dropped", "stdout is not read",
+                       "stdout is thrown away"):
+            with self.subTest(phrase=phrase):
+                self.assertTrue(validate.hook_stdout_conflicts(
+                    "docs/x.md", f"On `UserPromptSubmit`, {phrase}."))
+
+    def test_denying_it_for_an_event_that_really_is_passive_is_fine(self):
+        text = "For `PostToolUse` and `Stop`, stdout is ignored. Just exit 0."
+        self.assertEqual(validate.hook_stdout_conflicts("docs/x.md", text), [])
+
+    def test_naming_a_reaching_event_without_denying_anything_is_fine(self):
+        text = "`SessionStart` stdout goes into the model's context."
+        self.assertEqual(validate.hook_stdout_conflicts("docs/x.md", text), [])
+
+    def test_the_claim_and_the_denial_are_matched_per_sentence_not_per_file(self):
+        """A page may describe both kinds of event without contradicting itself."""
+        text = ("Into the model's context: `SessionStart`, `UserPromptSubmit`.\n\n"
+                "Debug log only: every other passive event, whose stdout is ignored.")
+        self.assertEqual(validate.hook_stdout_conflicts("docs/x.md", text), [])
+
+    def test_wrapped_lines_do_not_hide_a_conflict(self):
+        text = ("For events like `SessionStart` or `PostToolUse`,\n"
+                "stdout is ignored. Just exit 0 on success.")
+        self.assertTrue(validate.hook_stdout_conflicts("docs/x.md", text))
+
+    def test_the_shipped_docs_agree_with_the_vocabulary(self):
+        del validate.findings[:]
+        try:
+            validate.check_hook_stdout_docs()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_hooks_chapter_states_the_reaching_events(self):
+        with open(os.path.join(validate.ROOT, "docs", "10-hooks.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        for event in validate.hook_stdout_reaches_model():
+            with self.subTest(event=event):
+                self.assertIn(f"`{event}`", text)
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.hook_stdout_conflicts("docs/x.md", None)
+
+
 class ProbeContractTests(unittest.TestCase):
     """T-001: a probes file that lists nothing measured the whole contract as zero."""
 

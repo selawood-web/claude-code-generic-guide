@@ -80,3 +80,4 @@ red-team harness main forced to return 0 | caught | sed -i 's/^def main(argv: li
 probes.txt emptied so the gate measures nothing | caught | : > tools/probes.txt
 redteam_probes.txt emptied so no channel is measured | caught | : > tools/redteam_probes.txt
 numeric threshold added to a reference with nothing measuring it | caught | printf '\n\nKeep flaky failures under 5 percent.\n' >> .claude/references/code-gate.md
+docs claim hook stdout is ignored for an event that reaches the model | caught | python3 -c "open('docs/10-hooks.md','a').write('\nFor events like SessionStart, stdout is ignored.\n')"
