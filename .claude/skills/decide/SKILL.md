@@ -20,7 +20,7 @@ Companion files beside this one:
 ### Step 1 — Frame
 Establish, in one short exchange:
 - **The decision statement** — one sentence: "Choose X for Y by Z."
-- **Type** — tool/tech selection, go/no-go, prioritization, or trade-off. (Evaluating a whole product or app idea is `/product-brief`, not this skill — route there.)
+- **Type** — tool/tech selection, go/no-go, prioritization, or trade-off. (Evaluating a whole product or app idea is `/product-brief`, not this skill — route there.) When the choice is something to *install* — a connector, MCP server, plugin, extension, or CLI — the vetting and the approval gate in [`../../references/tool-choice.md`](../../references/tool-choice.md), *Closing a capability gap*, apply on top of this process.
 - **Reversibility** — two-way door (cheap to undo) or one-way door (expensive to undo)?
 - **Stakes** — what breaks or is lost if this is decided wrong?
 
