@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import unittest
 
 import validate
@@ -15,6 +16,9 @@ import validate
 from validate import (
     frontmatter_scalar_problem,
     inherited_env_uses,
+    runs_gate_automatically,
+    self_check,
+    unreachable_after_return,
     secret_jobs_running_tree_code,
     unpinned_npm_installs,
     unresolved_npm_version_vars,
@@ -636,6 +640,87 @@ class InheritedEnvTests(unittest.TestCase):
             inherited_env_uses(None)
         with self.assertRaises(TypeError):
             validate.blank_python_literals(None)
+
+
+class GateRunnerTests(unittest.TestCase):
+    """A repository that ships this gate must not rely on someone remembering
+    to invoke it (the `CI workflow deleted` probe)."""
+
+    AUTOMATIC = "name: validate\n\non:\n  push:\n    branches: [master]\n  pull_request:\n\njobs:\n  v:\n    steps:\n      - run: python tools/validate.py\n"
+
+    def test_a_workflow_running_the_gate_on_push_counts(self):
+        self.assertTrue(runs_gate_automatically(self.AUTOMATIC))
+
+    def test_a_hand_started_workflow_does_not_count(self):
+        hand = self.AUTOMATIC.replace("  push:\n    branches: [master]\n  pull_request:\n", "  workflow_dispatch:\n")
+        self.assertFalse(runs_gate_automatically(hand))
+
+    def test_a_workflow_that_never_runs_the_gate_does_not_count(self):
+        other = self.AUTOMATIC.replace("python tools/validate.py", "python tools/catalog.py")
+        self.assertFalse(runs_gate_automatically(other))
+
+    def test_a_push_trigger_inside_jobs_does_not_count(self):
+        """The trigger has to be in the `on:` block, not a job that mentions push."""
+        sneaky = "name: x\n\non:\n  workflow_dispatch:\n\njobs:\n  v:\n    steps:\n      - run: python tools/validate.py  # push\n"
+        self.assertFalse(runs_gate_automatically(sneaky))
+
+    def test_the_shipped_repository_has_an_automatic_runner(self):
+        found = False
+        wf = os.path.join(validate.ROOT, ".github", "workflows")
+        for name in sorted(os.listdir(wf)):
+            if name.endswith((".yml", ".yaml")):
+                with open(os.path.join(wf, name), encoding="utf-8") as fh:
+                    found = found or runs_gate_automatically(fh.read())
+        self.assertTrue(found, "no workflow runs tools/validate.py automatically")
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            runs_gate_automatically(None)
+
+
+class SelfCheckTests(unittest.TestCase):
+    """The validator's check on itself, which runs before main() so that a
+    main() that returns immediately cannot skip it (the `validator main forced
+    to return 0` probe)."""
+
+    def test_a_neutered_main_is_unreachable_code(self):
+        source = "def main() -> int:\n    return 0\n    check_markdown()\n    return 0\n"
+        self.assertEqual(unreachable_after_return(source), [3])
+
+    def test_clean_source_reports_nothing(self):
+        self.assertEqual(unreachable_after_return("def f():\n    if x:\n        return 1\n    return 2\n"), [])
+
+    def test_an_early_return_in_a_branch_is_not_dead_code(self):
+        source = "def f():\n    for i in y:\n        if i:\n            return i\n        print(i)\n    return None\n"
+        self.assertEqual(unreachable_after_return(source), [])
+
+    def test_a_raise_strands_what_follows_it_too(self):
+        self.assertEqual(unreachable_after_return("def f():\n    raise ValueError()\n    cleanup()\n"), [3])
+
+    def test_a_syntax_error_is_not_this_checks_to_report(self):
+        self.assertEqual(unreachable_after_return("def broken(\n"), [])
+
+    def test_the_shipped_validator_passes_its_own_self_check(self):
+        self.assertEqual(self_check(os.path.join(validate.ROOT, "tools", "validate.py")), [])
+
+    def test_a_neutered_validator_fails_its_own_self_check(self):
+        source = open(os.path.join(validate.ROOT, "tools", "validate.py"), encoding="utf-8").read()
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "validate.py")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(source.replace("def main() -> int:", "def main() -> int:\n    return 0", 1))
+            problems = self_check(path)
+        self.assertTrue(problems)
+        self.assertIn("unreachable", problems[0])
+
+    def test_an_unreadable_source_is_reported_not_swallowed(self):
+        problems = self_check(os.path.join(validate.ROOT, "no-such-file.py"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("cannot read its own source", problems[0])
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            unreachable_after_return(None)
 
 
 class GateIntegrationTests(unittest.TestCase):

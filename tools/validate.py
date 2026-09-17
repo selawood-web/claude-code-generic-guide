@@ -33,6 +33,8 @@ Checks, in order:
      moved tag runs new code with the workflow's permissions.
  20. Every audit subagent still serializes into the inline JSON a headless run
      needs — a brief that only an interactive run can load is a boundary CI loses.
+ 24. Something runs the validator automatically — a repository that ships this
+     gate must not rely on someone remembering to invoke it.
  23. No audit tool builds a child environment out of os.environ — code from the
      audited tree runs with an allow-list, never the operator's credentials.
  22. No workflow job both exposes a secret and runs a script from the checkout —
@@ -46,6 +48,7 @@ Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
 """
 
+import ast
 import io
 import json
 import os
@@ -976,6 +979,41 @@ def blank_python_literals(text: str) -> str:
     return "".join("".join(row) for row in rows)
 
 
+# --- 24. the gate has an automatic runner ------------------------------------
+# Deleting .github/workflows/validate.yml was a defect the gate could not see:
+# the only check for it lived in tools/audit_facts.py, which no CI step invokes,
+# so a commit removing the workflow left every check green. `audit.yml` is not a
+# substitute — it is label-gated and hand-started — so the property is not "a
+# workflow file exists" but "something runs the validator without being asked".
+#
+# Installed projects are exempt. They receive tools/validate.py and decide their
+# own CI; install.sh is the file that only the guide repository has.
+GATE_COMMAND_RE = re.compile(r"tools/validate\.py")
+AUTOMATIC_TRIGGER_RE = re.compile(r"^\s{2,}(push|pull_request):", re.M)
+
+
+def runs_gate_automatically(text: str) -> bool:
+    """True when this workflow runs the validator on a trigger nobody has to remember."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if not GATE_COMMAND_RE.search(text):
+        return False
+    header = text.split("\njobs:", 1)[0]
+    return bool(AUTOMATIC_TRIGGER_RE.search(header))
+
+
+def check_gate_has_a_runner() -> None:
+    if not tracked("install.sh"):
+        return                      # an installed project chooses its own CI
+    workflows = tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml")
+    for path in workflows:
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            if runs_gate_automatically(fh.read()):
+                return
+    fail("no workflow runs tools/validate.py on push or pull_request — "
+         "the gate would run only when someone remembers")
+
+
 def inherited_env_uses(text: str) -> list[int]:
     """Line numbers where a child environment is built out of os.environ."""
     if not isinstance(text, str):
@@ -1065,6 +1103,55 @@ def check_features() -> None:
                 fail(f"{path}:{finding.line}: {finding.message}")
 
 
+
+# --- the validator's check on itself -----------------------------------------
+# This one is not numbered and is not called from main(), deliberately. A check
+# inside main() cannot catch a main() that returns before calling it, and that
+# was a live blind spot: tools/probes.txt recorded "validator main forced to
+# return 0" as a defect the gate could not see, because the neutered validator
+# is the thing asked whether anything is wrong.
+#
+# Prepending `return 0` to main does not remove the checks — it strands them, so
+# the property worth testing is not "are the checks wired up" (they still parse
+# as called) but "can they be reached". Unreachable code in the gate is a real
+# defect in its own right, which is why this is a rule rather than a trap set
+# for one sed command.
+#
+# It closes blunt neutering, not a determined one: anybody who can edit main()
+# can edit this too. The control that does not share that weakness is CI running
+# the base branch's validator against the head, which is a workflow's job.
+def unreachable_after_return(source: str) -> list[int]:
+    """Line numbers of statements that follow an unconditional return or raise."""
+    if not isinstance(source, str):
+        raise TypeError("source must be a string")
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return []               # a syntax error is not this check's to report
+    dead: list[int] = []
+    for node in ast.walk(tree):
+        for field in ("body", "orelse", "finalbody"):
+            block = getattr(node, field, None)
+            if not isinstance(block, list):
+                continue
+            for i, statement in enumerate(block):
+                if isinstance(statement, (ast.Return, ast.Raise)) and i + 1 < len(block):
+                    dead.append(block[i + 1].lineno)
+    return sorted(set(dead))
+
+
+def self_check(path: str | None = None) -> list[str]:
+    """What the validator can tell about itself before main() gets a say."""
+    path = path or os.path.abspath(__file__)
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            source = fh.read()
+    except OSError as exc:
+        return [f"cannot read its own source: {exc}"]
+    return [f"unreachable code at line {no} — a check that cannot be reached is not a check"
+            for no in unreachable_after_return(source)]
+
+
 def main() -> int:
     check_markdown()
     check_skills()
@@ -1087,6 +1174,7 @@ def main() -> int:
     check_workflow_pins()
     check_workflow_secret_isolation()
     check_audit_env_allow_list()
+    check_gate_has_a_runner()
     check_headless_can_spawn()
     check_features()
     if findings:
@@ -1099,4 +1187,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Before main(), never from inside it: a neutered main() must not get to
+    # decide whether the validator is intact.
+    _problems = self_check()
+    for _problem in _problems:
+        print(f"validate.py self-check: {_problem}", file=sys.stderr)
+    sys.exit(1 if _problems else main())
