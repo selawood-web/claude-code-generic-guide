@@ -31,6 +31,16 @@ permissions:
   contents: read          # the audit reads the tree and never writes to it
   pull-requests: write    # one comment carrying the report
 
+env:
+  # Pinned, not `latest`: this job installs the CLI into a runner that later holds
+  # ANTHROPIC_API_KEY, so an unpinned install is an unreviewed dependency with a
+  # secret in scope. 2.1.273 is the version this design was measured against — the
+  # flag behaviour recorded in features/F002-audit-skill.md and
+  # decisions/2026-09-16-ccgg-audit-architecture.md ("measured against the installed
+  # CLI (2.1.273)"). npm's `latest` moves; what the corrections were written against
+  # does not. Bump this deliberately, re-measuring those flags, never incidentally.
+  CLAUDE_CODE_VERSION: "2.1.273"
+
 concurrency:
   group: audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -98,26 +108,82 @@ jobs:
             all|harness) python tools/audit_redteam.py --out "$STAMP" || true ;;
           esac
 
-      # The verifier is the one agent that executes, and its guard must not come
-      # from the tree under audit — a pull request could otherwise ship a guard
-      # that permits everything. Take it from the base branch the maintainers own.
-      - name: Trusted copy of the verifier guard
-        id: guard
+      # Everything that TELLS this run what to do must come from the base branch the
+      # maintainers own, never from the tree under audit. Four things qualify, and
+      # the guard was only the first of them:
+      #   the verifier's guard hook  — or a pull request ships a guard permitting all
+      #   the audit skill           — its body becomes the orchestrator's system prompt
+      #   the audit agent briefs    — each body becomes a subagent's system prompt
+      #   the launcher itself       — it holds the pinned grant set and does this rescue
+      # The head checkout is still what gets audited; it just no longer gets a say in
+      # how. audit_agents_json.py comes along because audit_headless.py imports it.
+      - name: Trusted copies of the files that configure the run
+        id: trusted
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          dest="$RUNNER_TEMP/audit-verifier-guard.sh"
-          src=".claude/hooks/audit-verifier-guard.sh"
-          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA:$src" 2>/dev/null; then
-            git show "$BASE_SHA:$src" > "$dest"
-            echo "guard taken from the base branch, not from the audited head"
-          else
-            cp "$src" "$dest"
-            echo "no base ref (manual run on a branch the maintainers own); guard taken from the checkout"
+          src_dir="$RUNNER_TEMP/trusted"
+          rm -rf "$src_dir"
+          mkdir -p "$src_dir/.claude/hooks" "$src_dir/.claude/skills/ccgg-audit" \
+                   "$src_dir/.claude/agents" "$src_dir/tools"
+
+          # One switch for the whole set: either the base ref supplies all of it, or
+          # none of it and we say so. A partial rescue is the dangerous middle.
+          trusted_from_base=0
+          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA:tools/audit_headless.py" 2>/dev/null; then
+            trusted_from_base=1
           fi
-          chmod +x "$dest"
-          echo "path=$dest" >> "$GITHUB_OUTPUT"
+
+          fetch() {   # fetch <path in repo>
+            if [ "$trusted_from_base" -eq 1 ] && git cat-file -e "$BASE_SHA:$1" 2>/dev/null; then
+              git show "$BASE_SHA:$1" > "$src_dir/$1"
+            else
+              cp "$1" "$src_dir/$1"
+            fi
+          }
+
+          fetch ".claude/hooks/audit-verifier-guard.sh"
+          fetch ".claude/skills/ccgg-audit/SKILL.md"
+          fetch "tools/audit_headless.py"
+          fetch "tools/audit_agents_json.py"
+
+          # The agent list itself comes from the base ref when there is one, so a
+          # pull request cannot add a specialist or drop the verifier.
+          if [ "$trusted_from_base" -eq 1 ]; then
+            agents=$(git ls-tree --name-only "$BASE_SHA" .claude/agents/ | grep -E 'audit-.*\.md$' || true)
+          else
+            agents=$(ls .claude/agents/audit-*.md 2>/dev/null || true)
+          fi
+          if [ -z "$agents" ]; then
+            echo "no audit agent briefs found; refusing to assemble a run with no specialists" >&2
+            exit 1
+          fi
+          for a in $agents; do fetch "$a"; done
+
+          chmod +x "$src_dir/.claude/hooks/audit-verifier-guard.sh"
+          if [ "$trusted_from_base" -eq 1 ]; then
+            echo "guard, skill, agent briefs and launcher taken from the base branch, not from the audited head"
+          else
+            echo "no base ref (manual run on a branch the maintainers own); taken from the checkout"
+          fi
+          echo "Trusted set:"; (cd "$src_dir" && find . -type f | sort | sed 's/^/  /')
+
+          # The launcher comes from the base ref, so the flags below must be ones the
+          # BASE understands — not the head's. On the pull request that first adds
+          # --trusted-source the base predates it, and this is that one-time case.
+          # Fail with the remedy rather than dropping the flag: a run that quietly
+          # lost its trusted source would look exactly like a protected one.
+          if ! python "$src_dir/tools/audit_headless.py" --help 2>/dev/null | grep -q -- '--trusted-source'; then
+            echo "The base branch's tools/audit_headless.py predates --trusted-source, so this run" >&2
+            echo "cannot be given a trusted skill or trusted agent briefs. Merge that change to the" >&2
+            echo "base branch first; until then the audit workflow cannot protect its own prompts." >&2
+            exit 1
+          fi
+
+          echo "guard=$src_dir/.claude/hooks/audit-verifier-guard.sh" >> "$GITHUB_OUTPUT"
+          echo "source=$src_dir" >> "$GITHUB_OUTPUT"
+          echo "launcher=$src_dir/tools/audit_headless.py" >> "$GITHUB_OUTPUT"
 
       # Nothing to run (no key, or a deliberate dry run): still assemble, so the
       # command, the agents JSON and the orchestrator prompt are on the record.
@@ -126,12 +192,14 @@ jobs:
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
           SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
           BUDGET: ${{ steps.settings.outputs.budget }}
         run: |
-          python tools/audit_headless.py \
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
-            --budget-usd "$BUDGET" --dry-run
+            --trusted-source "$SOURCE" --budget-usd "$BUDGET" --dry-run
 
       # Three authenticated runs died at the first API call, and the log could not
       # say whether the stored secret was mangled or the key itself was rejected.
@@ -233,13 +301,23 @@ jobs:
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
           SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
-          python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Fail here, not mid-run: an install that resolved to something else is a
+          # different tool than the one these flags were measured against.
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
+            --trusted-source "$SOURCE" --probe-tools
 
       # The same launcher a maintainer runs locally, with the same assembled command:
       # the tree's settings, hooks, agents, skills and CLAUDE.md excluded, agents
@@ -250,14 +328,24 @@ jobs:
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
           SCOPE: ${{ steps.settings.outputs.scope }}
-          GUARD: ${{ steps.guard.outputs.path }}
+          GUARD: ${{ steps.trusted.outputs.guard }}
+          SOURCE: ${{ steps.trusted.outputs.source }}
+          LAUNCHER: ${{ steps.trusted.outputs.launcher }}
           BUDGET: ${{ steps.settings.outputs.budget }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
-          python tools/audit_headless.py \
-            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --budget-usd "$BUDGET"
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Fail here, not mid-run: an install that resolved to something else is a
+          # different tool than the one these flags were measured against.
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
+          python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
+            --trusted-source "$SOURCE" --budget-usd "$BUDGET"
 
       # The report is rendered from findings.jsonl by a script, not written by the
       # model: a candidate no verifier reached still appears, tagged unverified.

@@ -797,9 +797,51 @@ def check_agents_serialize() -> None:
             fail(f".claude/agents/{name}.md: no brief survives serialization")
 
 
-# --- 21. workflow actions are pinned ------------------------------------------
+# --- 21. workflow actions are pinned, and npm installs name an exact version ------------------------------------------
 USES_RE = re.compile(r"^\s*-?\s*uses:\s*(\S+)", re.M)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+
+# A global install in a job that later holds a secret is a dependency nobody
+# reviewed. `@latest`, a bare name, or a range all resolve to whatever the registry
+# serves that minute; only an exact version is a decision someone made.
+NPM_INSTALL_RE = re.compile(r"npm\s+(?:install|i|add)\s+(?:-g\s+|--global\s+)?([^\s;&|]+)", re.M)
+EXACT_NPM_VERSION_RE = re.compile(r"^@?[^@]+@\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$")
+
+
+def unpinned_npm_installs(text: str) -> list[str]:
+    """Every npm install target in a workflow that is not pinned to an exact version.
+
+    A value interpolated from the workflow's own env (npm i -g "pkg@${VER}") counts
+    as pinned: the pin has simply been named once instead of twice. The registry
+    never sees the variable, so what matters is that a literal version exists in the
+    file, which check_workflow_pins confirms separately.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    loose = []
+    for raw in NPM_INSTALL_RE.findall(text):
+        spec = raw.strip("\"'")
+        if spec.startswith("-"):
+            continue                       # a flag, not a package
+        if "$" in spec:                    # pinned through a variable; checked below
+            continue
+        if not EXACT_NPM_VERSION_RE.match(spec):
+            loose.append(spec)
+    return loose
+
+
+def unresolved_npm_version_vars(text: str) -> list[str]:
+    """Env names an npm install pins through that the workflow never defines literally."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    missing = []
+    for raw in NPM_INSTALL_RE.findall(text):
+        spec = raw.strip("\"'")
+        for name in re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", spec):
+            if not re.search(rf"^\s*{name}:\s*[\"']?\d+\.\d+\.\d+", text, re.M):
+                missing.append(name)
+    return missing
 
 
 def unpinned_actions(text: str) -> list[str]:
@@ -823,6 +865,10 @@ def check_workflow_pins() -> None:
             text = fh.read()
         for ref in unpinned_actions(text):
             fail(f"{path}: uses {ref} — pin the action to a commit SHA; a tag can be moved under you")
+        for spec in unpinned_npm_installs(text):
+            fail(f"{path}: installs {spec} — pin it to an exact version; this job holds a secret")
+        for name in unresolved_npm_version_vars(text):
+            fail(f"{path}: installs a package pinned through ${name}, which no env sets to an exact version")
 
 
 # --- 22. a headless audit can still invoke its specialists --------------------

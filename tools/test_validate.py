@@ -14,6 +14,8 @@ import validate
 
 from validate import (
     frontmatter_scalar_problem,
+    unpinned_npm_installs,
+    unresolved_npm_version_vars,
     link_leaves_install_set,
     slugify,
     strip_code_blocks,
@@ -438,6 +440,72 @@ class SkillIdentityTests(unittest.TestCase):
         problems = validate.skill_identity_problems(".claude/skills/debug/SKILL.md", {"name": "debugger", "description": "x"})
         self.assertEqual(len(problems), 1)
         self.assertIn("/debug", problems[0])
+
+
+class NpmPinTests(unittest.TestCase):
+    """A global install in a job that later holds a secret is a dependency
+    nobody reviewed. These cases are why check_workflow_pins reads npm too."""
+
+    def test_a_bare_package_is_unpinned(self):
+        self.assertEqual(
+            unpinned_npm_installs("          npm install -g @anthropic-ai/claude-code\n"),
+            ["@anthropic-ai/claude-code"],
+        )
+
+    def test_latest_is_unpinned(self):
+        self.assertEqual(
+            unpinned_npm_installs("npm install -g @anthropic-ai/claude-code@latest\n"),
+            ["@anthropic-ai/claude-code@latest"],
+        )
+
+    def test_a_range_is_unpinned(self):
+        for spec in ("pkg@^2.1.0", "pkg@~2.1.0", "pkg@>=2.0.0"):
+            with self.subTest(spec=spec):
+                self.assertEqual(unpinned_npm_installs(f"npm i -g {spec}\n"), [spec])
+
+    def test_an_exact_version_is_pinned(self):
+        self.assertEqual(
+            unpinned_npm_installs('npm install -g "@anthropic-ai/claude-code@2.1.273"\n'), []
+        )
+
+    def test_a_prerelease_version_is_pinned(self):
+        self.assertEqual(unpinned_npm_installs("npm install -g pkg@2.1.273-rc.1\n"), [])
+
+    def test_a_version_named_once_in_env_is_pinned(self):
+        text = (
+            'env:\n  CLAUDE_CODE_VERSION: "2.1.273"\n'
+            '        run: |\n          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"\n'
+        )
+        self.assertEqual(unpinned_npm_installs(text), [])
+        self.assertEqual(unresolved_npm_version_vars(text), [])
+
+    def test_a_variable_no_env_pins_is_reported(self):
+        text = '          npm install -g "@anthropic-ai/claude-code@${SOME_VERSION}"\n'
+        self.assertEqual(unpinned_npm_installs(text), [])
+        self.assertEqual(unresolved_npm_version_vars(text), ["SOME_VERSION"])
+
+    def test_an_env_holding_a_range_does_not_count_as_a_pin(self):
+        text = (
+            'env:\n  VER: "^2.1.0"\n'
+            '          npm install -g "pkg@${VER}"\n'
+        )
+        self.assertEqual(unresolved_npm_version_vars(text), ["VER"])
+
+    def test_the_shipped_workflows_are_pinned(self):
+        for name in sorted(os.listdir(os.path.join(validate.ROOT, ".github", "workflows"))):
+            if not name.endswith((".yml", ".yaml")):
+                continue
+            with self.subTest(workflow=name):
+                with open(os.path.join(validate.ROOT, ".github", "workflows", name), encoding="utf-8") as fh:
+                    text = fh.read()
+                self.assertEqual(unpinned_npm_installs(text), [])
+                self.assertEqual(unresolved_npm_version_vars(text), [])
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            unpinned_npm_installs(None)
+        with self.assertRaises(TypeError):
+            unresolved_npm_version_vars(None)
 
 
 class GateIntegrationTests(unittest.TestCase):
