@@ -261,7 +261,11 @@ class RunSummaryTests(unittest.TestCase):
     EMPTY_RUN = {
         "num_turns": 12, "total_cost_usd": 0.42, "stop_reason": "end_turn",
         "subagent_stats": {"spawned": 0, "completed": 0, "failed": 0},
-        "permission_denials": [{"tool_name": "Write"}, {"tool_name": "Write"}, {"tool_name": "Bash"}],
+        "permission_denials": [
+            {"tool_name": "Write", "tool_input": {"file_path": "CCGG-AUDIT-X/findings.jsonl", "content": "..."}},
+            {"tool_name": "Write"},
+            {"tool_name": "Bash", "tool_input": {"command": "git worktree add /tmp/w HEAD"}},
+        ],
         "result": "I summarised my findings here rather than writing files.",
     }
 
@@ -272,13 +276,24 @@ class RunSummaryTests(unittest.TestCase):
         self.assertIn("0 subagent(s)", line)
         self.assertIn("end_turn", line)
 
-    def test_refused_tool_calls_are_named_and_counted(self):
+    def test_refused_tool_calls_are_named_with_what_they_asked_for(self):
+        # "Bash x2, Write" cost a diagnosis once: the command and the path were in
+        # the result all along. Each denial now carries the part that explains it.
         lines = run_summary(self.EMPTY_RUN)
         joined = "\n".join(lines)
         self.assertIn("3 tool call(s) refused", joined)
-        self.assertIn("Write x2", joined)
-        self.assertIn("Bash", joined)
+        self.assertIn("Write: CCGG-AUDIT-X/findings.jsonl", joined)
+        self.assertIn("Bash: git worktree add /tmp/w HEAD", joined)
         self.assertIn("refused write", joined, "the reader should be told what a denial explains")
+
+    def test_a_denial_without_detail_still_names_its_tool(self):
+        self.assertIn("Write", "\n".join(run_summary(dict(self.EMPTY_RUN,
+                                                          permission_denials=[{"tool_name": "Write"}]))))
+
+    def test_secrets_in_a_denial_are_bounded_like_the_last_words(self):
+        entry = {"tool_name": "Bash", "tool_input": {"command": "x" * 900}}
+        line = [l for l in run_summary(dict(self.EMPTY_RUN, permission_denials=[entry])) if "Bash" in l][0]
+        self.assertLess(len(line), 220)
 
     def test_the_runs_own_words_are_quoted_and_bounded(self):
         long_tail = dict(self.EMPTY_RUN, result="x" * 5000)
@@ -300,6 +315,44 @@ class RunSummaryTests(unittest.TestCase):
     def test_malformed_denial_entries_do_not_crash(self):
         lines = run_summary(dict(self.EMPTY_RUN, permission_denials=["oops", {}, None]))
         self.assertIn("unknown", "\n".join(lines))
+
+
+class GuardProbeTests(unittest.TestCase):
+    """The cent-scale experiment that stands in for a ten-dollar audit run."""
+
+    def setUp(self):
+        self.argv = audit_headless.probe_verifier_command('{"a":{}}', "/tmp/g.md", ["Read", "Agent"])
+
+    def test_bash_is_deliberately_wide_so_a_refusal_can_only_be_the_guard(self):
+        grants = self.argv[self.argv.index("--allowedTools") + 1:self.argv.index("--disallowed-tools")]
+        self.assertIn("Bash", grants)
+        self.assertIn("Bash", self.argv[self.argv.index("--tools") + 1].split(","))
+
+    def test_it_asks_for_one_allowed_and_one_refused_command(self):
+        prompt = self.argv[2]
+        self.assertIn(audit_headless.ALLOWED_PROBE_COMMAND, prompt)
+        self.assertIn(audit_headless.guard_probe_marker(), prompt)
+        self.assertIn("audit-verifier", prompt)
+        self.assertIn("Do not work around a refusal", prompt)
+
+    def test_it_is_capped_at_a_few_turns_and_a_dollar_or_so(self):
+        self.assertEqual(self.argv[self.argv.index("--max-turns") + 1], "12")
+        self.assertLessEqual(float(self.argv[self.argv.index("--max-budget-usd") + 1]), 2.0)
+
+    def test_the_marker_must_be_absolute_because_the_verifier_runs_in_a_worktree(self):
+        with self.assertRaises(HeadlessError):
+            audit_headless.verifier_probe_prompt("relative/marker")
+
+    def test_verdicts_name_what_was_observed(self):
+        self.assertIn("did NOT fire", audit_headless.guard_verdict(True, 1, "refused"))
+        self.assertIn("no subagent", audit_headless.guard_verdict(False, 0, "refused"))
+        self.assertIn("guard fired", audit_headless.guard_verdict(False, 1, "audit-verifier-guard: refusing"))
+        self.assertIn("inconclusive", audit_headless.guard_verdict(False, 2, "both commands ran"))
+
+    def test_an_escape_outranks_a_reported_refusal(self):
+        # A run that says it was refused while the marker exists is the dangerous
+        # case: believe the filesystem, not the transcript.
+        self.assertIn("did NOT fire", audit_headless.guard_verdict(True, 1, "audit-verifier-guard: refusing"))
 
 
 class ProbeCommandTests(unittest.TestCase):

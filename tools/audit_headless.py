@@ -264,6 +264,34 @@ def failure_line(stdout: str, stderr: str, returncode: int) -> str:
     return f"audit-headless: the run exited {returncode} with no output"
 
 
+# What a denial was actually asking for. The tool name alone cost a run: three
+# refusals said "Bash x2, Write" and left the diagnosis to guesswork, when the
+# command and the path were sitting in the result the whole time.
+DENIAL_FIELDS = ("command", "file_path", "path", "pattern", "url", "prompt", "description")
+
+
+def denial_line(entry) -> str:
+    """One refused call, named with the part of its input that explains it."""
+    if not isinstance(entry, dict):
+        return "unknown (no detail in the result)"
+    name = str(entry.get("tool_name") or "unknown")
+    payload = entry.get("tool_input")
+    detail = ""
+    if isinstance(payload, dict):
+        for field in DENIAL_FIELDS:
+            value = payload.get(field)
+            if isinstance(value, str) and value.strip():
+                detail = value.strip().replace("\n", " ")
+                break
+        else:
+            detail = ", ".join(sorted(payload)) or ""
+    elif isinstance(payload, str):
+        detail = payload.strip().replace("\n", " ")
+    if not detail:
+        return name
+    return f"{name}: {detail[:160]}"
+
+
 def run_summary(result: dict | None) -> list[str]:
     """What the run actually did, in a line or two.
 
@@ -292,15 +320,9 @@ def run_summary(result: dict | None) -> list[str]:
 
     denials = result.get("permission_denials") or []
     if denials:
-        names = []
+        lines.append(f"audit-headless: {len(denials)} tool call(s) refused by the grant set:")
         for entry in denials:
-            name = entry.get("tool_name") if isinstance(entry, dict) else None
-            names.append(str(name or "unknown"))
-        counts: dict[str, int] = {}
-        for name in names:
-            counts[name] = counts.get(name, 0) + 1
-        listed = ", ".join(f"{n} x{c}" if c > 1 else n for n, c in sorted(counts.items()))
-        lines.append(f"audit-headless: {len(denials)} tool call(s) refused by the grant set: {listed}")
+            lines.append("    " + denial_line(entry))
         lines.append("audit-headless: a refused write is why a run can finish cleanly and leave nothing behind")
     text = str(result.get("result") or "").strip().replace("\n", " ")
     if text:
@@ -326,6 +348,83 @@ def probe_command(agents_json: str, prompt_file: str, grants: list[str],
     """
     return _command(PROBE_PROMPT, agents_json, prompt_file, grants, "1",
                     str(PROBE_BUDGET_USD), model)
+
+
+VERIFIER_PROBE_BUDGET_USD = 1.50
+VERIFIER_PROBE_TURNS = 12
+ALLOWED_PROBE_COMMAND = "git status --porcelain"
+
+
+def verifier_probe_prompt(marker: str) -> str:
+    """Two questions a full audit cannot answer without spending ten dollars.
+
+    An audit run reported three refusals and wrote nothing, and the two facts
+    needed to fix it safely were both unknown: whether the verifier's Bash is
+    reachable at all under `--permission-prompts none`, and whether the guard
+    hook carried inline in the agent definition fires. This asks the verifier to
+    run one command the guard allows and one it must refuse. The refused one is
+    a redirect into a file nothing reads — harmless if the guard is absent, and
+    its existence afterwards is the proof that it was.
+    """
+    if not isinstance(marker, str) or not marker.startswith("/"):
+        raise HeadlessError("the probe marker must be an absolute path")
+    return (
+        "Spawn the `audit-verifier` subagent exactly once, with this task and nothing else:\n\n"
+        "  Run these two Bash commands in order, one call each, and report for each one\n"
+        "  whether it ran, and if it did not, the refusal message word for word:\n"
+        f"    1. {ALLOWED_PROBE_COMMAND}\n"
+        f"    2. printf escaped > {marker}\n"
+        "  Do not work around a refusal, do not try another form of the same command,\n"
+        "  and do not audit anything. Report the two outcomes and stop.\n\n"
+        "Then reply with the subagent's two outcomes verbatim and nothing else. If the\n"
+        "subagent could not be spawned, say only that."
+    )
+
+
+GUARD_PROBE_SYSTEM_PROMPT = (
+    "# Guard probe\n\n"
+    "This run is not an audit. It exists to observe one thing: whether the verifier\n"
+    "subagent's guard hook fires. Do exactly what the task message says, spawn the\n"
+    "subagent once, report what came back, and stop. Do not read the repository, do not\n"
+    "write files, and do not retry a refused command in another form — a refusal is the\n"
+    "result this run is looking for, not an obstacle.\n"
+)
+
+
+def probe_verifier_command(agents_json: str, prompt_file: str, grants: list[str],
+                           model: str | None = None) -> list[str]:
+    """The guard probe's argv: the audit's flags, with Bash deliberately wide.
+
+    The grant set is not what this measures — it is what would hide the
+    measurement. Bare `Bash` is added so a refusal can only have come from the
+    guard, and the run is capped at a few turns and a dollar and a half.
+    """
+    wide = list(grants)
+    if "Bash" not in wide:
+        wide.append("Bash")
+    return _command(verifier_probe_prompt(guard_probe_marker()), agents_json, prompt_file,
+                    wide, str(VERIFIER_PROBE_TURNS), str(VERIFIER_PROBE_BUDGET_USD), model)
+
+
+def guard_probe_marker() -> str:
+    """Where the refused command would land if nothing refused it."""
+    return os.environ.get("CCGG_GUARD_PROBE_MARKER") or "/tmp/ccgg-guard-probe-escape"
+
+
+def guard_verdict(marker_exists: bool, spawned, text: str) -> str:
+    """What the probe proved, in one line, from the three things it can observe."""
+    if marker_exists:
+        return ("audit-headless: the guard did NOT fire — the refused command wrote its marker, "
+                "so a hooks block inside an inline agent definition is not honoured")
+    if not spawned:
+        return ("audit-headless: inconclusive — no subagent was spawned, so the verifier's "
+                "guard was never reached")
+    lowered = (text or "").lower()
+    if "audit-verifier-guard" in lowered or "refus" in lowered or "denied" in lowered or "blocked" in lowered:
+        return ("audit-headless: the guard fired — the verifier's Bash is reachable and the "
+                "refused command was refused")
+    return ("audit-headless: inconclusive — nothing wrote the marker and the run reported no "
+            "refusal; read the result file before widening any grant")
 
 
 def check_scope(scope: str, root: str) -> str:
@@ -355,6 +454,8 @@ def main(argv: list[str]) -> int:
                         help="assemble and write the artifacts, print the command, run nothing")
     parser.add_argument("--probe-tools", action="store_true",
                         help="one turn, half a dollar: ask the run what tools it actually has")
+    parser.add_argument("--probe-verifier", action="store_true",
+                        help="a few turns, a dollar or so: does the verifier's inline guard hook fire")
     args = parser.parse_args(argv)
 
     root = args.repo
@@ -405,8 +506,22 @@ def main(argv: list[str]) -> int:
     with open(prompt_file, "w", encoding="utf-8") as fh:
         fh.write(prompt + "\n")
 
+    if args.probe_tools and args.probe_verifier:
+        print("audit-headless: pick one probe, not both", file=sys.stderr)
+        return 2
     if args.probe_tools:
         command = probe_command(agents_json, prompt_file, grants, args.model)
+    elif args.probe_verifier:
+        marker = guard_probe_marker()
+        try:
+            os.remove(marker)  # a marker left by an earlier probe would read as an escape
+        except OSError:
+            pass
+        # The audit's own steps would send this run auditing; the probe appends its own.
+        probe_prompt_file = os.path.join(out_dir, "guard-probe.md")
+        with open(probe_prompt_file, "w", encoding="utf-8") as fh:
+            fh.write(GUARD_PROBE_SYSTEM_PROMPT)
+        command = probe_verifier_command(agents_json, probe_prompt_file, grants, args.model)
     else:
         command = build_command(agents_json, prompt_file, grants, scope, report_dir,
                                 args.max_turns, args.budget_usd, args.model)
@@ -424,7 +539,13 @@ def main(argv: list[str]) -> int:
         print(shlex.join(readable))
         return 0
 
-    result_path = os.path.join(out_dir, "probe-result.json" if args.probe_tools else "result.json")
+    if args.probe_tools:
+        result_name = "probe-result.json"
+    elif args.probe_verifier:
+        result_name = "guard-probe-result.json"
+    else:
+        result_name = "result.json"
+    result_path = os.path.join(out_dir, result_name)
     try:
         proc = subprocess.run(command, cwd=root, capture_output=True, text=True,
                               encoding="utf-8", errors="replace")
@@ -445,9 +566,19 @@ def main(argv: list[str]) -> int:
         for line in (text.splitlines() or ["(the run named none)"]):
             print(f"    {line.strip()}")
         print(f"audit-headless: 'Agent' present: {'yes' if 'agent' in text.lower() else 'NO'}")
+    if args.probe_verifier:
+        marker = guard_probe_marker()
+        exists = os.path.exists(marker)
+        spawned = ((result or {}).get("subagent_stats") or {}).get("spawned") or 0
+        print(guard_verdict(exists, spawned, str((result or {}).get("result") or "")))
+        if exists:
+            try:
+                os.remove(marker)
+            except OSError:
+                pass
     for line in run_summary(result):
         print(line)
-    print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', 'result.json')}")
+    print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', result_name)}")
     return 0
 
 

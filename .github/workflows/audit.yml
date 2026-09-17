@@ -24,6 +24,10 @@ on:
         description: "one turn, ~1 cent: ask the run which tools it actually has, then stop"
         type: boolean
         default: false
+      probe_verifier:
+        description: "a few turns, ~$1: does the verifier's inline guard hook fire, then stop"
+        type: boolean
+        default: false
   pull_request:
     types: [opened, labeled, synchronize]
 
@@ -241,12 +245,30 @@ jobs:
           python tools/audit_headless.py \
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-tools
 
+      # Two facts a ten-dollar audit run could not establish: whether the verifier's
+      # Bash is reachable at all, and whether the guard hook carried inline in its
+      # definition fires. Bash is deliberately wide here, so a refusal can only be
+      # the guard; the command it must refuse writes a marker nothing reads, and the
+      # marker's existence afterwards is the proof that nothing refused it.
+      - name: Probe the verifier's guard
+        if: steps.settings.outputs.authenticated == 'true' && inputs.probe_verifier == true
+        env:
+          STAMP: ${{ steps.settings.outputs.stamp }}
+          SCOPE: ${{ steps.settings.outputs.scope }}
+          GUARD: ${{ steps.guard.outputs.path }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          npm install -g @anthropic-ai/claude-code
+          python tools/audit_headless.py \
+            --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" --probe-verifier
+
       # The same launcher a maintainer runs locally, with the same assembled command:
       # the tree's settings, hooks, agents, skills and CLAUDE.md excluded, agents
       # inline, the tool set and grants taken from the skill, budget capped.
       # `--agents` takes literal JSON, so it is passed as one argument, never a path.
       - name: Headless audit
-        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true
+        if: steps.settings.outputs.authenticated == 'true' && inputs.dry_run != true && inputs.probe_tools != true && inputs.probe_verifier != true
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
           SCOPE: ${{ steps.settings.outputs.scope }}
@@ -319,6 +341,7 @@ jobs:
           FINDINGS: ${{ steps.report.outputs.findings }}
           DRY_RUN: ${{ inputs.dry_run }}
           PROBE: ${{ inputs.probe_tools }}
+          GUARD_PROBE: ${{ inputs.probe_verifier }}
           AUTHENTICATED: ${{ steps.settings.outputs.authenticated }}
         run: |
           set -euo pipefail
@@ -328,9 +351,9 @@ jobs:
               echo "Dry run — nothing audited, by request." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
-            if [ "$PROBE" = "true" ]; then
-              echo "Tool probe: asked the run what tools it has and stopped. Nothing was audited, as asked."
-              echo "Tool probe — nothing audited, by request; the tool list is in the step log." >> "$GITHUB_STEP_SUMMARY"
+            if [ "$PROBE" = "true" ] || [ "$GUARD_PROBE" = "true" ]; then
+              echo "Probe run: asked the run one question and stopped. Nothing was audited, as asked."
+              echo "Probe run — nothing audited, by request; the answer is in the step log." >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             echo "This run audited nothing: the model stage left no candidates, no findings and no revision stamp."

@@ -239,6 +239,12 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   never noticed because a human answers the prompt there. Widening the Bash grant is only
   safe if the inline agent's guard hook actually fires — the open question above — so the
   next step is a cent-scale probe of both, not another 10 USD run — [open]
+- 2026-09-17 — `--probe-verifier`: a few turns and about a dollar, asking the orchestrator
+  to spawn the verifier once and run two commands — one the guard allows, one it must
+  refuse. Bash is deliberately wide in this probe so a refusal can only be the guard, and
+  the refused command writes a marker nothing reads: if the marker exists afterwards, the
+  hook never fired. Denials now print what they asked for, not just the tool's name — the
+  ten-dollar run's "Bash x2, Write" had the command and the path in the result all along — [in]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands
