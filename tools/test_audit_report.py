@@ -283,6 +283,41 @@ class DeterministicStageTests(unittest.TestCase):
         self.touch("redteam.json")
         self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], [])
 
+    def summary(self, name, **counts):
+        with open(os.path.join(self.dir, f"{name}.json"), "w", encoding="utf-8") as fh:
+            json.dump({"summary": counts, "probes": []}, fh)
+
+    def test_a_stage_whose_probes_all_errored_is_not_a_stage_that_found_nothing(self):
+        """T-006: presence was the only question asked of redteam.json."""
+        self.facts("all")
+        self.summary("probes", errors=0)
+        self.summary("redteam", error=4, total=4)
+        evidence = audit_report.run_evidence(self.dir)
+        self.assertEqual(evidence["stages_missing"], [])
+        self.assertEqual(evidence["stages_with_errors"], {"redteam": 4})
+
+    def test_the_two_harnesses_spell_the_count_differently_and_both_are_read(self):
+        self.facts("all")
+        self.summary("probes", errors=2)
+        self.summary("redteam", error=1)
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_with_errors"],
+                         {"probes": 2, "redteam": 1})
+
+    def test_a_clean_stage_reports_no_errors(self):
+        self.facts("all")
+        self.summary("probes", errors=0)
+        self.summary("redteam", error=0)
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_with_errors"], {})
+
+    def test_the_report_says_so_in_its_own_voice(self):
+        self.facts("all")
+        self.summary("probes", errors=0)
+        self.summary("redteam", error=3, total=3)
+        text = audit_report.render([], None, None, None, audit_report.run_evidence(self.dir))
+        self.assertIn("redteam", text)
+        self.assertIn("3", text)
+        self.assertIn("errored", text)
+
     def test_an_unknown_scope_reports_only_the_missing_facts(self):
         """No facts.json means no scope to reason from; do not invent a requirement."""
         self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], ["facts"])

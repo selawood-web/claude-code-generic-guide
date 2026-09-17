@@ -158,12 +158,15 @@ def main(argv: list[str]) -> int:
     repo = args.repo or subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True, encoding="utf-8").strip()
     probes_path = os.path.join(repo, args.probes)
     if not os.path.isfile(probes_path):
-        print(f"audit-redteam: no probes file at {args.probes} — nothing to measure")
-        return 0
+        print(f"audit-redteam: no probes file at {args.probes} — no channel was measured")
+        return 1
     try:
         probes = parse_redteam_probes(open(probes_path, encoding="utf-8").read())
     except RedteamFileError as exc:
         print(f"audit-redteam: {args.probes}: {exc}")
+        return 1
+    if not probes:
+        print(f"audit-redteam: {args.probes} lists no channel — no channel was measured")
         return 1
     started = time.time()
     with tempfile.TemporaryDirectory(prefix="ccgg-redteam-") as scratch:
@@ -177,6 +180,13 @@ def main(argv: list[str]) -> int:
         with open(os.path.join(args.out, "redteam.json"), "w", encoding="utf-8") as fh:
             json.dump({"summary": summary, "probes": [asdict(r) for r in results]}, fh, indent=2)
             fh.write("\n")
+    # A probe that errored measured its channel no more than a probe that never
+    # ran, and a stage where every one errored used to report exactly like one
+    # that measured every channel and found nothing (finding T-006). The verdict
+    # on what reached the model still belongs to the report; this is only about
+    # whether the stage measured anything.
+    if summary["error"]:
+        return 1
     return 0
 
 

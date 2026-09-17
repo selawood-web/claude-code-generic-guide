@@ -125,6 +125,12 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
             out.append("The red-team stage measured no injection channel in this run. "
                        "That is not the same as finding none.")
         out.append("")
+    errored = dict((evidence or {}).get("stages_with_errors") or {})
+    if errored:
+        named = ", ".join(f"`{name}.json`: {count} probe(s) errored" for name, count in sorted(errored.items()))
+        out.append(f"**⚠ Deterministic stage reported errors:** {named}. "
+                   "A probe that errored measured its channel no more than one that never ran.")
+        out.append("")
     if facts:
         items = facts.get("facts", [])
         n_find = sum(1 for f in items if f.get("status") == "finding")
@@ -166,6 +172,25 @@ REQUIRED_STAGES = {
 }
 
 
+# The two harnesses spell their error count differently, and a reader of the
+# report should not have to know that. Finding T-006: a stage in which every
+# probe errored was reported exactly like one that measured every channel and
+# found nothing, because only the file's presence was ever asked about.
+STAGE_ERROR_KEYS = {"probes": "errors", "redteam": "error"}
+
+
+def stage_errors(report_dir: str) -> dict:
+    """Stage name to error count, for the stages that reported any."""
+    found = {}
+    for name, key in STAGE_ERROR_KEYS.items():
+        data = read_json(os.path.join(report_dir, f"{name}.json"))
+        summary = data.get("summary") if isinstance(data, dict) else None
+        count = summary.get(key) if isinstance(summary, dict) else None
+        if isinstance(count, int) and count > 0:
+            found[name] = count
+    return found
+
+
 def deterministic_stages(report_dir: str) -> dict:
     """Which deterministic artifacts this run left, and which its scope required.
 
@@ -186,6 +211,7 @@ def deterministic_stages(report_dir: str) -> dict:
         "scope": scope,
         "stages_present": sorted(n for n, ok in present.items() if ok),
         "stages_missing": [n for n in required if not present[n]],
+        "stages_with_errors": stage_errors(report_dir),
     }
 
 

@@ -1287,16 +1287,86 @@ def unreachable_after_return(source: str) -> list[int]:
     return sorted(set(dead))
 
 
-def self_check(path: str | None = None) -> list[str]:
-    """What the validator can tell about itself before main() gets a say."""
-    path = path or os.path.abspath(__file__)
+# The scripts that make up the gate. `main forced to return 0` was caught in the
+# validator's own source and nowhere else, so the same mutation one file across —
+# in the harness that measures the gate — passed (finding T-006).
+GATE_SOURCE_GLOBS = ("tools/validate.py", "tools/feature_lint.py", "tools/catalog.py",
+                     "tools/audit_*.py")
+
+
+def gate_sources() -> list[str]:
+    """The tracked scripts self_check reads, sorted; tests excluded."""
+    found: set[str] = set()
+    for pattern in GATE_SOURCE_GLOBS:
+        found.update(p for p in tracked(pattern)
+                     if p.endswith(".py") and not os.path.basename(p).startswith("test_"))
+    return sorted(found)
+
+
+def source_problems(path: str) -> list[str]:
+    """Unreachable code in one gate script, as messages naming the file."""
+    label = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             source = fh.read()
     except OSError as exc:
-        return [f"cannot read its own source: {exc}"]
-    return [f"unreachable code at line {no} — a check that cannot be reached is not a check"
+        return [f"{label}: cannot be read: {exc}"]
+    return [f"{label}:{no}: unreachable code — a check that cannot be reached is not a check"
             for no in unreachable_after_return(source)]
+
+
+def self_check(path: str | None = None) -> list[str]:
+    """What the gate can tell about itself before main() gets a say.
+
+    With no argument it reads every script in gate_sources(); with one it reads
+    that file alone, which is how a test hands it a deliberately broken copy.
+    """
+    if path is not None:
+        return source_problems(path)
+    problems: list[str] = []
+    for rel in gate_sources():
+        problems += source_problems(os.path.join(ROOT, rel))
+    return problems
+
+
+# --- 25. probe contract -------------------------------------------------------
+PROBE_CONTRACTS = (("tools/audit_probes.py", "tools/probes.txt"),
+                   ("tools/audit_redteam.py", "tools/redteam_probes.txt"))
+
+
+def probe_lines(text: str) -> list[str]:
+    """The probe-carrying lines of a probes file: non-blank and not a comment.
+
+    Deliberately not the harness's parser. Importing a module out of the tree to
+    validate the tree would execute it, and the field-level contract is the
+    harness's to enforce — both harnesses now exit 1 on a malformed line. What
+    belongs here is the question neither of them could answer about itself: is
+    there anything to measure at all.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+
+
+def check_probe_contract() -> None:
+    """A repository that ships a probe harness must ship probes for it to run.
+
+    Both harnesses used to treat a missing or empty probes file as "nothing to
+    measure" and exit 0, so the whole measured catch rate could be emptied with
+    every gate still green (finding T-001).
+    """
+    present = set(tracked("tools/*"))
+    for harness, data in PROBE_CONTRACTS:
+        if harness not in present:
+            continue
+        if data not in present:
+            fail(f"{harness} is tracked but {data} is not — the harness would measure nothing")
+            continue
+        with open(os.path.join(ROOT, data), encoding="utf-8", errors="replace") as fh:
+            lines = probe_lines(fh.read())
+        if not lines:
+            fail(f"{data}: no probes — the contract {harness} measures is empty")
 
 
 def print_cautions() -> None:
@@ -1333,6 +1403,7 @@ def main() -> int:
     check_gate_has_a_runner()
     check_headless_can_spawn()
     check_features()
+    check_probe_contract()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
@@ -1349,5 +1420,5 @@ if __name__ == "__main__":
     # decide whether the validator is intact.
     _problems = self_check()
     for _problem in _problems:
-        print(f"validate.py self-check: {_problem}", file=sys.stderr)
+        print(f"gate self-check: {_problem}", file=sys.stderr)
     sys.exit(1 if _problems else main())

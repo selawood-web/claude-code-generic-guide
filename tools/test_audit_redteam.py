@@ -243,11 +243,16 @@ class MainTests(unittest.TestCase):
             code = main(["--repo", self.repo, *extra])
         return code, buffer.getvalue()
 
-    def test_a_missing_probes_file_is_not_a_failure(self):
+    def test_a_missing_probes_file_is_a_failure(self):
+        """Was asserted as exit 0 one commit ago; T-006 is that it should not be.
+
+        A stage pointed at a probes file that is not there measured no channel,
+        which is not the same answer as measuring every channel and finding none.
+        """
         self.commit()
         code, out = self.run_main()
-        self.assertEqual(code, 0)
-        self.assertIn("nothing to measure", out)
+        self.assertEqual(code, 1)
+        self.assertIn("no channel was measured", out)
 
     def test_a_malformed_probes_file_fails_loudly(self):
         write(self.repo, "tools/redteam_probes.txt", "only | three | fields\n")
@@ -255,6 +260,31 @@ class MainTests(unittest.TestCase):
         code, out = self.run_main()
         self.assertEqual(code, 1)
         self.assertIn("line 1", out)
+
+    def test_a_probes_file_that_lists_no_channel_is_a_failure(self):
+        """T-006's own reproduction: a file of comments read as a clean stage."""
+        write(self.repo, "tools/redteam_probes.txt", "# every channel commented out\n\n")
+        self.commit()
+        code, out = self.run_main()
+        self.assertEqual(code, 1)
+        self.assertIn("no channel", out)
+
+    def test_a_stage_in_which_every_probe_errored_is_a_failure(self):
+        """T-006: a red-team stage that measured nothing read as one that found nothing."""
+        write(self.repo, "tools/redteam_probes.txt",
+              "broken | exec | exit 9 | cat page.md\n")
+        self.commit()
+        code, printed = self.run_main()
+        self.assertEqual(code, 1, "an all-errors stage exited 0")
+        self.assertIn("error", printed)
+
+    def test_one_error_among_good_probes_still_fails(self):
+        write(self.repo, "tools/redteam_probes.txt",
+              "fine | exec | echo \"$MARKER\" >> page.md | cat page.md\n"
+              "broken | exec | exit 9 | cat page.md\n")
+        self.commit()
+        code, _ = self.run_main()
+        self.assertEqual(code, 1)
 
     def test_a_full_run_writes_the_verdicts_it_measured(self):
         write(self.repo, "tools/redteam_probes.txt",

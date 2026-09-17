@@ -973,7 +973,93 @@ class SelfCheckTests(unittest.TestCase):
     def test_an_unreadable_source_is_reported_not_swallowed(self):
         problems = self_check(os.path.join(validate.ROOT, "no-such-file.py"))
         self.assertEqual(len(problems), 1)
-        self.assertIn("cannot read its own source", problems[0])
+        self.assertIn("cannot be read", problems[0])
+        self.assertIn("no-such-file.py", problems[0])
+
+    def test_the_scan_covers_the_whole_gate_not_only_the_validator(self):
+        """T-006: the same mutation went uncaught one file across."""
+        covered = set(validate.gate_sources())
+        for path in ("tools/validate.py", "tools/audit_probes.py", "tools/audit_redteam.py",
+                     "tools/audit_facts.py", "tools/audit_report.py", "tools/feature_lint.py",
+                     "tools/catalog.py"):
+            with self.subTest(path=path):
+                self.assertIn(path, covered)
+
+    def test_the_shipped_gate_passes_the_widened_scan(self):
+        self.assertEqual(self_check(), [])
+
+    def test_a_neutered_harness_main_is_reported_with_its_file(self):
+        source = open(os.path.join(validate.ROOT, "tools", "audit_redteam.py"), encoding="utf-8").read()
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "audit_redteam.py")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(source.replace("def main(argv: list[str]) -> int:",
+                                        "def main(argv: list[str]) -> int:\n    return 0", 1))
+            problems = self_check(path)
+        self.assertTrue(problems, "a neutered red-team main passed the gate's self-check")
+        self.assertIn("unreachable", problems[0])
+        self.assertIn("audit_redteam.py", problems[0])
+
+
+class ProbeContractTests(unittest.TestCase):
+    """T-001: a probes file that lists nothing measured the whole contract as zero."""
+
+    def _check(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            old_cwd = os.getcwd()
+            del validate.findings[:]
+            try:
+                os.chdir(tmp)
+                validate.check_probe_contract()
+                return list(validate.findings)
+            finally:
+                os.chdir(old_cwd)
+                validate.ROOT = old_root
+                del validate.findings[:]
+
+    HARNESS = "print('stand-in for the real harness')\n"
+
+    def test_a_repository_without_the_harness_is_not_asked_for_probes(self):
+        self.assertEqual(self._check({"README.md": "no harness here\n"}), [])
+
+    def test_a_harness_with_no_probes_file_is_reported(self):
+        problems = self._check({"tools/audit_probes.py": self.HARNESS})
+        self.assertTrue(any("tools/probes.txt" in p for p in problems), problems)
+
+    def test_a_probes_file_with_only_comments_is_reported(self):
+        problems = self._check({"tools/audit_probes.py": self.HARNESS,
+                                "tools/probes.txt": "# all commented out\n\n"})
+        self.assertTrue(any("no probes" in p for p in problems), problems)
+
+    def test_a_malformed_line_is_left_to_the_harness(self):
+        """The field contract is the harness's, and it now exits 1 on a bad line."""
+        self.assertEqual(self._check({"tools/audit_probes.py": self.HARNESS,
+                                      "tools/probes.txt": "only | two\n"}), [])
+
+    def test_a_populated_probes_file_passes(self):
+        self.assertEqual(self._check({"tools/audit_probes.py": self.HARNESS,
+                                      "tools/probes.txt": "a probe | caught | true\n"}), [])
+
+    def test_the_red_team_probes_file_is_held_to_the_same_rule(self):
+        problems = self._check({"tools/audit_redteam.py": self.HARNESS,
+                                "tools/redteam_probes.txt": "# nothing\n"})
+        self.assertTrue(any("redteam_probes.txt" in p for p in problems), problems)
+
+    def test_the_shipped_repository_satisfies_its_own_contract(self):
+        del validate.findings[:]
+        try:
+            validate.check_probe_contract()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
 
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
