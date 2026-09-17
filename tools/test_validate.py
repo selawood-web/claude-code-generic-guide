@@ -1001,6 +1001,191 @@ class SelfCheckTests(unittest.TestCase):
         self.assertIn("audit_redteam.py", problems[0])
 
 
+class HiddenCharacterParityTests(unittest.TestCase):
+    """S-006: the two scans disagreed about what counts as invisible."""
+
+    TAG = "\U000e0041"          # a Unicode tag character
+    TAG_START = "\U000e0001"
+    SOFT_HYPHEN = "\u00ad"
+    RLM = "\u200f"
+    INVISIBLE_PLUS = "\u2064"
+    NUL = "\x00"
+    ESC = "\x1b"
+
+    def facts(self):
+        sys.path.insert(0, os.path.dirname(validate.__file__))
+        import audit_facts
+        return audit_facts
+
+    def test_the_two_modules_carry_the_same_pattern(self):
+        self.assertEqual(validate.HIDDEN_PATTERN, self.facts().HIDDEN_PATTERN)
+
+    def test_tag_characters_are_caught_by_both(self):
+        """The audit reported clean on these while the validator failed on them."""
+        for char in (self.TAG, self.TAG_START, "\U000e007f"):
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_what_only_the_audit_used_to_catch_is_kept(self):
+        """A union, not a copy: the validator had no soft hyphen or bidi marks."""
+        for char in (self.SOFT_HYPHEN, self.RLM, "\u200e", self.INVISIBLE_PLUS):
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_what_only_the_validator_used_to_catch_is_kept(self):
+        for char in (self.NUL, self.ESC, "\x0b", "\x0c"):
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_the_two_marks_neither_had_are_covered(self):
+        for char in ("\u061c", "\u180e"):   # Arabic letter mark, Mongolian vowel separator
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_whitespace_that_is_meant_to_be_there_is_not_hidden(self):
+        for text in ("a\tb\n", "a\r\nb\n", "plain lines\n"):
+            with self.subTest(text=repr(text)):
+                self.assertEqual(validate.hidden_characters(text), [])
+                self.assertEqual(self.facts().hidden_characters(text), [])
+
+    def test_ordinary_non_ascii_is_not_hidden(self):
+        text = "café — naïve 中文 🎉\n"
+        self.assertEqual(validate.hidden_characters(text), [])
+        self.assertEqual(self.facts().hidden_characters(text), [])
+
+    def test_the_two_agree_line_by_line_on_a_mixed_sample(self):
+        sample = f"one\ntwo{self.TAG}\nthree{self.SOFT_HYPHEN}{self.NUL}\nfour\n"
+        theirs = {(n, cp) for n, cps in self.facts().hidden_characters(sample) for cp in cps}
+        self.assertEqual(set(validate.hidden_characters(sample)), theirs)
+
+    def test_every_instruction_file_is_clean_under_both(self):
+        facts = self.facts()
+        for path in validate.instruction_files():
+            with open(os.path.join(validate.ROOT, path), encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+            with self.subTest(path=path):
+                self.assertEqual(validate.hidden_characters(text), [])
+                self.assertEqual(facts.hidden_characters(text), [])
+
+
+class AutomaticRunnerTests(unittest.TestCase):
+    """T-008/T-009: detectors and tests that ran only when somebody remembered."""
+
+    AUTO = "on:\n  push:\n    branches: [master]\n  pull_request:\n\njobs:\n  validate:\n"
+
+    def test_the_facts_stage_counts_only_on_an_automatic_trigger(self):
+        self.assertTrue(validate.runs_automatically(
+            self.AUTO + "    - run: python tools/audit_facts.py --fail-on-findings\n",
+            validate.FACTS_COMMAND_RE))
+        manual = "on:\n  workflow_dispatch:\n\njobs:\n  a:\n    - run: python tools/audit_facts.py\n"
+        self.assertFalse(validate.runs_automatically(manual, validate.FACTS_COMMAND_RE))
+
+    def test_a_label_gated_workflow_is_not_an_automatic_runner(self):
+        """audit.yml triggers on pull_request and then gates every job on a label."""
+        gated = ("on:\n  workflow_dispatch:\n  pull_request:\n    types: [labeled]\n\njobs:\n"
+                 "  deterministic:\n    if: >-\n"
+                 "      github.event_name == 'workflow_dispatch' ||\n"
+                 "      contains(github.event.pull_request.labels.*.name, 'audit')\n"
+                 "    steps:\n      - run: python tools/audit_facts.py\n")
+        self.assertFalse(validate.runs_automatically(gated, validate.FACTS_COMMAND_RE))
+
+    def test_the_real_audit_workflow_does_not_count_as_a_runner(self):
+        with open(os.path.join(validate.ROOT, ".github", "workflows", "audit.yml"), encoding="utf-8") as fh:
+            self.assertFalse(validate.runs_automatically(fh.read(), validate.FACTS_COMMAND_RE))
+
+    def test_the_validate_workflow_does(self):
+        with open(os.path.join(validate.ROOT, ".github", "workflows", "validate.yml"), encoding="utf-8") as fh:
+            text = fh.read()
+        for command, name, _ in validate.GATE_RUNNERS:
+            with self.subTest(runner=name):
+                self.assertTrue(validate.runs_automatically(text, command))
+
+    def test_a_mention_of_the_path_is_not_a_runner(self):
+        """The step guards itself with `if [ -f tools/audit_facts.py ]`."""
+        guard_only = self.AUTO + "    - run: |\n        if [ -f tools/audit_facts.py ]; then echo hi; fi\n"
+        self.assertFalse(validate.runs_automatically(guard_only, validate.FACTS_COMMAND_RE))
+
+    def test_a_trigger_named_inside_a_job_is_not_the_workflow_trigger(self):
+        """The audit workflow mentions pull_request in an `if:` — that is not a trigger."""
+        sneaky = ("on:\n  workflow_dispatch:\n\njobs:\n  a:\n"
+                  "    if: github.event_name == 'pull_request'\n"
+                  "    steps:\n      - run: python tools/audit_facts.py\n")
+        self.assertFalse(validate.runs_automatically(sneaky, validate.FACTS_COMMAND_RE))
+
+    def test_the_test_suite_counts_too(self):
+        self.assertTrue(validate.runs_automatically(
+            self.AUTO + '    - run: python -m unittest discover -s tools -p "test_*.py"\n',
+            validate.TESTS_COMMAND_RE))
+
+    def test_the_shipped_workflows_run_all_three(self):
+        del validate.findings[:]
+        try:
+            validate.check_gate_has_a_runner()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.runs_automatically(None, validate.FACTS_COMMAND_RE)
+
+
+class UnitTestStepTests(unittest.TestCase):
+    """T-009: the step skipped silently, and the guide repository shared that branch."""
+
+    WORKFLOW = os.path.join(validate.ROOT, ".github", "workflows", "validate.yml")
+
+    def step_body(self, name):
+        """The `run: |` block of a named step, dedented, ready for bash."""
+        with open(self.WORKFLOW, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+        start = next(i for i, ln in enumerate(lines) if ln.strip() == f"- name: {name}")
+        run = next(i for i in range(start, len(lines)) if lines[i].strip() == "run: |")
+        indent = len(lines[run + 1]) - len(lines[run + 1].lstrip())
+        body = []
+        for ln in lines[run + 1:]:
+            if ln.strip() and len(ln) - len(ln.lstrip()) < indent:
+                break
+            body.append(ln[indent:] if ln.strip() else "")
+        return "\n".join(body)
+
+    def run_step(self, files):
+        body = self.step_body("Unit tests for the validator")
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            env = dict(os.environ, PATH=os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"])
+            proc = subprocess.run(["bash", "-c", body], cwd=tmp, capture_output=True, text=True, env=env)
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def test_an_installed_project_without_tests_still_skips(self):
+        """The skip branch exists for a real reason: installed projects get no tests."""
+        code, out = self.run_step({"README.md": "a project\n"})
+        self.assertEqual(code, 0)
+        self.assertIn("skipping", out)
+
+    def test_the_guide_repository_without_tests_fails(self):
+        code, out = self.run_step({"install.sh": "#!/bin/sh\n"})
+        self.assertEqual(code, 1, "the guide repository took the installed-project skip")
+        self.assertIn("install.sh", out)
+
+    def test_tests_present_are_actually_run(self):
+        code, out = self.run_step({
+            "install.sh": "#!/bin/sh\n",
+            "tools/test_smoke.py": "import unittest\n\n\nclass T(unittest.TestCase):\n"
+                                   "    def test_ok(self):\n        self.assertTrue(True)\n",
+        })
+        self.assertEqual(code, 0, out)
+        self.assertIn("Ran 1 test", out)
+
+
 class AuditLeavesTheTreeAloneTests(unittest.TestCase):
     """P-001: F002 claims an audit run changes no file, measured by CI. It was not."""
 

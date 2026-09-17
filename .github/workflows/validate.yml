@@ -37,12 +37,29 @@ jobs:
       - name: Audit agents serialize for headless runs
         run: |
           if [ -f tools/audit_agents_json.py ]; then python tools/audit_agents_json.py --check; else echo "No audit agent serializer in this repo — skipping."; fi
+      # The hook-stdout, command-resolution and network-exec detectors live only in
+      # audit_facts.py, and nothing ran them on a trigger nobody has to remember:
+      # the audit workflow is manual by design and the probe harness's gate is
+      # validate.py, so they inherited a manual-only trigger (finding T-008). The
+      # cheap deterministic half runs here; the model stage stays invocation-only.
+      # --fail-on-findings stops on the defect-shaped kinds only — what the
+      # settings grant is a fact for review, not a reason to fail a project's CI.
+      - name: Deterministic fact checks
+        run: |
+          if [ -f tools/audit_facts.py ]; then
+            python tools/audit_facts.py --fail-on-findings
+          else
+            echo "No deterministic fact checks in this repo — skipping."
+          fi
       - name: Mutation probes against the validator
         run: python tools/audit_probes.py
       - name: Unit tests for the validator
         run: |
           if ls tools/test_*.py >/dev/null 2>&1; then
             python -m unittest discover -s tools -p "test_*.py" -v
+          elif [ -f install.sh ]; then
+            echo "install.sh is present, so this is the guide repository itself: tools/test_*.py is missing, which is a defect and not a skip" >&2
+            exit 1
           else
             echo "No validator unit tests in this repo — skipping."
           fi

@@ -714,21 +714,33 @@ def check_hooks() -> None:
 
 
 # --- 15. hidden characters --------------------------------------------------
-# Zero-width joiners and spaces, bidirectional overrides, Unicode tag characters
-# and C0 controls other than tab, newline and carriage return: invisible in a
-# diff, present in what the model reads.
-HIDDEN_RE = re.compile(
-    "[\u200b-\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069\U000e0000-\U000e007f"
-    "\x00-\x08\x0b\x0c\x0e-\x1f]"
+# Invisible in a diff, present in what the model reads. The two scans in this
+# repository had each caught what the other missed — the audit had no tag
+# characters or C0 controls, this one had no soft hyphen or directional marks
+# (finding S-006) — so the set has one home: tools/audit_facts.py carries this
+# string character-for-character and tools/test_validate.py compares them.
+HIDDEN_PATTERN = (
+    "[\u00ad\u061c\u180e"                 # soft hyphen, Arabic letter mark, Mongolian vowel separator
+    "\u200b-\u200f"                        # zero-width space/non-joiner/joiner, LRM, RLM
+    "\u202a-\u202e\u2066-\u2069"          # bidi embeddings, overrides and isolates
+    "\u2060-\u2064\ufeff"                  # word joiner, invisible operators, BOM
+    "\U000e0000-\U000e007f"                # Unicode tag characters
+    "\x00-\x08\x0b\x0c\x0e-\x1f]"       # C0 controls except tab, newline, carriage return
 )
+HIDDEN_RE = re.compile(HIDDEN_PATTERN)
 
 
 def hidden_characters(text: str) -> list[tuple[int, str]]:
-    """(line number, U+XXXX) for every hidden character in text."""
+    """(line number, U+XXXX) for every hidden character in text.
+
+    Split on "\\n", never str.splitlines(): that treats U+000B, U+000C and
+    U+001C-U+001E as line boundaries and removes them, so the three of them
+    this pattern names could never be reported.
+    """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     found = []
-    for n, line in enumerate(text.splitlines(), 1):
+    for n, line in enumerate(text.split("\n"), 1):
         for m in HIDDEN_RE.finditer(line):
             found.append((n, f"U+{ord(m.group(0)):04X}"))
     return found
@@ -1139,26 +1151,63 @@ GATE_COMMAND_RE = re.compile(r"tools/validate\.py")
 AUTOMATIC_TRIGGER_RE = re.compile(r"^\s{2,}(push|pull_request):", re.M)
 
 
-def runs_gate_automatically(text: str) -> bool:
-    """True when this workflow runs the validator on a trigger nobody has to remember."""
+# The validator is not the whole gate. The detectors that exist only in
+# audit_facts.py, and the unit tests that hold every check honest, ran on a
+# manual trigger or not at all (findings T-008 and T-009).
+# The command form, not the path: the step guards itself with
+# `if [ -f tools/audit_facts.py ]`, and a workflow that only mentions the file
+# runs nothing. (GATE_COMMAND_RE stays a bare path — tightening it would fail
+# installed projects whose workflow spells the invocation some other way.)
+FACTS_COMMAND_RE = re.compile(r"python[0-9.]*\s+tools/audit_facts\.py")
+TESTS_COMMAND_RE = re.compile(r"unittest\s+discover[^\n]*\btools\b")
+GATE_RUNNERS = (
+    (GATE_COMMAND_RE, "tools/validate.py", "the gate would run only when someone remembers"),
+    (FACTS_COMMAND_RE, "tools/audit_facts.py",
+     "its hook-stdout, command-resolution and network-exec checks exist nowhere else"),
+    (TESTS_COMMAND_RE, "the unit tests",
+     "every check in this repository would be unproven on the commit that broke it"),
+)
+
+
+# A workflow that reads the event or a label decides for itself whether to do any
+# work. audit.yml triggers on pull_request and then gates every job on an `audit`
+# label — dependable for what it is, and not a runner anything else can rely on.
+EVENT_GATED_RE = re.compile(r"github\.event_name|github\.event\.pull_request\.labels")
+
+
+def runs_automatically(text: str, command: re.Pattern) -> bool:
+    """True when this workflow runs `command` on a trigger nobody has to remember.
+
+    Three things have to hold: the command is invoked, the workflow's own `on:`
+    block names an automatic trigger — `pull_request` inside a job's `if:` is a
+    condition, not a reason it started — and no job reads the event or a label to
+    decide whether to run at all.
+    """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
-    if not GATE_COMMAND_RE.search(text):
+    if not command.search(text):
+        return False
+    if EVENT_GATED_RE.search(text):
         return False
     header = text.split("\njobs:", 1)[0]
     return bool(AUTOMATIC_TRIGGER_RE.search(header))
 
 
+def runs_gate_automatically(text: str) -> bool:
+    """True when this workflow runs the validator on a trigger nobody has to remember."""
+    return runs_automatically(text, GATE_COMMAND_RE)
+
+
 def check_gate_has_a_runner() -> None:
     if not tracked("install.sh"):
         return                      # an installed project chooses its own CI
-    workflows = tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml")
-    for path in workflows:
+    texts = []
+    for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
         with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
-            if runs_gate_automatically(fh.read()):
-                return
-    fail("no workflow runs tools/validate.py on push or pull_request — "
-         "the gate would run only when someone remembers")
+            texts.append(fh.read())
+    for command, name, why in GATE_RUNNERS:
+        if not any(runs_automatically(text, command) for text in texts):
+            fail(f"no workflow runs {name} on push or pull_request — {why}")
 
 
 def inherited_env_uses(text: str) -> list[int]:

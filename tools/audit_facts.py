@@ -42,7 +42,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audit_env  # noqa: E402  (same directory, installed together)
 from dataclasses import asdict, dataclass
 
-HIDDEN_RE = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\u00ad\u2066-\u2069]")
+# Kept character-for-character identical to tools/validate.py's HIDDEN_PATTERN;
+# tools/test_validate.py compares the two. Each scan used to catch what the other
+# missed — no tag characters or C0 controls here, no soft hyphen or directional
+# marks there — so a file could pass one gate and fail the other (finding S-006).
+HIDDEN_PATTERN = (
+    "[\u00ad\u061c\u180e"                 # soft hyphen, Arabic letter mark, Mongolian vowel separator
+    "\u200b-\u200f"                        # zero-width space/non-joiner/joiner, LRM, RLM
+    "\u202a-\u202e\u2066-\u2069"          # bidi embeddings, overrides and isolates
+    "\u2060-\u2064\ufeff"                  # word joiner, invisible operators, BOM
+    "\U000e0000-\U000e007f"                # Unicode tag characters
+    "\x00-\x08\x0b\x0c\x0e-\x1f]"       # C0 controls except tab, newline, carriage return
+)
+HIDDEN_RE = re.compile(HIDDEN_PATTERN)
 COMMAND_REF_RE = re.compile(r"`/([a-z][a-z0-9-]*)`")
 HOOK_PATH_RE = re.compile(r"\.claude/hooks/([\w.-]+)")
 TOOL_ENTRY_RE = re.compile(r"^([A-Za-z_][\w]*)(\(.*\))?$")
@@ -93,6 +105,20 @@ INSTRUCTION_GLOBS = (
     "features/*.md",
     "knowledge-base/*.md",
 )
+# Kinds whose `finding` status is a defect a gate should stop for. Two are left
+# out on purpose: permission-surface lists what the committed settings grant — a
+# fact for review, not a defect, and an installed project that grants anything
+# would otherwise go red on its own configuration — and `gate` records how the
+# tree's own gate did, which the workflow's other steps already report.
+GATING_KINDS = ("hook-registration", "hook-stdout", "hidden-characters", "frontmatter",
+                "command-resolution", "network-exec")
+
+
+def gating_findings(facts: list) -> list:
+    """The findings a CI runner should fail on (finding T-008)."""
+    return [f for f in facts if f.status == "finding" and f.kind in GATING_KINDS]
+
+
 STACK_MARKERS = {
     "package.json": "javascript", "pyproject.toml": "python", "requirements.txt": "python",
     "go.mod": "go", "Cargo.toml": "rust", "pom.xml": "java", "build.gradle": "java",
@@ -137,7 +163,9 @@ def hidden_characters(text: str) -> list[tuple[int, list[str]]]:
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     hits = []
-    for no, line in enumerate(text.splitlines(), 1):
+    # "\\n", never str.splitlines(): that treats U+000B, U+000C and U+001C-U+001E
+    # as line boundaries and removes them before the pattern can see them.
+    for no, line in enumerate(text.split("\n"), 1):
         found = [f"U+{ord(c):04X}" for c in line if HIDDEN_RE.match(c)]
         if found:
             hits.append((no, found))
@@ -354,7 +382,14 @@ def network_patterns(text: str) -> list[tuple[int, str, str]]:
         if stripped.startswith("#") or re.search(r"\(r[\"\']", stripped):
             continue  # a comment, or a regex literal that names the pattern rather than running it
         for pattern, label in NETWORK_PATTERNS:
-            if pattern.search(line):
+            match = pattern.search(line)
+            # A token reached through a leading hyphen is an option, not the
+            # command it spells: `--eval` in a flag table is not a shell eval,
+            # and one in this repository's own guard hook was the single finding
+            # standing between this stage and an automatic CI runner (T-008).
+            while match and match.start() and line[match.start() - 1] == "-":
+                match = pattern.search(line, match.end())
+            if match:
                 hits.append((no, label, stripped[:100]))
     return hits
 
@@ -579,6 +614,10 @@ def main(argv: list[str]) -> int:
                              "Off by default: this executes code from the checkout. On, it runs with "
                              "a minimal environment and a throwaway HOME, never the operator's.")
     parser.add_argument("--vocab", default=VOCAB_PATH)
+    parser.add_argument("--fail-on-findings", action="store_true",
+                        help="exit 1 when a defect-shaped check reports a finding. For a CI "
+                             "runner: these detectors exist only here, and without this they "
+                             "ran on a manual trigger or not at all.")
     args = parser.parse_args(argv)
     try:
         repo = args.repo or git(os.getcwd(), "rev-parse", "--show-toplevel")
@@ -604,6 +643,12 @@ def main(argv: list[str]) -> int:
     print(f"audit-facts: {len(facts.items)} fact(s) -> {out}")
     for kind, counts in sorted(by_kind.items()):
         print(f"  {kind:20} ok {counts['ok']:3}  finding {counts['finding']:3}  skipped {counts['skipped']:3}")
+    gating = gating_findings(facts.items)
+    if args.fail_on_findings and gating:
+        print(f"audit-facts: {len(gating)} finding(s) in {', '.join(GATING_KINDS)}:")
+        for f in gating:
+            print(f"  {f.kind}: {f.location}: {f.evidence}")
+        return 1
     return 0
 
 

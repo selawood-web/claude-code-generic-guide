@@ -33,7 +33,7 @@ being able to change anything.
 - Metric: validator mutation-probe catch rate on this repository, from the research
   run's baseline of 10 caught out of 21 planted defects to no probe listed `caught`
   being missed, measured by the probe harness the audit ships and runs in CI. The list
-  is 57 probes today and grows with every check that lands; the target is the rule the
+  is 62 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`
