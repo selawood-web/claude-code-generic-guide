@@ -149,6 +149,7 @@ Run `/skillify` after completing a new workflow to capture it as a reusable skil
 - Destructive operations (delete data, force-push, drop tables): pause and confirm explicitly first.
 - Contradictory or impossible requirements: state the conflict and ask for resolution.
 - A required third-party API or service is unavailable: state the blocker clearly.
+- Adding a capability — a connector, MCP server, plugin, extension, CLI, or any tool not already present: search for it, vet it and propose it freely; install or authorize it only on an explicit yes, and only at the scope that was approved. Procedure: [`.claude/references/tool-choice.md`](.claude/references/tool-choice.md), *Closing a capability gap*.
 
 ### Commit conventions
 ```

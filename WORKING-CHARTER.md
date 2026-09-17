@@ -96,10 +96,10 @@ next move is genuinely yours: a decision, a step nothing I hold can execute (the
 **reach test**, in the dialogue reference — tedium, length and "not strictly asked"
 all fail it), or an **owner gate** needing your authorization (a merge, a spend, a
 destructive act, anything sent outside; AGENTS.md, *Escalate instead of proceeding*),
-which ends as a next step naming exactly what unblocks it. A blocker takes the same shape: what is missing,
-why it blocks, the form of the answer, and what runs when it lands. Work spanning
-more than a couple of turns opens with one line on its size and blast radius, so
-stopping it is cheap before it starts. `/momentum` is the full
+which ends as a next step naming exactly what unblocks it. A blocker takes the same
+shape: what is missing, why it blocks, the form of the answer, and what runs when it
+lands. Work spanning more than a couple of turns opens with one line on its size and
+blast radius, so stopping it is cheap before it starts. `/momentum` is the full
 procedure; these lines bind whether or not it is invoked.
 
 ### Resources — reach for the right one, don't reinvent
@@ -108,7 +108,8 @@ Check for a standard, well-maintained library before building from scratch, and
 prefer the boring widely-used one; a genuinely close call comes to you as a
 pick-list. Use a skill when it fits. Never pull skills or code from GitHub or other
 untrusted sources. The web is for facts that change — versions, prices, APIs — not
-for libraries I already know. Judging a dependency:
+for libraries I already know. A capability we lack is mine to find, vet and put
+to you; adding it is an owner gate (AGENTS.md). Dependencies and gaps:
 [`.claude/references/tool-choice.md`](.claude/references/tool-choice.md).
 
 ### Efficiency — spend tokens where judgment lives
@@ -205,9 +206,8 @@ These travel with the charter into any project:
 > Copying the charter into another project? Replace this section. The list above stays.
 
 **What it is:** a drop-in documentation and configuration layer — markdown, four bash
-hooks (three lifecycle, one verifier guard), a JSON settings file, VS Code tasks, and
-the Python tooling in `tools/` (validator, feature lint, catalog, audit) that CI runs
-on every pull request.
+hooks, a JSON settings file, VS Code tasks, and the Python tooling in `tools/`
+(validator, feature lint, catalog, audit) that CI runs on every pull request.
 
 **Languages here:** Markdown, bash for `.claude/hooks/*.sh`, and Python for `tools/`.
 
@@ -218,7 +218,7 @@ on every pull request.
 
 - **The drop-in contract.** README's Quick Start tells people to copy exact paths:
   `AGENTS.md`, `.claude/`, `MEMORY.md`, `WORKING-CHARTER.md`. Renaming or moving any of
-  them invalidates every install instruction in the repo and every copy already deployed.
+  them invalidates every install instruction and every deployed copy.
   That set also bounds links: a rule file may point only at a file `install.sh` copies,
   or the link check fails in every installed project.
 - **Skill loading.** Every `.claude/skills/<name>/SKILL.md` keeps its YAML frontmatter —
@@ -231,7 +231,7 @@ on every pull request.
   resolve against, so it restates by design and its copies move when their homes do.
 
 **Verification here.** `tools/validate.py` is the executable gate: links, anchors,
-empty files, skill frontmatter, config parsing, the CLAUDE.md bridge, and hook health —
+empty files, frontmatter, configs, budgets, the CLAUDE.md bridge and hook health —
 run it locally before any push; CI runs it on every pull request. What it cannot check
 stays a stated claim: no rule gained a second home, and instructions match the live
 product (the charter's currency rule — verify against official docs before writing
