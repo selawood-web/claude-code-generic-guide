@@ -126,6 +126,23 @@ jobs:
             all|harness) python tools/audit_redteam.py --out "$STAMP" || true ;;
           esac
 
+      # F002's metric: an audit run changes no file in the audited tree. The report
+      # directory carries its own .gitignore, so a clean run leaves `git status`
+      # with nothing to say. Measured here because a metric nothing measures is a
+      # claim (finding P-001); the pathspec keeps the report out of it even in a
+      # checkout whose root .gitignore does not.
+      - name: The audited tree is unchanged
+        if: always()
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain -- . ':(exclude)CCGG-AUDIT-*')"
+          if [ -n "$changed" ]; then
+            echo "the audit changed the audited tree:" >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+          echo "audited tree unchanged"
+
       - name: Hand the deterministic results to the next job
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -412,6 +429,23 @@ jobs:
           python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
             --trusted-source "$SOURCE" --budget-usd "$BUDGET"
+
+      # F002's metric: an audit run changes no file in the audited tree. The report
+      # directory carries its own .gitignore, so a clean run leaves `git status`
+      # with nothing to say. Measured here because a metric nothing measures is a
+      # claim (finding P-001); the pathspec keeps the report out of it even in a
+      # checkout whose root .gitignore does not.
+      - name: The audited tree is unchanged
+        if: always()
+        run: |
+          set -euo pipefail
+          changed="$(git status --porcelain -- . ':(exclude)CCGG-AUDIT-*')"
+          if [ -n "$changed" ]; then
+            echo "the audit changed the audited tree:" >&2
+            echo "$changed" >&2
+            exit 1
+          fi
+          echo "audited tree unchanged"
 
       - name: Hand the model results to the report job
         if: always()

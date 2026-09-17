@@ -30,9 +30,13 @@ nothing runs them.
 A repository owner learns what their gate cannot see, in one command, without the audit
 being able to change anything.
 
-- Metric: validator mutation-probe catch rate on this repository, from 10 of 21 probes
-  (48%) to at least 19 of 21 (90%), measured by the probe harness the audit ships and
-  runs in CI
+- Metric: validator mutation-probe catch rate on this repository, from the research
+  run's baseline of 10 caught out of 21 planted defects to no probe listed `caught`
+  being missed, measured by the probe harness the audit ships and runs in CI. The list
+  is 56 probes today and grows with every check that lands; the target is the rule the
+  harness enforces — zero regressions — not a fixed denominator, because a percentage
+  against a moving list measures nothing. `tools/test_validate.py` fails when a number
+  written here stops matching `tools/probes.txt`
 - Metric: verified findings reproduced without prior knowledge, from 0 today to 5 of the 5
   findings numbered 1–5 in the research record's worked example, measured by the first
   audit run on this repository at the commit before those findings are fixed
@@ -89,10 +93,17 @@ being able to change anything.
 - Given a headless run against a checkout the operator did not write, when the audit
   starts, then nothing in that tree configures the run — its settings, hooks, agents,
   skills, MCP servers and `CLAUDE.md` are all excluded by `--setting-sources user` and
-  `--strict-mcp-config`, each of the five measured against a planted tree — while the
-  built-in tool set stays wide enough to invoke the specialists, and the assembled
-  command is written into the report directory's `headless/` folder so what ran is on
-  the record beside what it found
+  `--strict-mcp-config` — while the built-in tool set stays wide enough to invoke the
+  specialists, and the assembled command is written into the report directory's
+  `headless/` folder so what ran is on the record beside what it found.
+  What is measured in CI is that the launcher puts those flags in the command
+  (`tools/test_audit_headless.py`) and that the installed CLI is the pinned
+  `CLAUDE_CODE_VERSION` the flags were measured against (`.github/workflows/audit.yml`
+  fails when `claude --version` disagrees). The exclusion itself was measured by hand
+  against a planted tree on 2026-09-16 and is **not** re-measured per run: doing that
+  needs a live turn of the pinned CLI with an API key, which no probe harness here can
+  run. The pin is therefore what the claim rests on, and bumping it re-opens the
+  measurement (finding P-005)
 - Given a headless run, when the verifier executes, then its guard hook comes from a
   path the caller controls and never from the audited tree, and a run that names no
   such path is refused
@@ -181,6 +192,13 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   boundary first, then the verifier's allow-list, hook output sanitisation, the gate's
   new checks and probes, and the corrections to this definition and the architecture
   record where they described mechanisms that were never built — [in]
+- 2026-09-17 — Reversed the first half of the item above: a report is **not** kept in
+  git. Commit `ec7dc2d` untracked it because a committed `candidates/` directory is
+  present in every later verifier worktree under the filenames a verifier looks for,
+  and one was observed reading the committed batch instead of its own run's. Reports
+  stay on disk, ignored. Acceptance criterion 1 is evidenced instead by
+  [`2026-09-17-ccgg-audit-runs.md`](../decisions/2026-09-17-ccgg-audit-runs.md), a
+  tracked summary that uses none of those filenames — [in]
 - 2026-09-16 — The verifier's guard becomes an allow-list (repository tests and tools by
   path, git reads, text inspection) instead of a denylist, with a table-driven test as
   its contract — [in]

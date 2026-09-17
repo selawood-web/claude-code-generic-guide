@@ -1369,6 +1369,46 @@ def check_probe_contract() -> None:
             fail(f"{data}: no probes — the contract {harness} measures is empty")
 
 
+# --- 26. reference thresholds -------------------------------------------------
+THRESHOLD_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:percent|%)")
+MEASURED_RE = re.compile(r"measured by `[^`]+`|unmeasured")
+
+
+def paragraphs(text: str) -> list[tuple[int, str]]:
+    """Blank-line separated blocks, each with the line number it starts on."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    blocks, start, buf = [], 1, []
+    for no, line in enumerate(text.splitlines(), 1):
+        if line.strip():
+            if not buf:
+                start = no
+            buf.append(line)
+        elif buf:
+            blocks.append((start, "\n".join(buf)))
+            buf = []
+    if buf:
+        blocks.append((start, "\n".join(buf)))
+    return blocks
+
+
+def check_reference_thresholds() -> None:
+    """A number the rules make binding has to name what measures it.
+
+    The gate reference asked for 90 percent coverage on changed lines and AGENTS.md
+    made it binding, while no coverage runner, configuration or threshold existed
+    anywhere in the repository (finding P-003). A threshold states its measuring
+    command in the same paragraph, or says in so many words that it is unmeasured.
+    """
+    for path in tracked(".claude/references/*.md"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for start, block in paragraphs(text):
+            if THRESHOLD_RE.search(block) and not MEASURED_RE.search(block):
+                fail(f"{path}:{start}: states a numeric threshold without naming what measures it "
+                     f"— add \"measured by `<command>`\", or say it is unmeasured")
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1404,6 +1444,7 @@ def main() -> int:
     check_headless_can_spawn()
     check_features()
     check_probe_contract()
+    check_reference_thresholds()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

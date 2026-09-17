@@ -1001,6 +1001,114 @@ class SelfCheckTests(unittest.TestCase):
         self.assertIn("audit_redteam.py", problems[0])
 
 
+class AuditLeavesTheTreeAloneTests(unittest.TestCase):
+    """P-001: F002 claims an audit run changes no file, measured by CI. It was not."""
+
+    WORKFLOW = os.path.join(validate.ROOT, ".github", "workflows", "audit.yml")
+    STEP = "- name: The audited tree is unchanged"
+
+    def setUp(self):
+        with open(self.WORKFLOW, encoding="utf-8") as fh:
+            self.text = fh.read()
+
+    def test_both_jobs_that_run_the_audit_check_the_tree_after(self):
+        """The deterministic and model jobs check out separately; each measures its own."""
+        self.assertEqual(self.text.count(self.STEP), 2, "the step is missing from a job that runs the audit")
+
+    def test_the_step_measures_it_and_fails_on_output(self):
+        for block in self.text.split(self.STEP)[1:]:
+            head = block[:900]
+            with self.subTest(step=head.splitlines()[0] if head else ""):
+                self.assertIn("git status --porcelain", head)
+                self.assertIn("exit 1", head)
+                self.assertIn("if: always()", head)
+
+    def test_the_report_directory_is_excluded_by_pathspec(self):
+        """A checkout whose root .gitignore lacks the pattern must still pass."""
+        self.assertIn("':(exclude)CCGG-AUDIT-*'", self.text)
+
+
+class ReferenceThresholdTests(unittest.TestCase):
+    """P-003: a number AGENTS.md makes binding must name what measures it."""
+
+    def test_a_threshold_with_no_measurement_is_reported(self):
+        del validate.findings[:]
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                refs = os.path.join(tmp, ".claude", "references")
+                os.makedirs(refs)
+                with open(os.path.join(refs, "gate.md"), "w", encoding="utf-8") as fh:
+                    fh.write("# Gate\n\nTarget 90 percent coverage on changed lines.\n")
+                subprocess.run(["git", "init", "-q", tmp], check=True)
+                subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+                old_root, validate.ROOT = validate.ROOT, tmp
+                old_cwd = os.getcwd()
+                try:
+                    os.chdir(tmp)
+                    validate.check_reference_thresholds()
+                    problems = list(validate.findings)
+                finally:
+                    os.chdir(old_cwd)
+                    validate.ROOT = old_root
+        finally:
+            del validate.findings[:]
+        self.assertTrue(problems)
+        self.assertIn("numeric threshold", problems[0])
+
+    def test_naming_the_command_satisfies_it(self):
+        blocks = validate.paragraphs("Target 90 percent, measured by `pytest --cov`.\n")
+        self.assertTrue(all(validate.MEASURED_RE.search(b) for _, b in blocks))
+
+    def test_saying_it_is_unmeasured_satisfies_it(self):
+        self.assertTrue(validate.MEASURED_RE.search("Aim for 90 percent — an unmeasured aspiration."))
+
+    def test_paragraphs_are_blank_line_separated_and_numbered(self):
+        blocks = validate.paragraphs("one\n\n\nthree\nfour\n")
+        self.assertEqual(blocks, [(1, "one"), (4, "three\nfour")])
+
+    def test_the_shipped_references_satisfy_the_rule(self):
+        del validate.findings[:]
+        try:
+            validate.check_reference_thresholds()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.paragraphs(None)
+
+
+class ProbeCountDriftTests(unittest.TestCase):
+    """P-006: F002 quoted '19 of 21 (90%)' against a list that had grown past 40."""
+
+    # The documents that make claims about now. A dated evidence record quotes the
+    # numbers a past run measured and must not be dragged forward with the list.
+    DOCS = ("features/F002-audit-skill.md",
+            "decisions/2026-09-16-ccgg-audit-architecture.md")
+    COUNT_RE = re.compile(r"(\d+)\s+probes\b")
+
+    def live_total(self):
+        with open(os.path.join(validate.ROOT, "tools", "probes.txt"), encoding="utf-8") as fh:
+            return len(validate.probe_lines(fh.read()))
+
+    def test_every_digit_probe_count_in_the_docs_is_the_current_one(self):
+        """A count in words is history; a count in digits is a claim about now."""
+        live = self.live_total()
+        for doc in self.DOCS:
+            with open(os.path.join(validate.ROOT, doc), encoding="utf-8") as fh:
+                text = fh.read()
+            for quoted in self.COUNT_RE.findall(text):
+                with self.subTest(doc=doc, quoted=quoted):
+                    self.assertEqual(int(quoted), live,
+                                     f"{doc} says '{quoted} probes'; tools/probes.txt has {live}")
+
+    def test_the_feature_states_the_count_at_all(self):
+        with open(os.path.join(validate.ROOT, self.DOCS[0]), encoding="utf-8") as fh:
+            self.assertTrue(self.COUNT_RE.search(fh.read()),
+                            "F002 states no probe count, so nothing pins it to the list")
+
+
 class ProbeContractTests(unittest.TestCase):
     """T-001: a probes file that lists nothing measured the whole contract as zero."""
 
