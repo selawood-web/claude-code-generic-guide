@@ -30,10 +30,12 @@ nothing runs them.
 A repository owner learns what their gate cannot see, in one command, without the audit
 being able to change anything.
 
-- Metric: validator mutation-probe catch rate on this repository, from the research
+- Metric: mutation-probe catch rate on this repository, from the research
   run's baseline of 10 caught out of 21 planted defects to no probe listed `caught`
-  being missed, measured by the probe harness the audit ships and runs in CI. The list
-  is 69 probes today and grows with every check that lands; the target is the rule the
+  being missed, measured by the probe harness the audit ships and runs in CI. Each
+  probe names the gate that must catch it — the validator by default, the verifier
+  guard's unit table for a defect the validator cannot see. The list
+  is 83 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`

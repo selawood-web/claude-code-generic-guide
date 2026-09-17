@@ -5,11 +5,18 @@
 #   label     what defect is planted (free text, no pipes)
 #   expect    caught  — the gate is known to fail on this defect; a miss fails CI
 #             missed  — a known blind spot; a catch is reported so it can be promoted
+#             either may name the gate that must catch it: `caught:guard`. The name
+#             comes from GATES in tools/audit_probes.py and nowhere else; the default
+#             is `validator` (python3 tools/validate.py). The validator is not the
+#             whole gate — the verifier's allow-list is enforced by its unit table,
+#             so a guard defect measured against the validator always reads missed.
 #   mutation  a bash snippet run in a scratch copy of the tree at HEAD, before the gate;
 #             exit 3 means "not applicable in this repository" and the probe is skipped
 #
 # A miss on a `caught` line is a regression in the gate. A catch on a `missed` line
-# means a check landed: promote the line to `caught` in the same pull request.
+# means a check landed: promote the line to `caught` in the same pull request. A
+# mutation that leaves the tree unchanged is an `error`, not a miss: a probe that
+# plants nothing measures nothing, and reads exactly like a hole that is not there.
 # The first list is the 2026-09-16 audit's table; keep it sorted by kind, not by date.
 
 # --- links, catalogs, always-loaded files ---------------------------------------
@@ -93,3 +100,22 @@ Unicode tag character planted in an agent brief | caught | python3 -c "open('.cl
 grant target dropped from the workflow's base-ref rescue | caught | sed -i '/fetch "tools\/audit_report.py"/d' .github/workflows/audit.yml
 grant target's import dropped from the base-ref rescue | caught | sed -i '/fetch "tools\/audit_env.py"/d' .github/workflows/audit.yml
 a new pinned grant added without rescuing its script | caught | sed -i 's#"Bash(python3 tools/audit_report.py \*)",#"Bash(python3 tools/audit_report.py *)",\n    "Bash(python3 tools/audit_pr_comment.py *)",#' tools/audit_headless.py
+
+# Guard probes (gate `guard`): the verifier's allow-list decides what may execute
+# inside the audit's only executing agent, and tools/validate.py does not read it.
+# These mutations each restore a defect a finding closed; the gate that must catch
+# them is tools/test_verifier_guard.py's table.
+git's -c option skipped instead of refused | caught:guard | sed -i 's/if a == "-C":/if a in ("-C", "-c"):/' .claude/hooks/audit-verifier-guard.sh
+unnamed git global option skipped instead of refused | caught:guard | sed -i 's/refuse(f"git global option {a}")/i += 1; continue/' .claude/hooks/audit-verifier-guard.sh
+git -C allowed to leave the worktree | caught:guard | sed -i 's|path.startswith("/")|False|' .claude/hooks/audit-verifier-guard.sh
+python script allow-list matched by prefix again | caught:guard | sed -i 's/if name in PY_SCRIPTS:/if name.startswith("test_") or name in PY_SCRIPTS:/' .claude/hooks/audit-verifier-guard.sh
+shell script allow-list matched by suffix again | caught:guard | sed -i 's/if norm in SH_SCRIPTS:/if norm.endswith(".sh"):/' .claude/hooks/audit-verifier-guard.sh
+environment prefix before a command accepted again | caught:guard | sed -i 's/if name not in ENV_PREFIX_ALLOWED:/if False:/' .claude/hooks/audit-verifier-guard.sh
+sed -i allowed to edit the worktree | caught:guard | sed -i 's/refuse("sed -i")/pass/' .claude/hooks/audit-verifier-guard.sh
+find -exec and -delete allowed | caught:guard | sed -i 's/refuse(f"find {a}")/pass/' .claude/hooks/audit-verifier-guard.sh
+unknown program allowed instead of refused | caught:guard | sed -i 's/refuse(f"{prog} is not in the allow-list")/pass/' .claude/hooks/audit-verifier-guard.sh
+python script allowed to sit outside the worktree | caught:guard | sed -i 's/refuse("python script outside the worktree")/pass/' .claude/hooks/audit-verifier-guard.sh
+command separator set narrowed so a second command hides | caught:guard | python3 -c "import re,io;p='.claude/hooks/audit-verifier-guard.sh';t=open(p).read();t=t.replace('SEPARATOR_CHARS = frozenset(\"|&;', 'SEPARATOR_CHARS = frozenset(\";',1);open(p,'w').write(t)"
+refuse() stops refusing and lets the command run | caught:guard | python3 -c "p='.claude/hooks/audit-verifier-guard.sh';t=open(p).read();t=t.replace('from its allow-list only\", file=sys.stderr)\n    sys.exit(2)', 'from its allow-list only\", file=sys.stderr)\n    sys.exit(0)',1);open(p,'w').write(t)"
+guard stops failing closed when its program is empty | caught:guard | sed -i '/the guard program is empty; refusing/{n;s/exit 2/exit 0/}' .claude/hooks/audit-verifier-guard.sh
+guard stops failing closed when its own python crashes | caught:guard | sed -i 's/^  0|2) exit "$STATUS" ;;/  *) exit "$STATUS" ;;/' .claude/hooks/audit-verifier-guard.sh

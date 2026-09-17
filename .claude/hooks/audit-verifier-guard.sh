@@ -68,6 +68,19 @@ GIT_READ = {
     "var", "count-objects", "verify-commit", "verify-tag", "merge-base", "whatchanged",
     "reflog", "fsck", "version", "help",
 }
+# git's options before the subcommand, named rather than skipped. A deny-list here
+# would have to spell every option that names a program — `-c diff.external=`,
+# `-c core.pager=`, `-c core.sshCommand=`, `--config-env=`, `--exec-path=` — and then
+# keep pace with every git release. The environment spellings of that same
+# capability (GIT_EXTERNAL_DIFF, PAGER) were already refused by the environment
+# prefix rule; `-c` was the unlocked door to the same room (finding S-003).
+# `-C` is handled separately: it takes a path, and that path may not leave the tree.
+GIT_GLOBAL_FLAGS = frozenset((
+    "-v", "--version", "-P", "--no-pager", "--no-replace-objects",
+    "--no-optional-locks", "--no-lazy-fetch", "--no-advice",
+    "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs",
+))
 GIT_LISTING = {"branch": {"--list", "-a", "-r", "-v", "-vv", "--show-current", "--contains",
                           "--merged", "--no-merged", "-l"},
                "tag": {"--list", "-l", "-n", "--contains", "--points-at"},
@@ -344,14 +357,21 @@ def check_git(args):
     i = 0
     while i < len(args):
         a = args[i]
-        if a in ("-C", "-c"):
+        if a == "-C":
+            # git takes -C's path as its own token; an attached -Cpath is git's own
+            # error, not a spelling to cover here. The path may not leave the
+            # worktree, or "git pointed at another repository" is a claim the
+            # shorter option walks straight past.
+            path = args[i + 1] if i + 1 < len(args) else ""
+            if not path or path.startswith("-") or path.startswith("/") or ".." in path.split("/"):
+                refuse("git -C pointed outside the worktree")
             i += 2
             continue
-        if a.startswith("--git-dir") or a.startswith("--work-tree"):
-            refuse("git pointed at another repository")
-        if a.startswith("-"):
+        if a in GIT_GLOBAL_FLAGS:
             i += 1
             continue
+        if a.startswith("-"):
+            refuse(f"git global option {a}")
         break
     if i >= len(args):
         refuse("git with no subcommand")
