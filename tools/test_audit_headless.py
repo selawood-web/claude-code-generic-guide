@@ -323,17 +323,28 @@ class GuardProbeTests(unittest.TestCase):
     def setUp(self):
         self.argv = audit_headless.probe_verifier_command('{"a":{}}', "/tmp/g.md", ["Read", "Agent"])
 
-    def test_bash_is_deliberately_wide_so_a_refusal_can_only_be_the_guard(self):
+    def test_it_runs_on_the_audit_s_own_grants_so_an_allowed_command_proves_the_hook(self):
+        # The guard is known to refuse. What is under test now is its `allow`: with
+        # no bare Bash granted, a command that runs can only have been approved by
+        # the hook that read it.
         grants = self.argv[self.argv.index("--allowedTools") + 1:self.argv.index("--disallowed-tools")]
-        self.assertIn("Bash", grants)
-        self.assertIn("Bash", self.argv[self.argv.index("--tools") + 1].split(","))
+        self.assertNotIn("Bash", grants)
+        self.assertEqual(grants, ["Read", "Agent"])
+
+    def test_the_write_question_comes_before_the_subagent_and_stop_is_said_once(self):
+        # The first version put "stop" inside the subagent's task and the Write
+        # after it; the run stopped, and the Write question came back unanswered.
+        prompt = audit_headless.probe_verifier_command('{}', "p", ["Read"], report_dir="CCGG-AUDIT-X")[2]
+        self.assertLess(prompt.index("probe-write.txt"), prompt.index("audit-verifier"))
+        self.assertEqual(prompt.count("stop"), 1)
+        self.assertTrue(prompt.rstrip().endswith("say only that."))
 
     def test_it_asks_for_one_allowed_and_one_refused_command(self):
         prompt = self.argv[2]
         self.assertIn(audit_headless.ALLOWED_PROBE_COMMAND, prompt)
         self.assertIn(audit_headless.guard_probe_marker(), prompt)
         self.assertIn("audit-verifier", prompt)
-        self.assertIn("Do not work around a refusal", prompt)
+        self.assertIn("must not work around a refusal", prompt)
 
     def test_it_is_capped_at_a_few_turns_and_a_dollar_or_so(self):
         self.assertEqual(self.argv[self.argv.index("--max-turns") + 1], "12")
