@@ -1139,26 +1139,63 @@ GATE_COMMAND_RE = re.compile(r"tools/validate\.py")
 AUTOMATIC_TRIGGER_RE = re.compile(r"^\s{2,}(push|pull_request):", re.M)
 
 
-def runs_gate_automatically(text: str) -> bool:
-    """True when this workflow runs the validator on a trigger nobody has to remember."""
+# The validator is not the whole gate. The detectors that exist only in
+# audit_facts.py, and the unit tests that hold every check honest, ran on a
+# manual trigger or not at all (findings T-008 and T-009).
+# The command form, not the path: the step guards itself with
+# `if [ -f tools/audit_facts.py ]`, and a workflow that only mentions the file
+# runs nothing. (GATE_COMMAND_RE stays a bare path — tightening it would fail
+# installed projects whose workflow spells the invocation some other way.)
+FACTS_COMMAND_RE = re.compile(r"python[0-9.]*\s+tools/audit_facts\.py")
+TESTS_COMMAND_RE = re.compile(r"unittest\s+discover[^\n]*\btools\b")
+GATE_RUNNERS = (
+    (GATE_COMMAND_RE, "tools/validate.py", "the gate would run only when someone remembers"),
+    (FACTS_COMMAND_RE, "tools/audit_facts.py",
+     "its hook-stdout, command-resolution and network-exec checks exist nowhere else"),
+    (TESTS_COMMAND_RE, "the unit tests",
+     "every check in this repository would be unproven on the commit that broke it"),
+)
+
+
+# A workflow that reads the event or a label decides for itself whether to do any
+# work. audit.yml triggers on pull_request and then gates every job on an `audit`
+# label — dependable for what it is, and not a runner anything else can rely on.
+EVENT_GATED_RE = re.compile(r"github\.event_name|github\.event\.pull_request\.labels")
+
+
+def runs_automatically(text: str, command: re.Pattern) -> bool:
+    """True when this workflow runs `command` on a trigger nobody has to remember.
+
+    Three things have to hold: the command is invoked, the workflow's own `on:`
+    block names an automatic trigger — `pull_request` inside a job's `if:` is a
+    condition, not a reason it started — and no job reads the event or a label to
+    decide whether to run at all.
+    """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
-    if not GATE_COMMAND_RE.search(text):
+    if not command.search(text):
+        return False
+    if EVENT_GATED_RE.search(text):
         return False
     header = text.split("\njobs:", 1)[0]
     return bool(AUTOMATIC_TRIGGER_RE.search(header))
 
 
+def runs_gate_automatically(text: str) -> bool:
+    """True when this workflow runs the validator on a trigger nobody has to remember."""
+    return runs_automatically(text, GATE_COMMAND_RE)
+
+
 def check_gate_has_a_runner() -> None:
     if not tracked("install.sh"):
         return                      # an installed project chooses its own CI
-    workflows = tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml")
-    for path in workflows:
+    texts = []
+    for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
         with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
-            if runs_gate_automatically(fh.read()):
-                return
-    fail("no workflow runs tools/validate.py on push or pull_request — "
-         "the gate would run only when someone remembers")
+            texts.append(fh.read())
+    for command, name, why in GATE_RUNNERS:
+        if not any(runs_automatically(text, command) for text in texts):
+            fail(f"no workflow runs {name} on push or pull_request — {why}")
 
 
 def inherited_env_uses(text: str) -> list[int]:

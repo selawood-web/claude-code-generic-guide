@@ -93,6 +93,20 @@ INSTRUCTION_GLOBS = (
     "features/*.md",
     "knowledge-base/*.md",
 )
+# Kinds whose `finding` status is a defect a gate should stop for. Two are left
+# out on purpose: permission-surface lists what the committed settings grant — a
+# fact for review, not a defect, and an installed project that grants anything
+# would otherwise go red on its own configuration — and `gate` records how the
+# tree's own gate did, which the workflow's other steps already report.
+GATING_KINDS = ("hook-registration", "hook-stdout", "hidden-characters", "frontmatter",
+                "command-resolution", "network-exec")
+
+
+def gating_findings(facts: list) -> list:
+    """The findings a CI runner should fail on (finding T-008)."""
+    return [f for f in facts if f.status == "finding" and f.kind in GATING_KINDS]
+
+
 STACK_MARKERS = {
     "package.json": "javascript", "pyproject.toml": "python", "requirements.txt": "python",
     "go.mod": "go", "Cargo.toml": "rust", "pom.xml": "java", "build.gradle": "java",
@@ -354,7 +368,14 @@ def network_patterns(text: str) -> list[tuple[int, str, str]]:
         if stripped.startswith("#") or re.search(r"\(r[\"\']", stripped):
             continue  # a comment, or a regex literal that names the pattern rather than running it
         for pattern, label in NETWORK_PATTERNS:
-            if pattern.search(line):
+            match = pattern.search(line)
+            # A token reached through a leading hyphen is an option, not the
+            # command it spells: `--eval` in a flag table is not a shell eval,
+            # and one in this repository's own guard hook was the single finding
+            # standing between this stage and an automatic CI runner (T-008).
+            while match and match.start() and line[match.start() - 1] == "-":
+                match = pattern.search(line, match.end())
+            if match:
                 hits.append((no, label, stripped[:100]))
     return hits
 
@@ -579,6 +600,10 @@ def main(argv: list[str]) -> int:
                              "Off by default: this executes code from the checkout. On, it runs with "
                              "a minimal environment and a throwaway HOME, never the operator's.")
     parser.add_argument("--vocab", default=VOCAB_PATH)
+    parser.add_argument("--fail-on-findings", action="store_true",
+                        help="exit 1 when a defect-shaped check reports a finding. For a CI "
+                             "runner: these detectors exist only here, and without this they "
+                             "ran on a manual trigger or not at all.")
     args = parser.parse_args(argv)
     try:
         repo = args.repo or git(os.getcwd(), "rev-parse", "--show-toplevel")
@@ -604,6 +629,12 @@ def main(argv: list[str]) -> int:
     print(f"audit-facts: {len(facts.items)} fact(s) -> {out}")
     for kind, counts in sorted(by_kind.items()):
         print(f"  {kind:20} ok {counts['ok']:3}  finding {counts['finding']:3}  skipped {counts['skipped']:3}")
+    gating = gating_findings(facts.items)
+    if args.fail_on_findings and gating:
+        print(f"audit-facts: {len(gating)} finding(s) in {', '.join(GATING_KINDS)}:")
+        for f in gating:
+            print(f"  {f.kind}: {f.location}: {f.evidence}")
+        return 1
     return 0
 
 

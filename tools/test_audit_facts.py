@@ -253,6 +253,29 @@ class NetworkPatternTests(unittest.TestCase):
     def test_clean(self):
         self.assertEqual(network_patterns("echo ok\nexit 0\n"), [])
 
+    # T-008: the one finding that stood between this detector and a CI runner.
+    def test_eval_as_a_command_is_found(self):
+        self.assertTrue(network_patterns('eval "$payload"\n'))
+
+    def test_a_long_option_is_not_the_command_it_contains(self):
+        """`--eval` in a flag table is not a shell eval; it fired on the guard hook."""
+        self.assertEqual(network_patterns('NODE_CODE_LONG = {"--eval", "--print"}\n'), [])
+
+    def test_a_short_option_is_not_the_command_either(self):
+        self.assertEqual(network_patterns("run -eval now\n"), [])
+
+    def test_a_hyphen_inside_a_word_still_counts(self):
+        """`x-curl` is a different program, but `foo | sh` after it is still a pipe."""
+        self.assertEqual([h[1] for h in network_patterns("cat f | sh\n")], ["pipe to shell"])
+
+    def test_the_shipped_hooks_and_scripts_are_clean(self):
+        guide = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        dirty = []
+        for path in audit_facts.tracked(guide, ".claude/hooks/*") + audit_facts.tracked(guide, "*.sh"):
+            for no, label, snippet in network_patterns(audit_facts.read(guide, path)):
+                dirty.append(f"{path}:{no} {label}: {snippet[:60]}")
+        self.assertEqual(dirty, [], "a fetch-or-execute pattern this repository does not have")
+
 
 class PermissionSurfaceTests(unittest.TestCase):
     def test_fields_listed(self):
