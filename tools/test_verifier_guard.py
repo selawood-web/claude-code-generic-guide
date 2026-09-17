@@ -135,6 +135,13 @@ REFUSED = [
     "python3 scripts/deploy.py",
     "python3 evil.py",
     "python3 /tmp/x.py",
+    # An absolute path at the filesystem root: rpartition leaves the directory
+    # empty, which is one of PY_SCRIPT_DIRS, and the basename is an allowed name.
+    # Only the worktree check stands between `python3 /validate.py` and whatever
+    # is at that path. Found by the guard mutation probes, which is what they are
+    # for — no row covered it, so the check that stops it was untested.
+    "python3 /validate.py",
+    "bash /install.sh",
     "python3 ../outside.py",
     "python3 tools/../setup.py",
     "python3 .github/x.py",

@@ -49,6 +49,45 @@ class ParseProbesTests(unittest.TestCase):
         probes = parse_probes("x | missed | curl a | sh\n")
         self.assertEqual(probes[0].mutation, "curl a | sh")
 
+    def test_a_probe_defaults_to_the_validator_gate(self):
+        self.assertEqual(parse_probes("x | caught | true\n")[0].gate,
+                         audit_probes.DEFAULT_GATE_NAME)
+
+    def test_a_probe_may_name_its_gate(self):
+        probes = parse_probes("x | caught:guard | true\ny | missed:guard | true\n")
+        self.assertEqual([(p.expect, p.gate) for p in probes],
+                         [("caught", "guard"), ("missed", "guard")])
+
+    def test_every_named_gate_has_a_command(self):
+        for name in audit_probes.GATES:
+            self.assertTrue(audit_probes.GATES[name].strip(), name)
+
+    def test_an_unknown_gate_raises_rather_than_reading_as_a_blind_spot(self):
+        """A probe pointed at a gate nobody runs would report a hole that is not there."""
+        with self.assertRaises(ProbeFileError) as ctx:
+            parse_probes("x | caught:nonesuch | true\n")
+        self.assertIn("line 1", str(ctx.exception))
+        self.assertIn("nonesuch", str(ctx.exception))
+
+    def test_a_colon_with_no_gate_raises(self):
+        with self.assertRaises(ProbeFileError) as ctx:
+            parse_probes("x | caught: | true\n")
+        self.assertIn("line 1", str(ctx.exception))
+
+    def test_a_bad_verdict_is_still_caught_when_a_gate_is_named(self):
+        with self.assertRaises(ProbeFileError) as ctx:
+            parse_probes("x | maybe:guard | true\n")
+        self.assertIn("expect must be one of", str(ctx.exception))
+
+    def test_the_shipped_probes_file_parses_and_names_known_gates(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "tools", "probes.txt"), encoding="utf-8") as fh:
+            probes = parse_probes(fh.read())
+        self.assertTrue(probes)
+        self.assertEqual({p.gate for p in probes} - set(audit_probes.GATES), set())
+        self.assertIn("guard", {p.gate for p in probes},
+                      "no probe measures the verifier guard; its allow-list would be unmeasured again")
+
     def test_empty_text(self):
         self.assertEqual(parse_probes(""), [])
 
@@ -144,6 +183,7 @@ def _tiny_repo(root: str) -> str:
 
 
 GATE = ["bash", "-c", "test ! -e BROKEN"]
+GATES = {audit_probes.DEFAULT_GATE_NAME: GATE, "guard": ["bash", "-c", "test ! -e GUARD_BROKEN"]}
 
 
 class RunProbeTests(unittest.TestCase):
@@ -157,8 +197,8 @@ class RunProbeTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def probe(self, mutation, expect="caught"):
-        return run_probe(Probe("p", expect, mutation, 1), self.copy, GATE, self.env)
+    def probe(self, mutation, expect="caught", gate=audit_probes.DEFAULT_GATE_NAME):
+        return run_probe(Probe("p", expect, mutation, 1, gate), self.copy, GATES, self.env)
 
     def test_scratch_is_a_committed_copy_with_its_own_env(self):
         self.assertTrue(os.path.exists(os.path.join(self.copy, "README.md")))
@@ -171,25 +211,45 @@ class RunProbeTests(unittest.TestCase):
 
     def test_reset_between_probes_is_complete(self):
         self.probe("touch BROKEN")
-        self.assertEqual(self.probe("true").result, "missed")
+        self.assertEqual(self.probe("echo x >> README.md").result, "missed")
         self.assertFalse(os.path.exists(os.path.join(self.copy, "BROKEN")))
 
     def test_mutation_cannot_see_the_operator_environment(self):
         os.environ["CCGG_PROBE_TEST_SECRET"] = "leak"
         try:
-            r = self.probe('[ -z "${CCGG_PROBE_TEST_SECRET:-}" ] || exit 9')
+            r = self.probe('[ -z "${CCGG_PROBE_TEST_SECRET:-}" ] || exit 9; echo x >> README.md')
         finally:
             del os.environ["CCGG_PROBE_TEST_SECRET"]
         self.assertEqual(r.result, "missed", r.detail)
 
     def test_mutation_home_is_private(self):
-        r = self.probe('mkdir -p "$HOME/.claude" && echo x > "$HOME/.claude/planted"')
+        r = self.probe('mkdir -p "$HOME/.claude" && echo x > "$HOME/.claude/planted"'
+                       ' && echo x >> README.md')
         self.assertEqual(r.result, "missed", r.detail)
         self.assertTrue(os.path.exists(os.path.join(self.env["HOME"], ".claude", "planted")))
         self.assertFalse(os.path.exists(os.path.expanduser("~/.claude/planted")))
 
     def test_empty_mutation_is_an_error(self):
         self.assertEqual(self.probe("   ").result, "error")
+
+    def test_a_mutation_that_changes_nothing_is_an_error_not_a_miss(self):
+        """A sed whose pattern stopped matching reads exactly like a gate hole."""
+        r = self.probe("true")
+        self.assertEqual(r.result, "error")
+        self.assertIn("plants nothing", r.detail)
+
+    def test_a_probe_runs_the_gate_it_names(self):
+        r = self.probe("touch GUARD_BROKEN", gate="guard")
+        self.assertEqual(r.result, "caught", r.detail)
+        self.assertEqual(r.gate, "guard")
+        # The same defect measured against the default gate is invisible: that is
+        # the whole reason a probe may name its gate.
+        self.assertEqual(self.probe("touch GUARD_BROKEN").result, "missed")
+
+    def test_a_gate_with_no_command_is_an_error(self):
+        r = run_probe(Probe("p", "caught", "touch BROKEN", 1, "nonesuch"), self.copy, GATES, self.env)
+        self.assertEqual(r.result, "error")
+        self.assertIn("nonesuch", r.detail)
 
     def test_skip_and_failing_mutation(self):
         self.assertEqual(self.probe("exit 3").result, "skipped")
@@ -204,7 +264,7 @@ class MainIntegrationTests(unittest.TestCase):
             repo = _tiny_repo(tmp)
             with open(os.path.join(repo, "probes.txt"), "w") as fh:
                 fh.write("# probes\nplant | caught | touch BROKEN\nquiet | missed | echo x > README.md\n"
-                         "regressed | caught | true\nna | caught | exit 3\n")
+                         "regressed | caught | echo y >> README.md\nna | caught | exit 3\n")
             out = os.path.join(tmp, "out")
             rc = _quiet_main(["--repo", repo, "--probes", "probes.txt", "--gate", "bash -c 'test ! -e BROKEN'", "--out", out])
             self.assertEqual(rc, 1)
