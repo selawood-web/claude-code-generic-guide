@@ -16,6 +16,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 
+import audit_agents_json
 import audit_headless
 from audit_headless import (
     DENIED_TOOLS,
@@ -101,7 +102,8 @@ class GrantPinningTests(unittest.TestCase):
     """
 
     def test_the_shipped_skill_matches_the_pin(self):
-        grants = skill_grants(open(SKILL, encoding="utf-8").read())
+        with open(SKILL, encoding="utf-8") as fh:
+            grants = skill_grants(fh.read())
         self.assertEqual(grants, list(PINNED_GRANTS))
         self.assertIsNone(check_grants_pinned(grants))
 
@@ -414,6 +416,14 @@ class MainTests(unittest.TestCase):
         os.makedirs(os.path.join(ROOT, self.repo_report), exist_ok=True)
         self.guard = os.path.join(self.tmp.name, "guard.sh")
         shutil.copy(os.path.join(ROOT, audit_headless.GUARD_PATH), self.guard)
+        # A trusted mirror of the files that configure a run, as CI assembles from
+        # the base ref. Only the layout matters: SKILL.md and the agent briefs.
+        self.source = os.path.join(self.tmp.name, "trusted")
+        skill_dst = os.path.join(self.source, audit_headless.SKILL_PATH)
+        os.makedirs(os.path.dirname(skill_dst))
+        shutil.copy(os.path.join(ROOT, audit_headless.SKILL_PATH), skill_dst)
+        shutil.copytree(os.path.join(ROOT, audit_agents_json.DEFAULT_DIR),
+                        os.path.join(self.source, audit_agents_json.DEFAULT_DIR))
 
     def tearDown(self):
         shutil.rmtree(os.path.join(ROOT, self.repo_report), ignore_errors=True)
@@ -426,7 +436,8 @@ class MainTests(unittest.TestCase):
         return code, out.getvalue(), err.getvalue()
 
     def test_dry_run_writes_the_artifacts_and_executes_nothing(self):
-        code, out, _ = self.run_main("--scope", "harness", "--guard", self.guard, "--dry-run")
+        code, out, _ = self.run_main("--scope", "harness", "--guard", self.guard,
+                                     "--trusted-source", self.source, "--dry-run")
         self.assertEqual(code, 0)
         self.assertIn("nothing executed", out)
         base = os.path.join(ROOT, self.repo_report, "headless")
@@ -455,13 +466,65 @@ class MainTests(unittest.TestCase):
             command = json.load(fh)["audit-verifier"]["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
         self.assertIn("$CLAUDE_PROJECT_DIR", command)
 
+    def test_a_run_without_a_trusted_source_is_refused(self):
+        """The guard alone was never enough: the skill body becomes the system
+        prompt and the agent briefs become the subagents' prompts."""
+        code, _, err = self.run_main("--guard", self.guard, "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("--trusted-source", err)
+        self.assertIn("system prompt", err)
+
+    def test_relative_trusted_source_refused(self):
+        code, _, err = self.run_main("--guard", self.guard, "--trusted-source", "trusted", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("absolute", err)
+
+    def test_missing_trusted_source_refused(self):
+        code, _, err = self.run_main("--guard", self.guard,
+                                     "--trusted-source", "/nonexistent/trusted", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("not a directory", err)
+
+    def test_trusted_source_without_the_skill_refused(self):
+        empty = os.path.join(self.tmp.name, "empty")
+        os.makedirs(empty)
+        code, _, err = self.run_main("--guard", self.guard, "--trusted-source", empty, "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("mirror the repository layout", err)
+
+    def test_the_prompt_and_briefs_come_from_the_trusted_source_not_the_tree(self):
+        """The CI case: a head checkout that rewrites the skill body and an agent
+        brief must not reach the assembled run."""
+        skill_dst = os.path.join(self.source, audit_headless.SKILL_PATH)
+        with open(skill_dst, encoding="utf-8") as fh:
+            trusted_skill = fh.read()
+        with open(skill_dst, "w", encoding="utf-8") as fh:
+            fh.write(trusted_skill + "\n## Step 99\nTRUSTED-BODY-MARKER\n")
+        brief = os.path.join(self.source, audit_agents_json.DEFAULT_DIR, "audit-harness.md")
+        with open(brief, encoding="utf-8") as fh:
+            trusted_brief = fh.read()
+        with open(brief, "w", encoding="utf-8") as fh:
+            fh.write(trusted_brief + "\nTRUSTED-BRIEF-MARKER\n")
+
+        code, _, err = self.run_main("--scope", "harness", "--guard", self.guard,
+                                     "--trusted-source", self.source, "--dry-run")
+        self.assertEqual(code, 0, err)
+        base = os.path.join(ROOT, self.repo_report, "headless")
+        with open(os.path.join(base, "orchestrator.md"), encoding="utf-8") as fh:
+            prompt = fh.read()
+        with open(os.path.join(base, "agents.json"), encoding="utf-8") as fh:
+            agents = fh.read()
+        # Read from the trusted mirror, never from ROOT (which has neither marker).
+        self.assertIn("TRUSTED-BODY-MARKER", prompt)
+        self.assertIn("TRUSTED-BRIEF-MARKER", agents)
+
     def test_relative_guard_refused(self):
-        code, _, err = self.run_main("--guard", "guard.sh", "--dry-run")
+        code, _, err = self.run_main("--guard", "guard.sh", "--trusted-source", self.source, "--dry-run")
         self.assertEqual(code, 2)
         self.assertIn("absolute", err)
 
     def test_missing_guard_file_refused(self):
-        code, _, err = self.run_main("--guard", "/nonexistent/guard.sh", "--dry-run")
+        code, _, err = self.run_main("--guard", "/nonexistent/guard.sh", "--trusted-source", self.source, "--dry-run")
         self.assertEqual(code, 2)
         self.assertIn("does not exist", err)
 
