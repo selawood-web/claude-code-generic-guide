@@ -75,10 +75,15 @@ ISOLATION = ("--setting-sources", "user", "--strict-mcp-config")
 # which catches honest drift without making either depend on the other.
 #
 # Scope, stated plainly: this pin is only as trustworthy as the copy of *this file*
-# that runs. An operator invoking a trusted checkout's audit_headless.py against a
-# tree they did not write is covered. A CI job that runs the audited head's own
-# launcher is not, until .github/workflows/audit.yml rescues this file from the base
-# ref the way it already rescues the verifier guard.
+# that runs. .github/workflows/audit.yml rescues this launcher, the guard, the skill
+# and the agent briefs from the base ref, so a CI run is covered for those.
+#
+# The grants themselves were not. Every Bash grant below names a path, and with the
+# run's cwd at the audited checkout those paths resolved to the head's copies — in
+# the one job that holds ANTHROPIC_API_KEY, with --permission-prompts none (finding
+# S-007). grants_for() rewrites them to the trusted source when there is one, and
+# check_pinned_grants_are_rescued in tools/validate.py fails the gate when a script
+# named here is not in the workflow's base-ref rescue list.
 PINNED_GRANTS = (
     "Bash(python3 tools/audit_facts.py *)",
     "Bash(python3 tools/audit_probes.py *)",
@@ -90,6 +95,36 @@ PINNED_GRANTS = (
     "Grep",
     "Agent",
 )
+GRANT_SCRIPT_RE = re.compile(r"Bash\(python3 (tools/[A-Za-z0-9_]+\.py) \*\)")
+
+
+def grant_scripts(grants) -> list[str]:
+    """The repository paths a Bash grant would execute, in order."""
+    found = []
+    for grant in grants:
+        match = GRANT_SCRIPT_RE.fullmatch(grant.strip())
+        if match and match.group(1) not in found:
+            found.append(match.group(1))
+    return found
+
+
+def grants_for(grants: list[str], source_root: str, root: str) -> list[str]:
+    """The grants as the run should receive them: Bash pointed at the trusted copies.
+
+    With --trust-checkout the two roots are the same tree and nothing changes. With
+    a trusted source, a grant that says `tools/audit_report.py` would otherwise be
+    satisfied by the audited head's copy of that file, because the run's cwd is the
+    audited checkout (finding S-007).
+    """
+    if os.path.abspath(source_root) == os.path.abspath(root):
+        return list(grants)
+    out = []
+    for grant in grants:
+        match = GRANT_SCRIPT_RE.fullmatch(grant.strip())
+        out.append(f"Bash(python3 {os.path.join(source_root, match.group(1))} *)" if match else grant)
+    return out
+
+
 # `--tools` names the built-in tool; the permission flags accept either name.
 TOOL_ALIASES = {"Agent": "Task"}
 WRITE_GRANT_RE = re.compile(r"Write\([^)]*\)")
@@ -219,8 +254,14 @@ def tool_names(grants: list[str]) -> list[str]:
     return names
 
 
-def orchestrator_prompt(skill_text: str, scope: str, report_dir: str) -> str:
+def orchestrator_prompt(skill_text: str, scope: str, report_dir: str,
+                        tools_root: str | None = None) -> str:
     """The appended system prompt: the skill's own steps, plus where this run stands."""
+    where_tools = (
+        f"- Run the audit's own scripts from `{tools_root}/tools/`, never `tools/`. The tree you\n"
+        f"  are auditing is not the tree whose code may run here, and your grants name the\n"
+        f"  trusted copies only.\n" if tools_root else ""
+    )
     return (
         "# Headless audit run\n\n"
         "You are running `/ccgg-audit` non-interactively. There is no operator to ask, so a\n"
@@ -235,7 +276,8 @@ def orchestrator_prompt(skill_text: str, scope: str, report_dir: str) -> str:
         "- The shipped security tooling is not available here; say so in the report and let\n"
         "  the security specialist run its own product pass.\n"
         f"- Write nothing outside `{report_dir}`. Commit nothing. Push nothing.\n"
-        "- End by writing the revision stamp and rendering the report, as Step 5 says.\n\n"
+        + where_tools
+        + "- End by writing the revision stamp and rendering the report, as Step 5 says.\n\n"
         "---\n\n" + skill_body(skill_text)
     )
 
@@ -531,6 +573,10 @@ def main(argv: list[str]) -> int:
         # skill's own text, not against this run's rewritten directory.
         check_grants_pinned(grants)
         grants = retarget_write_grant(grants, report_dir)
+        # S-007: the run's cwd is the audited checkout, so a grant naming
+        # `tools/audit_report.py` pre-approves *its* copy. Point the Bash grants at
+        # the trusted tree; with --trust-checkout this is a no-op.
+        grants = grants_for(grants, source_root, root)
         definitions = audit_agents_json.build(
             source_root, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, args.guard, None
         )
@@ -545,7 +591,8 @@ def main(argv: list[str]) -> int:
     out_dir = os.path.join(root, report_dir, "headless")
     os.makedirs(out_dir, exist_ok=True)
     agents_json = json.dumps(definitions)
-    prompt = orchestrator_prompt(skill_text, scope, report_dir)
+    tools_root = None if os.path.abspath(source_root) == os.path.abspath(root) else source_root
+    prompt = orchestrator_prompt(skill_text, scope, report_dir, tools_root)
     prompt_file = os.path.join(out_dir, "orchestrator.md")
     with open(os.path.join(out_dir, "agents.json"), "w", encoding="utf-8") as fh:
         fh.write(agents_json + "\n")

@@ -9,12 +9,15 @@ verifier may do, and belongs in the same pull request as its justification.
 
 import json
 import os
+import sys
 import re
 import shutil
 import stat
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     ".claude", "hooks", "audit-verifier-guard.sh")
@@ -73,6 +76,17 @@ ALLOWED = [
     "python3 tools/test_validate.py",
     "python3 ./tools/validate.py",
     "cd tools && python3 validate.py",
+    # S-001: the repository's own shell scripts stay runnable.
+    "bash -n .claude/hooks/session-start.sh",
+    "bash -n update.sh",
+    "sh install.sh --help",
+    # S-002: the assignment prefixes a reproduction actually needs.
+    "CCGG_HOME=/tmp/x CCGG_REF=v1 bash -n .claude/hooks/session-start.sh",
+    "LC_ALL=C grep -n foo AGENTS.md",
+    # S-004: the pinned module and script names.
+    "python3 -m unittest discover -s tools",
+    "python3 -m unittest test_validate",
+    "python3 tools/test_verifier_guard.py",
 ]
 
 REFUSED = [
@@ -91,6 +105,26 @@ REFUSED = [
     "python3 -Sc 'import os'",
     "python3 -IBc 'import os'",
     "python3 -Zz tools/validate.py",
+    # S-001: check_shell returned on the first non-flag argument, so any .sh the
+    # audited branch carried ran — the hole R-012 closed for python, four lines up.
+    "bash tools/whatever.sh",
+    "bash /tmp/evil.sh",
+    "sh ../outside.sh",
+    "bash .claude/hooks/../../etc/x.sh",
+    "bash",
+    # S-002: the VAR= prefix was popped without reading the name, so a variable
+    # that names a program to run passed behind an allow-listed one.
+    "LD_PRELOAD=tools/evil.so cat README.md",
+    "LESSOPEN=@tools/x.sh less README.md",
+    "GIT_EXTERNAL_DIFF=./payload.sh git diff HEAD~1 HEAD",
+    "PAGER=./payload.sh git log",
+    "PYTHONSTARTUP=tools/x.py python3 tools/validate.py",
+    # S-004: the python allow-list matched a prefix, not a name.
+    "python3 tools/test_pwn.py",
+    "python3 tools/audit_pwn.py",
+    "python3 -m unittest discover -s /tmp",
+    "python3 -m unittest test_pwn",
+    "python3 -m doctest tools/pwn.py",
     # R-012: `python3 <path>` was allowed unconditionally as "the repository's
     # own code", so any .py file an audited branch carries ran inside the
     # verifier's worktree — in CI, on the runner that holds the API key.
@@ -220,6 +254,25 @@ class AllowListTests(unittest.TestCase):
     def test_non_json_input_refused(self):
         proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
+
+
+class CanaryTests(unittest.TestCase):
+    """R-008: the canary only means something while the guard still refuses it."""
+
+    def canary(self):
+        import audit_report
+        return audit_report.GUARD_CANARY
+
+    def test_the_canary_is_refused_by_the_guard(self):
+        rc, err = run_guard(self.canary())
+        self.assertEqual(rc, 2, "the canary command is no longer refused — it proves nothing")
+        self.assertIn("audit-verifier-guard: refused", err)
+
+    def test_the_canary_is_harmless(self):
+        """A canary that changed something would be a poor thing to run every time."""
+        self.assertNotIn(">", self.canary())
+        self.assertNotIn("rm", self.canary())
+        self.assertNotIn("|", self.canary())
 
 
 class GuardFailureTests(unittest.TestCase):

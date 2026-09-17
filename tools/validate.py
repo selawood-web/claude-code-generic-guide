@@ -1516,6 +1516,208 @@ def check_hook_stdout_docs() -> None:
             fail(problem)
 
 
+# --- 28. the verifier's guard canary ------------------------------------------
+# The guard hook on the verifier was assumed to fire until a run measured it and
+# found it did not (finding R-008). What replaced the assumption is a canary the
+# verifier runs first and the report records. Delete it from the brief and every
+# later run silently stops measuring, so the gate holds the wiring in place.
+# Kept identical to tools/audit_report.py's GUARD_CANARY; a test compares them.
+GUARD_CANARY = "uname -a"
+GUARD_CANARY_MARKER = "GUARD-CANARY"
+VERIFIER_BRIEF = os.path.join(".claude", "agents", "audit-verifier.md")
+
+
+def guard_canary_problems(path: str, text: str) -> list[str]:
+    """The verifier brief must tell the verifier to run the canary and report it."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    problems = []
+    if GUARD_CANARY_MARKER not in text:
+        problems.append(f"{path}: no {GUARD_CANARY_MARKER} line — the run would stop measuring "
+                        "whether the verifier's guard fires, and nothing would say so")
+    elif GUARD_CANARY not in text:
+        problems.append(f"{path}: names a canary but not `{GUARD_CANARY}`, the command "
+                        "tools/audit_report.py counts as proof the guard fired")
+    return problems
+
+
+def check_guard_canary() -> None:
+    if VERIFIER_BRIEF not in tracked(VERIFIER_BRIEF):
+        return                      # a project without the audit verifier
+    with open(os.path.join(ROOT, VERIFIER_BRIEF), encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    for problem in guard_canary_problems(VERIFIER_BRIEF, text):
+        fail(problem)
+
+
+# --- 29. the verifier guard's allow-lists match the tree ----------------------
+# The guard names the scripts it will run. Before finding S-004 it matched a
+# prefix, so a branch adding tools/test_anything.py was allowed by construction;
+# and `-m unittest discover` imports whatever is in the directory whatever the
+# list says. Holding the list equal to the tree is what makes adding a script to
+# the gate a visible, named change to the guard rather than a silent one.
+GUARD_PATH = os.path.join(".claude", "hooks", "audit-verifier-guard.sh")
+GUARD_HEREDOC_RE = re.compile(r"<<'PY'[^\n]*\n(.*?)\nPY\n", re.S)
+GUARD_LIST_NAMES = ("PY_SCRIPTS", "SH_SCRIPTS")
+
+
+def guard_allow_lists(path: str | None = None) -> dict:
+    """The guard's own script allow-lists, read from its embedded python."""
+    full = path or os.path.join(ROOT, GUARD_PATH)
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        match = GUARD_HEREDOC_RE.search(fh.read())
+    if not match:
+        return {}
+    try:
+        tree = ast.parse(match.group(1))
+    except SyntaxError:
+        return {}
+    found = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id in GUARD_LIST_NAMES:
+            value = node.value
+            # The lists are written `frozenset((...))` — a call, not a literal.
+            if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                    and value.func.id in ("frozenset", "set", "tuple") and len(value.args) == 1):
+                value = value.args[0]
+            try:
+                found[target.id] = set(ast.literal_eval(value))
+            except (ValueError, TypeError):
+                continue
+    return found
+
+
+def guard_allow_list_problems(lists: dict, py_tree: set, sh_tree: set,
+                              authored_here: bool = True) -> list[str]:
+    """Differences between what the guard names and what the repository ships.
+
+    The two directions are not symmetrical. A script in the tree the guard does
+    not name is a finding everywhere: nobody decided to allow it. A name the guard
+    keeps with no file behind it is a finding only where the list is authored —
+    an installed project gets the guard and validate.py but neither tools/test_*.py
+    nor install.sh/update.sh, and a list trimmed to each install would stop being
+    one list.
+    """
+    problems = []
+    for name, tree in (("PY_SCRIPTS", py_tree), ("SH_SCRIPTS", sh_tree)):
+        listed = set(lists.get(name) or ())
+        for missing in sorted(tree - listed):
+            problems.append(f"{GUARD_PATH}: {missing} is in the tree but not in {name} — "
+                            f"the verifier cannot run it, and a script the guard does not "
+                            f"name is a script nobody decided to allow")
+        if not authored_here:
+            continue
+        for stale in sorted(listed - tree):
+            problems.append(f"{GUARD_PATH}: {name} allows {stale}, which the repository does "
+                            f"not ship — a name kept after its file went is a name a branch "
+                            f"can reintroduce")
+    return problems
+
+
+def check_guard_allow_lists() -> None:
+    if not tracked(GUARD_PATH):
+        return                      # a project without the audit verifier
+    py_tree = {os.path.basename(p) for p in tracked("tools/*.py")
+               if os.path.basename(p) != "__init__.py"}
+    sh_tree = set(tracked(".claude/hooks/*.sh")) | set(tracked("*.sh"))
+    for problem in guard_allow_list_problems(guard_allow_lists(), py_tree, sh_tree,
+                                             authored_here=bool(tracked("install.sh"))):
+        fail(problem)
+
+
+AUDIT_WORKFLOW_PATH = ".github/workflows/audit.yml"
+HEADLESS_PATH = "tools/audit_headless.py"
+# The one grant shape that names a path the run may execute without a prompt.
+PINNED_GRANT_SCRIPT_RE = re.compile(r"Bash\(python3 (tools/[A-Za-z0-9_]+\.py) \*\)")
+RESCUE_FETCH_RE = re.compile(r'^\s*fetch "([^"]+)"', re.M)
+LOCAL_IMPORT_RE = re.compile(r"^import ([A-Za-z_][A-Za-z0-9_]*)", re.M)
+
+
+def pinned_grant_scripts(text: str) -> list[str]:
+    """The repository paths PINNED_GRANTS lets a headless run execute unprompted.
+
+    Read with ast, never by importing: validating a module by running it is how the
+    audited tree would get its say back.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not (isinstance(target, ast.Name) and target.id == "PINNED_GRANTS"):
+            continue
+        value = node.value
+        if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                and value.func.id in ("frozenset", "set", "tuple") and len(value.args) == 1):
+            value = value.args[0]
+        try:
+            grants = ast.literal_eval(value)
+        except (ValueError, TypeError):
+            continue
+        for grant in grants:
+            match = PINNED_GRANT_SCRIPT_RE.fullmatch(str(grant).strip())
+            if match and match.group(1) not in found:
+                found.append(match.group(1))
+    return found
+
+
+def local_imports(path: str) -> set[str]:
+    """Sibling modules under tools/ that `path` imports, one level deep."""
+    full = os.path.join(ROOT, path)
+    if not os.path.isfile(full):
+        return set()
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        names = set(LOCAL_IMPORT_RE.findall(fh.read()))
+    return {f"tools/{n}.py" for n in names if os.path.isfile(os.path.join(ROOT, "tools", n + ".py"))}
+
+
+def rescued_paths(text: str) -> set[str]:
+    """The paths the workflow's trusted-copies step takes from the base ref."""
+    return set(RESCUE_FETCH_RE.findall(text))
+
+
+def pinned_grant_rescue_problems(scripts: list[str], rescued: set[str]) -> list[str]:
+    """Grant targets — and what they import — that the base-ref rescue leaves behind.
+
+    A pinned grant is a pre-approval to run a path, and the headless run's cwd is the
+    audited checkout. A target the workflow does not rescue is therefore the head's
+    own code, executing unprompted in the job that holds the API key (finding S-007).
+    """
+    problems = []
+    for script in scripts:
+        needed = [script] + sorted(local_imports(script))
+        for path in needed:
+            if path in rescued:
+                continue
+            why = ("a pinned grant pre-approves it" if path == script
+                   else f"{script} imports it and a pinned grant pre-approves that")
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: {path} is not in the base-ref rescue list, and "
+                            f"{why} — the audited head would supply the code that runs")
+    return problems
+
+
+def check_pinned_grants_are_rescued() -> None:
+    if not (tracked(HEADLESS_PATH) and tracked(AUDIT_WORKFLOW_PATH)):
+        return                      # a project without the headless audit or its workflow
+    with open(os.path.join(ROOT, HEADLESS_PATH), encoding="utf-8", errors="replace") as fh:
+        scripts = pinned_grant_scripts(fh.read())
+    if not scripts:
+        fail(f"{HEADLESS_PATH}: PINNED_GRANTS names no script to run; either it moved or it "
+             f"stopped being readable, and this check silently stopped checking")
+        return
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        rescued = rescued_paths(fh.read())
+    for problem in pinned_grant_rescue_problems(scripts, rescued):
+        fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1553,6 +1755,9 @@ def main() -> int:
     check_probe_contract()
     check_reference_thresholds()
     check_hook_stdout_docs()
+    check_guard_canary()
+    check_guard_allow_lists()
+    check_pinned_grants_are_rescued()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

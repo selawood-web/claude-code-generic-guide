@@ -191,15 +191,16 @@ jobs:
             echo "No ANTHROPIC_API_KEY — the deterministic stage ran and the model run is skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Everything that TELLS this run what to do must come from the base branch the
-      # maintainers own, never from the tree under audit. Four things qualify, and
-      # the guard was only the first of them:
+      # Everything that TELLS this run what to do, or that it may RUN without a
+      # prompt, must come from the base branch the maintainers own, never from the
+      # tree under audit. The guard was only the first of them:
       #   the verifier's guard hook  — or a pull request ships a guard permitting all
       #   the audit skill           — its body becomes the orchestrator's system prompt
       #   the audit agent briefs    — each body becomes a subagent's system prompt
       #   the launcher itself       — it holds the pinned grant set and does this rescue
+      #   the pinned grants' targets — the four audit_*.py the run may execute unasked
       # The head checkout is still what gets audited; it just no longer gets a say in
-      # how. audit_agents_json.py comes along because audit_headless.py imports it.
+      # how. audit_agents_json.py and audit_env.py come along as imports.
       - name: Trusted copies of the files that configure the run
         id: trusted
         env:
@@ -230,6 +231,16 @@ jobs:
           fetch ".claude/skills/ccgg-audit/SKILL.md"
           fetch "tools/audit_headless.py"
           fetch "tools/audit_agents_json.py"
+          # The launcher's pinned grants pre-approve these four by name, and the run's
+          # cwd is the audited head — so without a trusted copy the head supplies the
+          # code those grants allow to run unprompted. audit_env.py comes along because
+          # three of them import it. tools/validate.py keeps this list and PINNED_GRANTS
+          # in step (finding S-007).
+          fetch "tools/audit_facts.py"
+          fetch "tools/audit_probes.py"
+          fetch "tools/audit_redteam.py"
+          fetch "tools/audit_report.py"
+          fetch "tools/audit_env.py"
 
           # The agent list itself comes from the base ref when there is one, so a
           # pull request cannot add a specialist or drop the verifier.

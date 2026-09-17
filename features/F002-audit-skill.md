@@ -33,7 +33,7 @@ being able to change anything.
 - Metric: validator mutation-probe catch rate on this repository, from the research
   run's baseline of 10 caught out of 21 planted defects to no probe listed `caught`
   being missed, measured by the probe harness the audit ships and runs in CI. The list
-  is 62 probes today and grows with every check that lands; the target is the rule the
+  is 69 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`
@@ -231,6 +231,17 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-16 — Whether a `hooks` block inside an inline `--agents` definition fires is
   also unproven, and it is the verifier's guard: until a run shows the guard refusing a
   command, treat headless verification as unguarded — [open]
+- 2026-09-17 — Answered, in the negative and wider than the question asked. A run
+  measured it from inside an interactive verifier: the guard script refuses `uname -a`
+  with exit 2 when piped the hook input directly, and the same command issued as a Bash
+  tool call ran, as did `python3 -c` — the form the guard refuses by name. So the gap is
+  not specific to the inline `--agents` path; it was observed on the ordinary one. The
+  product documents a frontmatter `hooks` block as firing for the subagent that declares
+  it, so this is a wiring gap in the dispatch path, not a wrong design. Consequence: the
+  guard is no longer claimed anywhere as a boundary that holds. Every run records the
+  canary in `guard.json`, the report banners a run whose guard did not fire, and what
+  bounds the verifier meanwhile is worktree isolation, the removed write tools, and the
+  orchestrator's task-message constraints (finding R-008) — [in]
 - 2026-09-16 — The first audit run that reached a model spawned no subagent and reported
   no `Agent` tool, after 42 turns and 1.38 USD. Read against the installed CLI (2.1.273)
   rather than a summary: `--bare` skips "hooks, LSP, plugin sync, attribution,

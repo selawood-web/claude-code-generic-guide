@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import validate
 
@@ -1072,6 +1073,93 @@ class HiddenCharacterParityTests(unittest.TestCase):
                 self.assertEqual(facts.hidden_characters(text), [])
 
 
+class GuardAllowListTests(unittest.TestCase):
+    """S-001/S-004: the guard names the scripts it allows, so the tree must match."""
+
+    def test_the_shipped_lists_match_the_tree(self):
+        del validate.findings[:]
+        try:
+            validate.check_guard_allow_lists()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_script_the_guard_does_not_name_is_reported(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py"}, "SH_SCRIPTS": {"install.sh"}},
+            py_tree={"validate.py", "test_new.py"}, sh_tree={"install.sh"})
+        self.assertTrue(any("test_new.py" in p for p in problems), problems)
+
+    def test_a_name_the_guard_allows_that_is_not_in_the_tree_is_reported(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py", "gone.py"}, "SH_SCRIPTS": {"install.sh"}},
+            py_tree={"validate.py"}, sh_tree={"install.sh"})
+        self.assertTrue(any("gone.py" in p for p in problems), problems)
+
+    def test_shell_scripts_are_held_to_the_same_rule(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": set(), "SH_SCRIPTS": {"install.sh"}},
+            py_tree=set(), sh_tree={"install.sh", "deploy.sh"})
+        self.assertTrue(any("deploy.sh" in p for p in problems), problems)
+
+    def test_an_installed_project_is_not_asked_to_trim_the_list(self):
+        """It gets the guard and validate.py but not tools/test_*.py or install.sh."""
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py", "test_validate.py"}, "SH_SCRIPTS": {"install.sh"}},
+            py_tree={"validate.py"}, sh_tree=set(), authored_here=False)
+        self.assertEqual(problems, [])
+
+    def test_an_unnamed_script_is_still_reported_in_an_installed_project(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py"}, "SH_SCRIPTS": set()},
+            py_tree={"validate.py", "surprise.py"}, sh_tree=set(), authored_here=False)
+        self.assertTrue(any("surprise.py" in p for p in problems), problems)
+
+    def test_matching_lists_pass(self):
+        self.assertEqual(validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"a.py"}, "SH_SCRIPTS": {"b.sh"}},
+            py_tree={"a.py"}, sh_tree={"b.sh"}), [])
+
+    def test_the_lists_are_read_from_the_guard_itself(self):
+        lists = validate.guard_allow_lists()
+        self.assertIn("validate.py", lists["PY_SCRIPTS"])
+        self.assertIn("install.sh", lists["SH_SCRIPTS"])
+        self.assertNotIn("test_pwn.py", lists["PY_SCRIPTS"])
+
+
+class GuardCanaryWiringTests(unittest.TestCase):
+    """R-008: a run stops measuring the guard the moment the canary leaves the brief."""
+
+    def test_the_shipped_brief_carries_the_canary(self):
+        del validate.findings[:]
+        try:
+            validate.check_guard_canary()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_brief_without_the_canary_is_reported(self):
+        problems = validate.guard_canary_problems(
+            ".claude/agents/audit-verifier.md",
+            "---\nname: audit-verifier\n---\n\nVerify things. No canary here.\n")
+        self.assertTrue(problems)
+        self.assertIn("canary", problems[0].lower())
+
+    def test_a_brief_that_names_a_different_command_is_reported(self):
+        text = "GUARD-CANARY: refused\n\n```\nls -la\n```\n"
+        problems = validate.guard_canary_problems(".claude/agents/audit-verifier.md", text)
+        self.assertTrue(any(validate.GUARD_CANARY in p for p in problems), problems)
+
+    def test_the_canary_matches_the_renderers(self):
+        sys.path.insert(0, os.path.dirname(validate.__file__))
+        import audit_report
+        self.assertEqual(validate.GUARD_CANARY, audit_report.GUARD_CANARY)
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.guard_canary_problems("x", None)
+
+
 class AutomaticRunnerTests(unittest.TestCase):
     """T-008/T-009: detectors and tests that ran only when somebody remembered."""
 
@@ -1534,6 +1622,61 @@ class GateIntegrationTests(unittest.TestCase):
         os.remove(os.path.join(self.repo, ".claude/hooks/pre-compact.sh"))
         proc = self.run_gate()
         self.assertIn("pre-compact.sh, which is not a tracked file", proc.stdout)
+
+
+class PinnedGrantRescueTests(unittest.TestCase):
+    """S-007: a grant that pre-approves a path is a promise about whose copy runs."""
+
+    def test_the_shipped_workflow_rescues_every_grant_target(self):
+        del validate.findings[:]
+        try:
+            validate.check_pinned_grants_are_rescued()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_grant_targets_are_read_from_the_launcher(self):
+        with open(os.path.join(validate.ROOT, validate.HEADLESS_PATH), encoding="utf-8") as fh:
+            scripts = validate.pinned_grant_scripts(fh.read())
+        self.assertEqual(scripts, ["tools/audit_facts.py", "tools/audit_probes.py",
+                                   "tools/audit_redteam.py", "tools/audit_report.py"])
+
+    def test_non_bash_grants_name_no_script(self):
+        text = 'PINNED_GRANTS = ("Read", "Glob", "Write(CCGG-AUDIT-*/**)")\n'
+        self.assertEqual(validate.pinned_grant_scripts(text), [])
+
+    def test_a_grant_target_outside_the_rescue_list_is_reported(self):
+        problems = validate.pinned_grant_rescue_problems(
+            ["tools/audit_report.py"], {"tools/audit_headless.py"})
+        self.assertTrue(any("tools/audit_report.py" in p for p in problems), problems)
+
+    def test_a_rescued_target_passes(self):
+        self.assertEqual(validate.pinned_grant_rescue_problems(
+            ["tools/audit_report.py"], {"tools/audit_report.py"}), [])
+
+    def test_what_a_grant_target_imports_is_rescued_too(self):
+        """audit_facts.py imports audit_env.py; rescuing only the first leaves the gap."""
+        problems = validate.pinned_grant_rescue_problems(
+            ["tools/audit_facts.py"], {"tools/audit_facts.py"})
+        self.assertTrue(any("tools/audit_env.py" in p for p in problems), problems)
+
+    def test_the_rescue_list_is_read_from_the_workflow(self):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            rescued = validate.rescued_paths(fh.read())
+        self.assertIn("tools/audit_headless.py", rescued)
+        self.assertIn("tools/audit_report.py", rescued)
+        self.assertIn(".claude/hooks/audit-verifier-guard.sh", rescued)
+
+    def test_an_unreadable_pin_fails_rather_than_passing_quietly(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "pinned_grant_scripts", return_value=[]):
+                validate.check_pinned_grants_are_rescued()
+            self.assertTrue(any("stopped being readable" in f for f in validate.findings),
+                            list(validate.findings))
+        finally:
+            del validate.findings[:]
+
 
 
 if __name__ == "__main__":
