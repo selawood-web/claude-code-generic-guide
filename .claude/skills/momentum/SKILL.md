@@ -39,9 +39,13 @@ Success: a single sentence a third party could use to check the work.
 List every step from here to DONE, numbered, each marked with its owner:
 `[me]` (I execute) or `[you]` (only the user can do it — an account, a payment,
 a dashboard click, a machine setting).
+A rung is `[you]` only once it has failed the reach test in
+[`../../references/dialogue.md`](../../references/dialogue.md): no tool, command, connector, subagent or job I hold can perform it, or it is an
+owner gate. Everything else is `[me]`, including the tedious and the long.
 Front-load every `[me]` step. A `[you]` step never blocks work that does not
 depend on it — reorder around it and come back.
-Success: a numbered ladder where the next `[me]` step is unambiguous.
+Success: a numbered ladder where the next `[me]` step is unambiguous, and every
+`[you]` rung can say what was tried before it was marked.
 
 ### Step 3 — Run the ladder without stopping
 Execute `[me]` steps back to back. Do not report between them, do not ask
@@ -76,11 +80,12 @@ If DONE was reached, `NEXT →` states the verification the user can run, or
 Success: the user can reply with one word and work resumes.
 
 ### Step 5 — When blocked, one precise ask
-A blocker is not "I need more info". It is a form with four fields:
+A blocker is not "I need more info". It is a form with named fields:
 
 ```
 BLOCKED: <the one thing missing, named exactly>
 WHY:     <what cannot proceed without it, one line>
+TRIED:   <the channels ruled out, one line — why this is not mine to run>
 FORMAT:  <exactly what to paste, click, or choose — a sample value>
 ON ARRIVAL: <what runs the second it lands>
 MEANWHILE: <the work continuing in parallel, or "nothing left that is independent">
@@ -106,6 +111,8 @@ Success: the user sees what changed and can verify it without asking.
 - Reporting a finished sub-step as if it were a finished task.
 - "I could do A, B, or C — which do you prefer?" with no recommendation.
 - Asking for permission to continue work already authorized.
+- Handing over a step a tool, command, connector, or subagent in this session could
+  have executed — including "run this and send me the output".
 - Stopping because something was ambiguous, when an assumption would have
   carried the work to done and been trivially reversible.
 

@@ -108,6 +108,9 @@ A decision without its rationale becomes a mystery. Future engineers will change
 ### Every Reply Ends in One of Four Shapes
 Done (finished and verified), a single named next step, a pick-list, or a numbered manual — nothing else is a legal ending. Whichever it is, the recommended option or the next step comes first, so accepting the assistant's best judgment is always the fastest path. Never end on an open-ended "what would you like?", and never re-report state that has not changed.
 
+### Execute, Don't Delegate Upward
+A step belongs to the human only when nothing the assistant holds can perform it — no tool, command, connector, subagent, or background job — or when it is an owner gate (a merge, a spend, a destructive act, anything sent outside). Tedious, long, or peripheral steps are the work, not a hand-back. A hand-back says in one line what was tried first.
+
 ### Decisions Are Pick-Lists, Human Steps Are Manuals
 A decision for the owner is presented as a selectable list of named options with one-line trade-offs, recommendation first. A step only the owner can perform is presented as a numbered, zero-context, copy-paste-ready manual with a "what success looks like" check at the end.
 
