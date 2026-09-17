@@ -478,6 +478,7 @@ jobs:
           print(f"blockers={int(status.get('blockers', 0))}")
           print(f"complete={str(bool(status.get('complete', False))).lower()}")
           print(f"findings={int(status.get('findings', 0))}")
+          print("stages_missing=" + ",".join(status.get("stages_missing") or []))
           PY
 
       # The audit never pushes. Its output leaves as an artifact and one comment.
@@ -511,12 +512,20 @@ jobs:
           BLOCKERS: ${{ steps.report.outputs.blockers }}
           COMPLETE: ${{ steps.report.outputs.complete }}
           FINDINGS: ${{ steps.report.outputs.findings }}
+          STAGES_MISSING: ${{ steps.report.outputs.stages_missing }}
           DRY_RUN: ${{ inputs.dry_run }}
           PROBE: ${{ inputs.probe_tools }}
           AUTHENTICATED: ${{ needs.model.outputs.authenticated }}
           MODEL_RESULT: ${{ needs.model.result }}
         run: |
           set -euo pipefail
+          # A deterministic stage that did not run measured nothing. It does not
+          # by itself mean nothing was audited, so it warns rather than fails —
+          # but it must never pass in silence (finding S-011).
+          if [ -n "${STAGES_MISSING:-}" ]; then
+            echo "Deterministic stage incomplete: $STAGES_MISSING did not run. That part of the audit measured nothing."
+            echo "⚠ Deterministic stage incomplete: $STAGES_MISSING did not run — that part measured nothing." >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [ "$COMPLETE" != "true" ]; then
             if [ "$DRY_RUN" = "true" ]; then
               echo "Dry run: assembled the command and rendered the deterministic results. Nothing was audited, as asked."

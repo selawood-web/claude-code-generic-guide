@@ -29,6 +29,7 @@ import os
 import re
 import shlex
 import subprocess
+import time
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -281,6 +282,52 @@ def _command(prompt: str, agents_json: str, prompt_file: str, grants: list[str],
     return argv
 
 
+def _git(root: str, *args: str) -> str:
+    try:
+        return subprocess.check_output(["git", *args], cwd=root, text=True, encoding="utf-8").strip()
+    except (OSError, subprocess.CalledProcessError):
+        return ""
+
+
+def revision_stamp(root: str, scope: str, specialists: list[str], result: dict | None,
+                   elapsed_s: float) -> tuple[str, dict]:
+    """(filename, contents) for the run's REVISION stamp.
+
+    Written by the launcher rather than asked of the model, which is finding
+    P-004: the CLI's result JSON is the only place total_cost_usd and num_turns
+    exist, the model is told neither, and the one stamp in the repository before
+    this recorded `cost_usd: null` by construction. The renderer reads this for
+    the report's commit and cost line, so it is the difference between a report
+    that says what a run cost and one that cannot.
+    """
+    head = _git(root, "rev-parse", "--short", "HEAD") or "unknown"
+    cost = (result or {}).get("total_cost_usd")
+    try:
+        cost = round(float(cost), 4) if cost is not None else None
+    except (TypeError, ValueError):
+        cost = None
+    return f"REVISION-{head}.json", {
+        "head": head,
+        "dirty": bool(_git(root, "status", "--porcelain")),
+        "scope": scope,
+        "specialists_run": sorted(specialists),
+        "duration_s": round(elapsed_s, 1),
+        "cost_usd": cost,
+        "turns": (result or {}).get("num_turns"),
+    }
+
+
+def write_revision_stamp(root: str, report_dir: str, scope: str, specialists: list[str],
+                         result: dict | None, elapsed_s: float) -> str:
+    """Write the stamp into the report directory; return the path written."""
+    name, stamp = revision_stamp(root, scope, specialists, result, elapsed_s)
+    path = os.path.join(root, report_dir, name)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(stamp, fh, indent=2)
+        fh.write("\n")
+    return path
+
+
 def result_object(stdout: str) -> dict | None:
     """The CLI's `--output-format json` result, whichever line carries it."""
     if not isinstance(stdout, str):
@@ -525,6 +572,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     result_path = os.path.join(out_dir, "probe-result.json" if args.probe_tools else "result.json")
+    started = time.monotonic()
     try:
         proc = subprocess.run(command, cwd=root, capture_output=True, text=True,
                               encoding="utf-8", errors="replace")
@@ -545,6 +593,16 @@ def main(argv: list[str]) -> int:
         for line in (text.splitlines() or ["(the run named none)"]):
             print(f"    {line.strip()}")
         print(f"audit-headless: 'Agent' present: {'yes' if 'agent' in text.lower() else 'NO'}")
+    # Only after a run that actually completed: the renderer treats a stamp as
+    # evidence the model stage ran, so writing one for a failed or probe-only run
+    # would turn "nothing was audited" into a clean bill. Those paths return above.
+    if not args.probe_tools:
+        try:
+            written = write_revision_stamp(root, report_dir, scope, list(definitions),
+                                           result, time.monotonic() - started)
+            print(f"audit-headless: wrote {os.path.relpath(written, root)}")
+        except OSError as exc:
+            print(f"audit-headless: could not write the revision stamp: {exc}", file=sys.stderr)
     for line in run_summary(result):
         print(line)
     print(f"audit-headless: run complete; result in {os.path.join(report_dir, 'headless', 'result.json')}")

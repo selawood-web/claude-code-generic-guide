@@ -244,3 +244,72 @@ class ReportDirTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeterministicStageTests(unittest.TestCase):
+    """A stage that did not run measured nothing, and the report says so (S-011)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+        self.addCleanup(self.tmp.cleanup)
+
+    def facts(self, scope):
+        with open(os.path.join(self.dir, "facts.json"), "w", encoding="utf-8") as fh:
+            json.dump({"scope": scope, "facts": []}, fh)
+
+    def touch(self, name):
+        with open(os.path.join(self.dir, name), "w", encoding="utf-8") as fh:
+            fh.write("{}")
+
+    def test_all_scope_reports_a_missing_redteam_stage(self):
+        self.facts("all")
+        self.touch("probes.json")
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], ["redteam"])
+
+    def test_harness_scope_requires_it_too(self):
+        self.facts("harness")
+        self.touch("probes.json")
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], ["redteam"])
+
+    def test_process_scope_does_not_require_it(self):
+        self.facts("process")
+        self.touch("probes.json")
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], [])
+
+    def test_a_complete_deterministic_stage_reports_nothing_missing(self):
+        self.facts("all")
+        self.touch("probes.json")
+        self.touch("redteam.json")
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], [])
+
+    def test_an_unknown_scope_reports_only_the_missing_facts(self):
+        """No facts.json means no scope to reason from; do not invent a requirement."""
+        self.assertEqual(audit_report.run_evidence(self.dir)["stages_missing"], ["facts"])
+
+    def test_a_missing_stage_does_not_by_itself_make_a_run_incomplete(self):
+        """`complete` is about the model stage; these are different questions."""
+        self.facts("all")
+        with open(os.path.join(self.dir, "findings.jsonl"), "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(GOOD) + "\n")
+        evidence = audit_report.run_evidence(self.dir)
+        self.assertTrue(evidence["complete"])
+        self.assertIn("redteam", evidence["stages_missing"])
+
+    def test_the_report_says_the_red_team_stage_measured_nothing(self):
+        text = render([], None, None, None,
+                      {"complete": True, "stages_missing": ["redteam"], "scope": "all"})
+        self.assertIn("redteam.json", text)
+        self.assertIn("not the same as finding none", text)
+
+    def test_a_clean_run_carries_no_warning(self):
+        text = render([], None, None, None, {"complete": True, "stages_missing": [], "scope": "all"})
+        self.assertNotIn("measured no injection channel", text)
+        self.assertNotIn("did not complete", text)
+
+    def test_status_json_carries_the_missing_stages(self):
+        self.facts("all")
+        self.touch("probes.json")
+        audit_report.main(["--dir", self.dir])
+        with open(os.path.join(self.dir, "status.json"), encoding="utf-8") as fh:
+            self.assertEqual(json.load(fh)["stages_missing"], ["redteam"])

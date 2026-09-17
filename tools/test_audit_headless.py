@@ -31,6 +31,8 @@ from audit_headless import (
     orchestrator_prompt,
     probe_command,
     retarget_write_grant,
+    revision_stamp,
+    write_revision_stamp,
     skill_body,
     skill_grants,
     tool_names,
@@ -544,3 +546,74 @@ class MainTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RevisionStampTests(unittest.TestCase):
+    """The launcher records what a run cost, because it is the only thing that
+    knows (finding P-004: the model was asked, and could only write null)."""
+
+    RESULT = {"total_cost_usd": 1.23456, "num_turns": 42, "result": "done"}
+
+    def test_cost_and_duration_come_from_the_result_not_the_model(self):
+        name, stamp = revision_stamp(ROOT, "all", ["audit-harness"], self.RESULT, 1851.37)
+        self.assertEqual(stamp["cost_usd"], 1.2346)
+        self.assertEqual(stamp["turns"], 42)
+        self.assertEqual(stamp["duration_s"], 1851.4)
+        self.assertTrue(name.startswith("REVISION-") and name.endswith(".json"))
+
+    def test_the_stamp_names_the_commit_it_audited(self):
+        _, stamp = revision_stamp(ROOT, "all", [], self.RESULT, 1.0)
+        self.assertRegex(stamp["head"], r"^[0-9a-f]{7,40}$")
+        self.assertIn("dirty", stamp)
+
+    def test_specialists_are_recorded_sorted(self):
+        _, stamp = revision_stamp(ROOT, "harness", ["audit-security", "audit-harness"], self.RESULT, 1.0)
+        self.assertEqual(stamp["specialists_run"], ["audit-harness", "audit-security"])
+
+    def test_a_run_with_no_result_json_records_null_rather_than_guessing(self):
+        _, stamp = revision_stamp(ROOT, "all", [], None, 3.0)
+        self.assertIsNone(stamp["cost_usd"])
+        self.assertIsNone(stamp["turns"])
+        self.assertEqual(stamp["duration_s"], 3.0)
+
+    def test_a_non_numeric_cost_does_not_crash_the_stamp(self):
+        _, stamp = revision_stamp(ROOT, "all", [], {"total_cost_usd": "n/a"}, 1.0)
+        self.assertIsNone(stamp["cost_usd"])
+
+    def test_the_renderer_reads_what_this_writes(self):
+        """The stamp is only worth writing if the report shows it."""
+        import audit_report
+        _, stamp = revision_stamp(ROOT, "all", [], self.RESULT, 12.0)
+        text = audit_report.render([], None, None, stamp, {"complete": True})
+        self.assertIn("1.2346 USD", text)
+        self.assertIn("12.0 s", text)
+
+    def test_a_completed_run_writes_the_stamp_with_a_real_cost(self):
+        """P-004's becomes_check: the file lands, and cost_usd is not null."""
+        with tempfile.TemporaryDirectory() as root:
+            report = "CCGG-AUDIT-TEST"
+            os.makedirs(os.path.join(root, report))
+            path = write_revision_stamp(root, report, "all", ["audit-harness"], self.RESULT, 900.0)
+            self.assertTrue(os.path.exists(path))
+            self.assertEqual(os.path.dirname(path), os.path.join(root, report))
+            with open(path, encoding="utf-8") as fh:
+                stamp = json.load(fh)
+        self.assertIsNotNone(stamp["cost_usd"])
+        self.assertEqual(stamp["cost_usd"], 1.2346)
+        self.assertEqual(stamp["duration_s"], 900.0)
+        self.assertEqual(stamp["scope"], "all")
+
+    def test_the_written_stamp_is_what_the_renderer_counts_as_evidence(self):
+        import audit_report
+        with tempfile.TemporaryDirectory() as root:
+            report = "CCGG-AUDIT-TEST"
+            d = os.path.join(root, report)
+            os.makedirs(d)
+            self.assertFalse(audit_report.run_evidence(d)["revision_stamp"])
+            write_revision_stamp(root, report, "all", [], self.RESULT, 1.0)
+            self.assertTrue(audit_report.run_evidence(d)["revision_stamp"])
+
+    def test_an_unreadable_repo_still_produces_a_stamp(self):
+        name, stamp = revision_stamp(os.path.join(ROOT, "no-such-dir"), "all", [], None, 1.0)
+        self.assertEqual(stamp["head"], "unknown")
+        self.assertEqual(name, "REVISION-unknown.json")
