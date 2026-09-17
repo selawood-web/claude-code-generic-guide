@@ -1550,6 +1550,84 @@ def check_guard_canary() -> None:
         fail(problem)
 
 
+# --- 29. the verifier guard's allow-lists match the tree ----------------------
+# The guard names the scripts it will run. Before finding S-004 it matched a
+# prefix, so a branch adding tools/test_anything.py was allowed by construction;
+# and `-m unittest discover` imports whatever is in the directory whatever the
+# list says. Holding the list equal to the tree is what makes adding a script to
+# the gate a visible, named change to the guard rather than a silent one.
+GUARD_PATH = os.path.join(".claude", "hooks", "audit-verifier-guard.sh")
+GUARD_HEREDOC_RE = re.compile(r"<<'PY'[^\n]*\n(.*?)\nPY\n", re.S)
+GUARD_LIST_NAMES = ("PY_SCRIPTS", "SH_SCRIPTS")
+
+
+def guard_allow_lists(path: str | None = None) -> dict:
+    """The guard's own script allow-lists, read from its embedded python."""
+    full = path or os.path.join(ROOT, GUARD_PATH)
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        match = GUARD_HEREDOC_RE.search(fh.read())
+    if not match:
+        return {}
+    try:
+        tree = ast.parse(match.group(1))
+    except SyntaxError:
+        return {}
+    found = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id in GUARD_LIST_NAMES:
+            value = node.value
+            # The lists are written `frozenset((...))` — a call, not a literal.
+            if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                    and value.func.id in ("frozenset", "set", "tuple") and len(value.args) == 1):
+                value = value.args[0]
+            try:
+                found[target.id] = set(ast.literal_eval(value))
+            except (ValueError, TypeError):
+                continue
+    return found
+
+
+def guard_allow_list_problems(lists: dict, py_tree: set, sh_tree: set,
+                              authored_here: bool = True) -> list[str]:
+    """Differences between what the guard names and what the repository ships.
+
+    The two directions are not symmetrical. A script in the tree the guard does
+    not name is a finding everywhere: nobody decided to allow it. A name the guard
+    keeps with no file behind it is a finding only where the list is authored —
+    an installed project gets the guard and validate.py but neither tools/test_*.py
+    nor install.sh/update.sh, and a list trimmed to each install would stop being
+    one list.
+    """
+    problems = []
+    for name, tree in (("PY_SCRIPTS", py_tree), ("SH_SCRIPTS", sh_tree)):
+        listed = set(lists.get(name) or ())
+        for missing in sorted(tree - listed):
+            problems.append(f"{GUARD_PATH}: {missing} is in the tree but not in {name} — "
+                            f"the verifier cannot run it, and a script the guard does not "
+                            f"name is a script nobody decided to allow")
+        if not authored_here:
+            continue
+        for stale in sorted(listed - tree):
+            problems.append(f"{GUARD_PATH}: {name} allows {stale}, which the repository does "
+                            f"not ship — a name kept after its file went is a name a branch "
+                            f"can reintroduce")
+    return problems
+
+
+def check_guard_allow_lists() -> None:
+    if not tracked(GUARD_PATH):
+        return                      # a project without the audit verifier
+    py_tree = {os.path.basename(p) for p in tracked("tools/*.py")
+               if os.path.basename(p) != "__init__.py"}
+    sh_tree = set(tracked(".claude/hooks/*.sh")) | set(tracked("*.sh"))
+    for problem in guard_allow_list_problems(guard_allow_lists(), py_tree, sh_tree,
+                                             authored_here=bool(tracked("install.sh"))):
+        fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1588,6 +1666,7 @@ def main() -> int:
     check_reference_thresholds()
     check_hook_stdout_docs()
     check_guard_canary()
+    check_guard_allow_lists()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
