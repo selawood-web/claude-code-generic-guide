@@ -212,7 +212,8 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   stands — [open]
 - 2026-09-16 — Whether a `hooks` block inside an inline `--agents` definition fires is
   also unproven, and it is the verifier's guard: until a run shows the guard refusing a
-  command, treat headless verification as unguarded — [open]
+  command, treat headless verification as unguarded — [in] (answered 2026-09-17: it
+  fires, and the refusal named the trusted guard's own path)
 - 2026-09-16 — The first audit run that reached a model spawned no subagent and reported
   no `Agent` tool, after 42 turns and 1.38 USD. Read against the installed CLI (2.1.273)
   rather than a summary: `--bare` skips "hooks, LSP, plugin sync, attribution,
@@ -245,6 +246,12 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   the refused command writes a marker nothing reads: if the marker exists afterwards, the
   hook never fired. Denials now print what they asked for, not just the tool's name — the
   ten-dollar run's "Bash x2, Write" had the command and the path in the result all along — [in]
+- 2026-09-17 — The probe answered both: the verifier ran `git status --porcelain` and the
+  guard refused the redirect, naming the trusted copy's path — so **inline agent hooks do
+  fire**, and the clean status is indirect evidence that `isolation: worktree` holds. The
+  fix follows from it: the guard returns a PreToolUse `allow` for what its allow-list
+  accepts, so the verifier's Bash is approved by the thing that has read the command rather
+  than by a grant that cannot. The orchestrator stays narrow — [in]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands

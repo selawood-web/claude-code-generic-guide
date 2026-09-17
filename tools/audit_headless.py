@@ -355,7 +355,7 @@ VERIFIER_PROBE_TURNS = 12
 ALLOWED_PROBE_COMMAND = "git status --porcelain"
 
 
-def verifier_probe_prompt(marker: str) -> str:
+def verifier_probe_prompt(marker: str, report_dir: str = "") -> str:
     """Two questions a full audit cannot answer without spending ten dollars.
 
     An audit run reported three refusals and wrote nothing, and the two facts
@@ -368,6 +368,15 @@ def verifier_probe_prompt(marker: str) -> str:
     """
     if not isinstance(marker, str) or not marker.startswith("/"):
         raise HeadlessError("the probe marker must be an absolute path")
+    write_step = ""
+    if report_dir:
+        write_step = (
+            f"\nThen, yourself, use the Write tool to create `{report_dir.rstrip('/')}/probe-write.txt`\n"
+            "with the single word ok, and report whether that was allowed or refused, and the\n"
+            "refusal message word for word if it was refused. The audit's own findings file\n"
+            "lands in that directory, so whether this is allowed decides whether an audit can\n"
+            "record anything at all.\n"
+        )
     return (
         "Spawn the `audit-verifier` subagent exactly once, with this task and nothing else:\n\n"
         "  Run these two Bash commands in order, one call each, and report for each one\n"
@@ -376,8 +385,10 @@ def verifier_probe_prompt(marker: str) -> str:
         f"    2. printf escaped > {marker}\n"
         "  Do not work around a refusal, do not try another form of the same command,\n"
         "  and do not audit anything. Report the two outcomes and stop.\n\n"
-        "Then reply with the subagent's two outcomes verbatim and nothing else. If the\n"
-        "subagent could not be spawned, say only that."
+        + write_step +
+        "\nThen reply with the subagent's two outcomes verbatim, and the Write outcome if you\n"
+        "were asked for one, and nothing else. If the subagent could not be spawned, say only\n"
+        "that."
     )
 
 
@@ -385,14 +396,15 @@ GUARD_PROBE_SYSTEM_PROMPT = (
     "# Guard probe\n\n"
     "This run is not an audit. It exists to observe one thing: whether the verifier\n"
     "subagent's guard hook fires. Do exactly what the task message says, spawn the\n"
-    "subagent once, report what came back, and stop. Do not read the repository, do not\n"
-    "write files, and do not retry a refused command in another form — a refusal is the\n"
-    "result this run is looking for, not an obstacle.\n"
+    "subagent once, report what came back, and stop. Do not read the repository, write\n"
+    "nothing the task message does not name, and do not retry a refused command or a\n"
+    "refused write in another form — a refusal is the result this run is looking for,\n"
+    "not an obstacle.\n"
 )
 
 
 def probe_verifier_command(agents_json: str, prompt_file: str, grants: list[str],
-                           model: str | None = None) -> list[str]:
+                           model: str | None = None, report_dir: str = "") -> list[str]:
     """The guard probe's argv: the audit's flags, with Bash deliberately wide.
 
     The grant set is not what this measures — it is what would hide the
@@ -402,8 +414,9 @@ def probe_verifier_command(agents_json: str, prompt_file: str, grants: list[str]
     wide = list(grants)
     if "Bash" not in wide:
         wide.append("Bash")
-    return _command(verifier_probe_prompt(guard_probe_marker()), agents_json, prompt_file,
-                    wide, str(VERIFIER_PROBE_TURNS), str(VERIFIER_PROBE_BUDGET_USD), model)
+    return _command(verifier_probe_prompt(guard_probe_marker(), report_dir), agents_json,
+                    prompt_file, wide, str(VERIFIER_PROBE_TURNS), str(VERIFIER_PROBE_BUDGET_USD),
+                    model)
 
 
 def guard_probe_marker() -> str:
@@ -521,7 +534,8 @@ def main(argv: list[str]) -> int:
         probe_prompt_file = os.path.join(out_dir, "guard-probe.md")
         with open(probe_prompt_file, "w", encoding="utf-8") as fh:
             fh.write(GUARD_PROBE_SYSTEM_PROMPT)
-        command = probe_verifier_command(agents_json, probe_prompt_file, grants, args.model)
+        command = probe_verifier_command(agents_json, probe_prompt_file, grants, args.model,
+                                         report_dir)
     else:
         command = build_command(agents_json, prompt_file, grants, scope, report_dir,
                                 args.max_turns, args.budget_usd, args.model)
@@ -571,6 +585,9 @@ def main(argv: list[str]) -> int:
         exists = os.path.exists(marker)
         spawned = ((result or {}).get("subagent_stats") or {}).get("spawned") or 0
         print(guard_verdict(exists, spawned, str((result or {}).get("result") or "")))
+        wrote = os.path.exists(os.path.join(root, report_dir, "probe-write.txt"))
+        print(f"audit-headless: the report directory is writable by the run: "
+              f"{'yes' if wrote else 'NO — an audit could not record a finding'}")
         if exists:
             try:
                 os.remove(marker)

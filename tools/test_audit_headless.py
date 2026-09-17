@@ -339,6 +339,14 @@ class GuardProbeTests(unittest.TestCase):
         self.assertEqual(self.argv[self.argv.index("--max-turns") + 1], "12")
         self.assertLessEqual(float(self.argv[self.argv.index("--max-budget-usd") + 1]), 2.0)
 
+    def test_it_also_asks_whether_the_report_directory_is_writable(self):
+        # The same ten-dollar run that starved the verifier also had one Write
+        # refused, and a report directory nothing can write to is an audit that
+        # cannot record a finding.
+        prompt = audit_headless.probe_verifier_command('{}', "p", ["Read"], report_dir="CCGG-AUDIT-X")[2]
+        self.assertIn("CCGG-AUDIT-X/probe-write.txt", prompt)
+        self.assertNotIn("probe-write.txt", self.argv[2], "without a report directory it asks only about Bash")
+
     def test_the_marker_must_be_absolute_because_the_verifier_runs_in_a_worktree(self):
         with self.assertRaises(HeadlessError):
             audit_headless.verifier_probe_prompt("relative/marker")

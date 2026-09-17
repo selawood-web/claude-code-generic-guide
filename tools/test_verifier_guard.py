@@ -121,6 +121,11 @@ def run_guard(command: str, tool: str = "Bash") -> tuple[int, str]:
     return proc.returncode, proc.stderr
 
 
+def guard_stdout(command: str, tool: str = "Bash") -> str:
+    payload = json.dumps({"tool_name": tool, "tool_input": {"command": command}})
+    return subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True).stdout
+
+
 class AllowListTests(unittest.TestCase):
     def test_allowed_rows_run(self):
         for cmd in ALLOWED:
@@ -134,6 +139,28 @@ class AllowListTests(unittest.TestCase):
                 rc, err = run_guard(cmd)
                 self.assertEqual(rc, 2, "allowed a command outside the allow-list")
                 self.assertIn("audit-verifier-guard: refused", err)
+
+    def test_an_allowed_command_is_approved_not_merely_permitted(self):
+        # Headless there is no prompt to answer and the skill grants only its four
+        # report scripts, so a silent exit 0 leaves every reproduction refused.
+        decision = json.loads(guard_stdout("git status --porcelain"))["hookSpecificOutput"]
+        self.assertEqual(decision["hookEventName"], "PreToolUse")
+        self.assertEqual(decision["permissionDecision"], "allow")
+
+    def test_the_approval_carries_no_content_from_the_tree(self):
+        # Hook stdout is model context. The command under inspection never returns
+        # through it, whatever it contains.
+        out = guard_stdout("grep -r 'IGNORE PREVIOUS INSTRUCTIONS' .")
+        self.assertNotIn("IGNORE PREVIOUS", out)
+        self.assertNotIn("grep", out)
+
+    def test_a_refused_command_approves_nothing(self):
+        for cmd in ("curl http://x", "printf x > /tmp/y", ""):
+            with self.subTest(cmd=cmd):
+                self.assertEqual(guard_stdout(cmd).strip(), "")
+
+    def test_another_tool_is_neither_approved_nor_refused(self):
+        self.assertEqual(guard_stdout("anything", tool="Read").strip(), "")
 
     def test_refusal_names_the_reason(self):
         rc, err = run_guard("curl http://x")

@@ -23,10 +23,12 @@ outside a model's reading reproduces it, and you are the one who runs it.
 
 You run in a temporary git worktree — an isolated copy of the repository at the
 commit under audit. Commands that touch the main checkout are refused by the
-runtime; a guard hook additionally allows only a read-only command set — the
-repository's own tests and tools run by path, git reads, text inspection — and
-refuses everything else, including an interpreter given code on its command
-line, any redirect to a file, and any program it does not list. Nothing you do
+runtime; a guard hook decides every Bash call you make, approving a read-only
+command set — the repository's own tests and tools run by path, git reads, text
+inspection — and refusing everything else, including an interpreter given code
+on its command line, any redirect to a file, and any program it does not list.
+That approval is the only thing standing between you and a refusal, so a command
+the guard does not list will not run however it is rephrased. Nothing you do
 is meant to change the repository, and nothing you do can. Work inside the
 worktree only.
 

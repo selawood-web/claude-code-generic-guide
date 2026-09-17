@@ -5,7 +5,10 @@
 #          the repository's own tests and tools, git reads, and text inspection —
 #          as a second layer under the worktree isolation the runtime already
 #          enforces. Exit 2 blocks the call; the reason on stderr reaches the
-#          model. The rule is an allow-list: a command is run only when every
+#          model. A command that passes prints a PreToolUse allow decision, so
+#          the guard is what approves the verifier's Bash: headless there is no
+#          prompt to answer, and the audit skill grants only its four report
+#          scripts, so without this every reproduction command is refused. The rule is an allow-list: a command is run only when every
 #          segment of it (each side of a pipe, `&&`, `;`, and every `$(...)`)
 #          starts with an allowed program in an allowed form. Anything else —
 #          an unknown program, an interpreter given code on its command line,
@@ -336,11 +339,23 @@ except ValueError:
     print("audit-verifier-guard: hook input is not JSON; refusing", file=sys.stderr)
     sys.exit(2)
 if payload.get("tool_name") != "Bash":
-    sys.exit(0)
+    sys.exit(0)  # this guard speaks only for Bash; anything else keeps its own rules
 command = str((payload.get("tool_input") or {}).get("command", ""))
 if not command.strip():
     refuse("empty command")
 check_command(command)
+# The allow-list is the verifier's permission, not merely its ceiling. Headless,
+# nobody is there to answer a prompt, and the audit skill's grants name only the
+# four report scripts — so a reproduction command that passes every check above
+# was still refused before it ran. The hook decides, which is the right place:
+# the guard has read the command, the grant set has not. Fixed string only: the
+# command came from the tree under audit and never goes back into the model's
+# context through here.
+print(json.dumps({"hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "permissionDecisionReason": "audit-verifier-guard: on the read-only allow-list",
+}}))
 sys.exit(0)
 PY
 
