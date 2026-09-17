@@ -714,21 +714,33 @@ def check_hooks() -> None:
 
 
 # --- 15. hidden characters --------------------------------------------------
-# Zero-width joiners and spaces, bidirectional overrides, Unicode tag characters
-# and C0 controls other than tab, newline and carriage return: invisible in a
-# diff, present in what the model reads.
-HIDDEN_RE = re.compile(
-    "[\u200b-\u200d\u2060\ufeff\u202a-\u202e\u2066-\u2069\U000e0000-\U000e007f"
-    "\x00-\x08\x0b\x0c\x0e-\x1f]"
+# Invisible in a diff, present in what the model reads. The two scans in this
+# repository had each caught what the other missed — the audit had no tag
+# characters or C0 controls, this one had no soft hyphen or directional marks
+# (finding S-006) — so the set has one home: tools/audit_facts.py carries this
+# string character-for-character and tools/test_validate.py compares them.
+HIDDEN_PATTERN = (
+    "[\u00ad\u061c\u180e"                 # soft hyphen, Arabic letter mark, Mongolian vowel separator
+    "\u200b-\u200f"                        # zero-width space/non-joiner/joiner, LRM, RLM
+    "\u202a-\u202e\u2066-\u2069"          # bidi embeddings, overrides and isolates
+    "\u2060-\u2064\ufeff"                  # word joiner, invisible operators, BOM
+    "\U000e0000-\U000e007f"                # Unicode tag characters
+    "\x00-\x08\x0b\x0c\x0e-\x1f]"       # C0 controls except tab, newline, carriage return
 )
+HIDDEN_RE = re.compile(HIDDEN_PATTERN)
 
 
 def hidden_characters(text: str) -> list[tuple[int, str]]:
-    """(line number, U+XXXX) for every hidden character in text."""
+    """(line number, U+XXXX) for every hidden character in text.
+
+    Split on "\\n", never str.splitlines(): that treats U+000B, U+000C and
+    U+001C-U+001E as line boundaries and removes them, so the three of them
+    this pattern names could never be reported.
+    """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
     found = []
-    for n, line in enumerate(text.splitlines(), 1):
+    for n, line in enumerate(text.split("\n"), 1):
         for m in HIDDEN_RE.finditer(line):
             found.append((n, f"U+{ord(m.group(0)):04X}"))
     return found

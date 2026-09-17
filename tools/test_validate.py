@@ -1001,6 +1001,77 @@ class SelfCheckTests(unittest.TestCase):
         self.assertIn("audit_redteam.py", problems[0])
 
 
+class HiddenCharacterParityTests(unittest.TestCase):
+    """S-006: the two scans disagreed about what counts as invisible."""
+
+    TAG = "\U000e0041"          # a Unicode tag character
+    TAG_START = "\U000e0001"
+    SOFT_HYPHEN = "\u00ad"
+    RLM = "\u200f"
+    INVISIBLE_PLUS = "\u2064"
+    NUL = "\x00"
+    ESC = "\x1b"
+
+    def facts(self):
+        sys.path.insert(0, os.path.dirname(validate.__file__))
+        import audit_facts
+        return audit_facts
+
+    def test_the_two_modules_carry_the_same_pattern(self):
+        self.assertEqual(validate.HIDDEN_PATTERN, self.facts().HIDDEN_PATTERN)
+
+    def test_tag_characters_are_caught_by_both(self):
+        """The audit reported clean on these while the validator failed on them."""
+        for char in (self.TAG, self.TAG_START, "\U000e007f"):
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_what_only_the_audit_used_to_catch_is_kept(self):
+        """A union, not a copy: the validator had no soft hyphen or bidi marks."""
+        for char in (self.SOFT_HYPHEN, self.RLM, "\u200e", self.INVISIBLE_PLUS):
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_what_only_the_validator_used_to_catch_is_kept(self):
+        for char in (self.NUL, self.ESC, "\x0b", "\x0c"):
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_the_two_marks_neither_had_are_covered(self):
+        for char in ("\u061c", "\u180e"):   # Arabic letter mark, Mongolian vowel separator
+            with self.subTest(char=f"U+{ord(char):04X}"):
+                self.assertTrue(validate.hidden_characters(f"x{char}y\n"))
+                self.assertTrue(self.facts().hidden_characters(f"x{char}y\n"))
+
+    def test_whitespace_that_is_meant_to_be_there_is_not_hidden(self):
+        for text in ("a\tb\n", "a\r\nb\n", "plain lines\n"):
+            with self.subTest(text=repr(text)):
+                self.assertEqual(validate.hidden_characters(text), [])
+                self.assertEqual(self.facts().hidden_characters(text), [])
+
+    def test_ordinary_non_ascii_is_not_hidden(self):
+        text = "café — naïve 中文 🎉\n"
+        self.assertEqual(validate.hidden_characters(text), [])
+        self.assertEqual(self.facts().hidden_characters(text), [])
+
+    def test_the_two_agree_line_by_line_on_a_mixed_sample(self):
+        sample = f"one\ntwo{self.TAG}\nthree{self.SOFT_HYPHEN}{self.NUL}\nfour\n"
+        theirs = {(n, cp) for n, cps in self.facts().hidden_characters(sample) for cp in cps}
+        self.assertEqual(set(validate.hidden_characters(sample)), theirs)
+
+    def test_every_instruction_file_is_clean_under_both(self):
+        facts = self.facts()
+        for path in validate.instruction_files():
+            with open(os.path.join(validate.ROOT, path), encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
+            with self.subTest(path=path):
+                self.assertEqual(validate.hidden_characters(text), [])
+                self.assertEqual(facts.hidden_characters(text), [])
+
+
 class AutomaticRunnerTests(unittest.TestCase):
     """T-008/T-009: detectors and tests that ran only when somebody remembered."""
 
