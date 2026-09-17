@@ -54,6 +54,34 @@ DENIED_TOOLS = ("Edit", "NotebookEdit", "WebFetch", "WebSearch")
 #   --strict-mcp-config     no MCP server from the tree's .mcp.json
 #   --tools                 the built-in set, named from the skill's own grants
 ISOLATION = ("--setting-sources", "user", "--strict-mcp-config")
+# The grant set this launcher runs with, held here rather than adopted from the tree
+# under audit. skill_grants() still reads that tree's allowed-tools line, but
+# check_grants_pinned() refuses the run when it differs, so a pull request cannot
+# widen the permissions of the audit reviewing it.
+#
+# Deliberately a literal, not an import of tools/validate.py's AUDIT_SKILL_GRANTS:
+# that module is read from the audited tree too, and a commit that neuters the
+# validator is a defect class the probe contract records as undetected
+# (tools/probes.txt, "validator main forced to return 0 | missed"). Two independent
+# pins fail independently. tools/test_audit_headless.py asserts the two stay equal,
+# which catches honest drift without making either depend on the other.
+#
+# Scope, stated plainly: this pin is only as trustworthy as the copy of *this file*
+# that runs. An operator invoking a trusted checkout's audit_headless.py against a
+# tree they did not write is covered. A CI job that runs the audited head's own
+# launcher is not, until .github/workflows/audit.yml rescues this file from the base
+# ref the way it already rescues the verifier guard.
+PINNED_GRANTS = (
+    "Bash(python3 tools/audit_facts.py *)",
+    "Bash(python3 tools/audit_probes.py *)",
+    "Bash(python3 tools/audit_redteam.py *)",
+    "Bash(python3 tools/audit_report.py *)",
+    "Write(CCGG-AUDIT-*/**)",
+    "Read",
+    "Glob",
+    "Grep",
+    "Agent",
+)
 # `--tools` names the built-in tool; the permission flags accept either name.
 TOOL_ALIASES = {"Agent": "Task"}
 WRITE_GRANT_RE = re.compile(r"Write\([^)]*\)")
@@ -85,8 +113,10 @@ def skill_body(text: str) -> str:
 def skill_grants(text: str) -> list[str]:
     """The skill's `allowed-tools` as a list of grants, kept in file order.
 
-    The headless run is granted exactly what the skill is granted in a session.
-    tools/validate.py pins that string, so a change to it is a reviewed change.
+    Parsing only: what comes back is the *audited tree's* claim about its grants,
+    not something to run with. check_grants_pinned() decides whether it may be
+    used. tools/validate.py pins the same string, but it is a file in that same
+    tree, so it is not a control the launcher can lean on.
     """
     if not isinstance(text, str):
         raise TypeError("text must be a string")
@@ -111,6 +141,38 @@ def skill_grants(text: str) -> list[str]:
     if not grants:
         raise HeadlessError(f"{SKILL_PATH}: allowed-tools is empty")
     return grants
+
+
+def check_grants_pinned(grants: list[str]) -> None:
+    """Refuse a run whose skill grants differ from this launcher's pinned set.
+
+    The audited tree names its own `allowed-tools`, and adopting that line lets the
+    checkout choose the permissions of the agent auditing it — a widened Bash
+    specifier arrives pre-approved, because the run is started with
+    `--permission-prompts none`. The run therefore starts only when the tree's
+    grants and PINNED_GRANTS agree exactly, order included.
+
+    Order is part of the comparison on purpose: `--tools` is derived from these
+    grants in file order, so a reordering is a different command, and "exactly the
+    pinned set" is a cheaper rule to audit than "the same grants, somehow arranged".
+    """
+    if list(grants) == list(PINNED_GRANTS):
+        return
+    extra = [g for g in grants if g not in PINNED_GRANTS]
+    missing = [g for g in PINNED_GRANTS if g not in grants]
+    detail = []
+    if extra:
+        detail.append("not in the pinned set: " + ", ".join(extra))
+    if missing:
+        detail.append("missing: " + ", ".join(missing))
+    if not detail:
+        detail.append("the pinned grants in a different order")
+    raise HeadlessError(
+        f"{SKILL_PATH}: allowed-tools differs from the launcher's pinned set "
+        f"({'; '.join(detail)}) — refusing to adopt the audited tree's grants. "
+        f"If this change is intended, update PINNED_GRANTS in tools/audit_headless.py "
+        f"and AUDIT_SKILL_GRANTS in tools/validate.py in the same reviewed commit."
+    )
 
 
 def retarget_write_grant(grants: list[str], report_dir: str) -> list[str]:
@@ -383,7 +445,11 @@ def main(argv: list[str]) -> int:
             raise HeadlessError(f"--guard {args.guard} does not exist")
         with open(os.path.join(root, SKILL_PATH), encoding="utf-8") as fh:
             skill_text = fh.read()
-        grants = retarget_write_grant(skill_grants(skill_text), report_dir)
+        grants = skill_grants(skill_text)
+        # Before the Write grant is retargeted: the pin is written against the
+        # skill's own text, not against this run's rewritten directory.
+        check_grants_pinned(grants)
+        grants = retarget_write_grant(grants, report_dir)
         definitions = audit_agents_json.build(
             root, audit_agents_json.DEFAULT_DIR, audit_agents_json.DEFAULT_GLOB, args.guard, None
         )

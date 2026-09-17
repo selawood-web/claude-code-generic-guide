@@ -19,8 +19,10 @@ from contextlib import redirect_stderr, redirect_stdout
 import audit_headless
 from audit_headless import (
     DENIED_TOOLS,
+    PINNED_GRANTS,
     HeadlessError,
     build_command,
+    check_grants_pinned,
     check_scope,
     failure_line,
     result_object,
@@ -88,6 +90,62 @@ class SkillGrantTests(unittest.TestCase):
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
             skill_grants(None)
+
+
+class GrantPinningTests(unittest.TestCase):
+    """The audited tree must not choose the permissions of the run auditing it.
+
+    skill_grants() reads the tree's allowed-tools line; check_grants_pinned()
+    is what decides whether that line may be used. These cases are the reason
+    the second function exists.
+    """
+
+    def test_the_shipped_skill_matches_the_pin(self):
+        grants = skill_grants(open(SKILL, encoding="utf-8").read())
+        self.assertEqual(grants, list(PINNED_GRANTS))
+        self.assertIsNone(check_grants_pinned(grants))
+
+    def test_the_two_independent_pins_agree(self):
+        """audit_headless.PINNED_GRANTS and validate.AUDIT_SKILL_GRANTS are kept
+        as separate literals on purpose (either file can be neutered alone), so
+        a test — not an import — is what keeps them from drifting apart."""
+        import validate
+        self.assertEqual(
+            list(PINNED_GRANTS),
+            skill_grants("allowed-tools: " + validate.AUDIT_SKILL_GRANTS),
+        )
+
+    def test_a_widened_bash_grant_is_refused(self):
+        """The audit's own S-007 reproduction: a tree that adds Bash(curl *)."""
+        widened = list(PINNED_GRANTS) + ["Bash(curl *)"]
+        with self.assertRaises(HeadlessError) as caught:
+            check_grants_pinned(widened)
+        self.assertIn("Bash(curl *)", str(caught.exception))
+        self.assertIn("not in the pinned set", str(caught.exception))
+
+    def test_a_wholesale_replacement_is_refused(self):
+        with self.assertRaises(HeadlessError) as caught:
+            check_grants_pinned(["Bash(*)", "Write(**)", "Read", "Glob", "Grep", "Agent"])
+        self.assertIn("Bash(*)", str(caught.exception))
+        self.assertIn("missing:", str(caught.exception))
+
+    def test_a_dropped_grant_is_refused(self):
+        with self.assertRaises(HeadlessError) as caught:
+            check_grants_pinned([g for g in PINNED_GRANTS if g != "Grep"])
+        self.assertIn("missing: Grep", str(caught.exception))
+
+    def test_reordering_is_refused_because_tools_follow_grant_order(self):
+        shuffled = [PINNED_GRANTS[-1]] + list(PINNED_GRANTS[:-1])
+        with self.assertRaises(HeadlessError) as caught:
+            check_grants_pinned(shuffled)
+        self.assertIn("different order", str(caught.exception))
+
+    def test_the_refusal_names_where_an_intended_change_goes(self):
+        with self.assertRaises(HeadlessError) as caught:
+            check_grants_pinned(["Read"])
+        message = str(caught.exception)
+        self.assertIn("PINNED_GRANTS", message)
+        self.assertIn("AUDIT_SKILL_GRANTS", message)
 
 
 class RetargetWriteGrantTests(unittest.TestCase):
