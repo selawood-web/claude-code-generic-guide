@@ -69,6 +69,37 @@ VOCAB_PATH = os.path.join("tools", "audit_vocab.json")
 GIT_CLONE_RE = re.compile(r"\bgit\s+clone\b")
 CLONE_PIN_RE = re.compile(r"(--branch|-b\s|--revision)")
 FETCH_TO_SHELL_RE = re.compile(r"\b(curl|wget)\b[^|\n]*\|\s*(sudo\s+)?(sh|bash|zsh)\b")
+# A skill's `description` is shown to the model in every session's listing,
+# before any invocation, so whatever it says is context nobody asked for
+# (finding R-005). Its job is matching a request: that needs no URL, no
+# backtick, no shell substitution and no pipe. Patterns are kept as strings so
+# tools/audit_facts.py can carry the identical tuple and a test can compare them.
+DESCRIPTION_BANNED = (
+    (r"https?://|\bwww\.", "a URL"),
+    (r"`", "a backtick"),
+    (r"\$\(|\$\{", "a shell substitution"),
+    (r"\||&&", "a shell operator"),
+)
+DESCRIPTION_MAX = 600
+
+
+def description_problems(path: str, description: str) -> list[str]:
+    """Content rules for a frontmatter description, as messages.
+
+    Deliberately not a rule: "no imperative sentences". Every description in
+    this repository is one — "Design system architecture...", "Use when the
+    user asks to..." — so that test would fail all twenty-seven skills and
+    teach the next person to switch the check off.
+    """
+    if not isinstance(description, str):
+        raise TypeError("description must be a string")
+    problems = []
+    for pattern, what in DESCRIPTION_BANNED:
+        if re.search(pattern, description):
+            problems.append(f"{path}: frontmatter 'description' contains {what} — the field loads in every session and is matched against a request, never followed")
+    if len(description) > DESCRIPTION_MAX:
+        problems.append(f"{path}: frontmatter 'description' is {len(description)} characters, over {DESCRIPTION_MAX} — a matcher, not a place to put instructions")
+    return problems
 
 findings: list[str] = []
 cautions: list[str] = []
@@ -282,8 +313,19 @@ def fetch_exec_problems(path: str, text: str) -> list[str]:
     return problems
 
 
+def fetch_exec_paths() -> list[str]:
+    """Scripts plus every file whose content reaches the model as instructions.
+
+    An unpinned clone or a download-to-shell pipe is as live in a sentence a
+    skill tells the agent to follow as it is in a hook, and check 14 read only
+    hooks and *.sh files, so a skill body was never looked at (finding R-004,
+    and the one probe the gate was missing, T-005).
+    """
+    return list(dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh") + instruction_files()))
+
+
 def check_fetch_exec() -> None:
-    for path in dict.fromkeys(tracked(".claude/hooks/*") + tracked("*.sh")):
+    for path in fetch_exec_paths():
         text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
         for problem in fetch_exec_problems(path, text):
             fail(problem)
@@ -325,6 +367,7 @@ def skill_identity_problems(path: str, fields: dict[str, str]) -> list[str]:
     for key in ("name", "description"):
         if not fields.get(key, "").strip("'\" "):
             problems.append(f"{path}: frontmatter '{key}' is empty")
+    problems += description_problems(path, fields.get("description", "").strip("'\" "))
     dirname = os.path.basename(os.path.dirname(path))
     name = fields.get("name", "").strip("'\" ")
     if name and dirname and name != dirname:
@@ -369,6 +412,7 @@ def agent_frontmatter_problems(path: str, fields: dict[str, str]) -> list[str]:
     Every audit agent omits CLAUDE.md: the audited rules are evidence, not orders.
     """
     problems = [f"{path}: frontmatter missing key '{k}'" for k in AGENT_REQUIRED_KEYS if not fields.get(k)]
+    problems += description_problems(path, fields.get("description", "").strip("'\" "))
     name = fields.get("name", "")
     if not name.startswith("audit-"):
         return problems

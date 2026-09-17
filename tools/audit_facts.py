@@ -55,6 +55,25 @@ NETWORK_PATTERNS = (
     (re.compile(r"\bsource\s+\$|\.\s+\$"), "source from variable"),
 )
 RULE_FILES = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md", "MEMORY.md")
+# Kept character-for-character identical to tools/validate.py's rules for the
+# same field; tools/test_validate.py compares the two. A skill's description is
+# shown to the model in every session's listing, before any invocation, and the
+# only checks on it were that it is not empty (finding R-005).
+DESCRIPTION_BANNED = (
+    (r"https?://|\bwww\.", "a URL"),
+    (r"`", "a backtick"),
+    (r"\$\(|\$\{", "a shell substitution"),
+    (r"\||&&", "a shell operator"),
+)
+DESCRIPTION_MAX = 600
+
+
+def description_findings(description: str) -> list[str]:
+    """What is wrong with a description's content, as reasons."""
+    reasons = [what for pattern, what in DESCRIPTION_BANNED if re.search(pattern, description)]
+    if len(description) > DESCRIPTION_MAX:
+        reasons.append(f"{len(description)} characters, over {DESCRIPTION_MAX}")
+    return reasons
 # Every tracked file whose content reaches the model as instructions. Kept
 # character-for-character identical to tools/validate.py's INSTRUCTION_GLOBS —
 # the two scans had drifted apart, and the hidden-character scan here saw the
@@ -208,6 +227,9 @@ def frontmatter_facts(path: str, text: str, kind: str, vocab: dict, facts: Facts
     if not fields.get("description"):
         facts.add("frontmatter", "finding", path, "description missing or empty",
                   "the product uses the first non-empty content line instead; auto-invocation matches on it")
+    for reason in description_findings(fields.get("description", "")):
+        facts.add("frontmatter", "finding", path, f"description contains {reason}",
+                  "class: injection; the description loads in every session before any invocation")
     for key in fields:
         if key in documented:
             continue
