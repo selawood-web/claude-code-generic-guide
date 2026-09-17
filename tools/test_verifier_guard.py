@@ -61,6 +61,14 @@ ALLOWED = [
     "python3 -W ignore -m unittest discover -s tools",
     "python3 -I -m unittest discover -s tools",
     "python3 --version",
+    # R-012: the gate tooling the verifier actually reproduces with, in every
+    # spelling it reaches it by.
+    "python3 tools/feature_lint.py",
+    "python3 tools/catalog.py --check",
+    "python3 tools/audit_report.py --dir CCGG-AUDIT-x",
+    "python3 tools/test_validate.py",
+    "python3 ./tools/validate.py",
+    "cd tools && python3 validate.py",
 ]
 
 REFUSED = [
@@ -79,6 +87,27 @@ REFUSED = [
     "python3 -Sc 'import os'",
     "python3 -IBc 'import os'",
     "python3 -Zz tools/validate.py",
+    # R-012: `python3 <path>` was allowed unconditionally as "the repository's
+    # own code", so any .py file an audited branch carries ran inside the
+    # verifier's worktree — in CI, on the runner that holds the API key.
+    "python3 setup.py install",
+    "python3 scripts/deploy.py",
+    "python3 evil.py",
+    "python3 /tmp/x.py",
+    "python3 ../outside.py",
+    "python3 tools/../setup.py",
+    "python3 .github/x.py",
+    "python3 tools/sub/x.py",
+    # R-013: pytest imports conftest.py and its plugins from whatever tree it is
+    # pointed at; ruff, mypy and flake8 load project config the same way. None of
+    # them is used by this repository's gate, so none is in the allow-list.
+    "pytest tools",
+    "pytest",
+    "python3 -m pytest tools",
+    "ruff check .",
+    "mypy tools",
+    "flake8 tools",
+    "pyflakes tools",
     "bash -c id",
     "printf x | bash",
     "sh -s < x",

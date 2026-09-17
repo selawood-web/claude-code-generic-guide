@@ -26,7 +26,7 @@ fi
 INPUT="$(cat)"
 
 read -r -d '' GUARD <<'PY' || true
-import json, re, shlex, sys
+import json, posixpath, re, shlex, sys
 
 KEYWORDS = {"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done",
             "in", "!", "{", "}", "(", ")", "time", "[[", "]]"}
@@ -51,7 +51,7 @@ PLAIN = {
     "echo", "printf", "test", "[", "true", "false", "read", "sleep", "printenv",
     "md5sum", "sha256sum", "sha1sum", "du", "df", "cd", "pushd", "popd", "export",
     "local", "declare", "set", "unset", "exit", "return", "break", "continue", ":",
-    "shift", "let", "shellcheck", "pytest", "ruff", "mypy", "flake8", "pyflakes",
+    "shift", "let", "shellcheck",
     "git-lfs", "less", "more", "comm", "join", "paste", "fold", "fmt", "yes",
 }
 GIT_READ = {
@@ -69,7 +69,19 @@ GIT_LISTING = {"branch": {"--list", "-a", "-r", "-v", "-vv", "--show-current", "
                "worktree": {"list"},
                "stash": {"list", "show"},
                "notes": {"list", "show"}}
-PY_MODULES = {"unittest", "pytest", "json.tool", "doctest", "py_compile", "tokenize"}
+# pytest is deliberately absent, here and from PLAIN: it imports conftest.py and
+# its entry-point plugins from whatever tree it is pointed at, as ruff, mypy and
+# flake8 load project config from it (finding R-013). This repository's gate uses
+# none of them, so a reproduction never needs one; a future need is a row added
+# here with its constraint, not a program that was never really read.
+PY_MODULES = {"unittest", "json.tool", "doctest", "py_compile", "tokenize"}
+# `python3 <path>` used to be allowed unconditionally as "the repository's own
+# code", which on an audited branch means any .py file the branch carries
+# (finding R-012). The verifier reproduces with the gate's own tooling; that is
+# what these name.
+PY_SCRIPT_DIRS = frozenset(("", "tools"))
+PY_SCRIPT_NAMES = frozenset(("validate.py", "feature_lint.py", "catalog.py"))
+PY_SCRIPT_PREFIXES = ("audit_", "test_")
 # python's option letters cluster and may carry their value attached, so `-c`,
 # `-Sc`, `-cCODE` and `-IBc CODE` are all the code flag (finding S-002). The
 # letters are split and classified rather than matched as whole tokens.
@@ -167,6 +179,27 @@ def strip_redirects(seg):
     return out
 
 
+def check_py_script(path):
+    """Allow the gate's own scripts as a script argument, and nothing else.
+
+    Names, not contents: the guard cannot read what a file does. What it can do
+    is keep `python3` pointed at the dozen files the gate consists of instead of
+    at anything an audited branch adds (finding R-012). A branch that edits
+    tools/validate.py itself still gets execution — that is what the base-ref
+    copies in .github/workflows/audit.yml are for, not this hook.
+    """
+    norm = posixpath.normpath(path)
+    if posixpath.isabs(norm) or norm == ".." or norm.startswith("../"):
+        refuse("python script outside the worktree")
+    directory, _, name = norm.rpartition("/")
+    if directory not in PY_SCRIPT_DIRS:
+        refuse("python script outside tools/")
+    if name.endswith(".py") and (name in PY_SCRIPT_NAMES
+                                 or name.startswith(PY_SCRIPT_PREFIXES)):
+        return
+    refuse(f"{name} is not one of the gate's own scripts")
+
+
 def check_python(args):
     """Refuse code on the command line and any module outside PY_MODULES.
 
@@ -214,7 +247,7 @@ def check_python(args):
             else:
                 i += 1
             continue
-        return  # a script path: the repository's own code, run inside the worktree
+        return check_py_script(a)
     if saw_long_only:
         return  # --version / --help print and exit; they run nothing
     refuse("python with no script")
