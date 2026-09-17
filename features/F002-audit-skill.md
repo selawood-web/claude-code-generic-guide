@@ -286,6 +286,11 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `Edit` in a rule cannot hand the audit the Edit tool — [in]
 - 2026-09-17 — A probe's answer is repeated by the gate step, because reading it meant
   paging back through the install step every time — [in]
+- 2026-09-17 — **The first headless audit that completed.** Run 35205933966, scope `all`:
+  `complete=true`, 3 findings, 0 blockers, report rendered, gate green. The launcher itself
+  exited non-zero on that run and the report still landed, which is the gate behaving as
+  designed — it judges what the model stage left behind, not the launcher's exit status.
+  The remaining acceptance evidence for F002 is a run that is green end to end — [open]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands
