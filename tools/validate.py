@@ -1287,16 +1287,184 @@ def unreachable_after_return(source: str) -> list[int]:
     return sorted(set(dead))
 
 
-def self_check(path: str | None = None) -> list[str]:
-    """What the validator can tell about itself before main() gets a say."""
-    path = path or os.path.abspath(__file__)
+# The scripts that make up the gate. `main forced to return 0` was caught in the
+# validator's own source and nowhere else, so the same mutation one file across —
+# in the harness that measures the gate — passed (finding T-006).
+GATE_SOURCE_GLOBS = ("tools/validate.py", "tools/feature_lint.py", "tools/catalog.py",
+                     "tools/audit_*.py")
+
+
+def gate_sources() -> list[str]:
+    """The tracked scripts self_check reads, sorted; tests excluded."""
+    found: set[str] = set()
+    for pattern in GATE_SOURCE_GLOBS:
+        found.update(p for p in tracked(pattern)
+                     if p.endswith(".py") and not os.path.basename(p).startswith("test_"))
+    return sorted(found)
+
+
+def source_problems(path: str) -> list[str]:
+    """Unreachable code in one gate script, as messages naming the file."""
+    label = os.path.relpath(path, ROOT) if os.path.isabs(path) else path
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             source = fh.read()
     except OSError as exc:
-        return [f"cannot read its own source: {exc}"]
-    return [f"unreachable code at line {no} — a check that cannot be reached is not a check"
+        return [f"{label}: cannot be read: {exc}"]
+    return [f"{label}:{no}: unreachable code — a check that cannot be reached is not a check"
             for no in unreachable_after_return(source)]
+
+
+def self_check(path: str | None = None) -> list[str]:
+    """What the gate can tell about itself before main() gets a say.
+
+    With no argument it reads every script in gate_sources(); with one it reads
+    that file alone, which is how a test hands it a deliberately broken copy.
+    """
+    if path is not None:
+        return source_problems(path)
+    problems: list[str] = []
+    for rel in gate_sources():
+        problems += source_problems(os.path.join(ROOT, rel))
+    return problems
+
+
+# --- 25. probe contract -------------------------------------------------------
+PROBE_CONTRACTS = (("tools/audit_probes.py", "tools/probes.txt"),
+                   ("tools/audit_redteam.py", "tools/redteam_probes.txt"))
+
+
+def probe_lines(text: str) -> list[str]:
+    """The probe-carrying lines of a probes file: non-blank and not a comment.
+
+    Deliberately not the harness's parser. Importing a module out of the tree to
+    validate the tree would execute it, and the field-level contract is the
+    harness's to enforce — both harnesses now exit 1 on a malformed line. What
+    belongs here is the question neither of them could answer about itself: is
+    there anything to measure at all.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return [line.strip() for line in text.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+
+
+def check_probe_contract() -> None:
+    """A repository that ships a probe harness must ship probes for it to run.
+
+    Both harnesses used to treat a missing or empty probes file as "nothing to
+    measure" and exit 0, so the whole measured catch rate could be emptied with
+    every gate still green (finding T-001).
+    """
+    present = set(tracked("tools/*"))
+    for harness, data in PROBE_CONTRACTS:
+        if harness not in present:
+            continue
+        if data not in present:
+            fail(f"{harness} is tracked but {data} is not — the harness would measure nothing")
+            continue
+        with open(os.path.join(ROOT, data), encoding="utf-8", errors="replace") as fh:
+            lines = probe_lines(fh.read())
+        if not lines:
+            fail(f"{data}: no probes — the contract {harness} measures is empty")
+
+
+# --- 26. reference thresholds -------------------------------------------------
+THRESHOLD_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:percent|%)")
+MEASURED_RE = re.compile(r"measured by `[^`]+`|unmeasured")
+
+
+def paragraphs(text: str) -> list[tuple[int, str]]:
+    """Blank-line separated blocks, each with the line number it starts on."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    blocks, start, buf = [], 1, []
+    for no, line in enumerate(text.splitlines(), 1):
+        if line.strip():
+            if not buf:
+                start = no
+            buf.append(line)
+        elif buf:
+            blocks.append((start, "\n".join(buf)))
+            buf = []
+    if buf:
+        blocks.append((start, "\n".join(buf)))
+    return blocks
+
+
+def check_reference_thresholds() -> None:
+    """A number the rules make binding has to name what measures it.
+
+    The gate reference asked for 90 percent coverage on changed lines and AGENTS.md
+    made it binding, while no coverage runner, configuration or threshold existed
+    anywhere in the repository (finding P-003). A threshold states its measuring
+    command in the same paragraph, or says in so many words that it is unmeasured.
+    """
+    for path in tracked(".claude/references/*.md"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for start, block in paragraphs(text):
+            if THRESHOLD_RE.search(block) and not MEASURED_RE.search(block):
+                fail(f"{path}:{start}: states a numeric threshold without naming what measures it "
+                     f"— add \"measured by `<command>`\", or say it is unmeasured")
+
+
+# --- 27. hook stdout, docs vs vocabulary --------------------------------------
+# The guide's hooks chapter said stdout is ignored "for events like SessionStart",
+# while tools/audit_vocab.json, tools/audit_facts.py, the red-team agent brief and
+# this repository's own SessionStart hook all treat that stdout as text the model
+# reads (finding C-CONFLICT-001). The vocabulary is the one source of truth; this
+# check makes the prose answer to it.
+STDOUT_DENIED_RE = re.compile(
+    r"\bstdout\b[^.]{0,40}\b(?:is|are)\s+(?:ignored|discarded|dropped|unused|"
+    r"not\s+read|thrown\s+away)", re.I)
+
+
+def hook_stdout_reaches_model() -> list[str]:
+    """The events whose stdout the product adds to the model's context."""
+    path = os.path.join(ROOT, VOCAB_PATH)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return list(json.load(fh).get("hook_stdout_reaches_model") or [])
+    except (OSError, ValueError):
+        return []
+
+
+def sentences(text: str) -> list[str]:
+    """Sentences, with wrapped lines joined — a claim split across two lines is one claim."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    flat = re.sub(r"\s+", " ", text)
+    return [s.strip() for s in re.split(r"(?<=[.!?])\s+", flat) if s.strip()]
+
+
+def hook_stdout_conflicts(path: str, text: str) -> list[str]:
+    """Sentences that deny stdout reaches the model for an event where it does.
+
+    Per sentence, not per file: a page may describe both kinds of event, and
+    saying "every other passive event's stdout is ignored" is not a conflict.
+    """
+    reaching = hook_stdout_reaches_model()
+    problems = []
+    for sentence in sentences(text):
+        if not STDOUT_DENIED_RE.search(sentence):
+            continue
+        named = [e for e in reaching if e in sentence]
+        if named:
+            problems.append(
+                f"{path}: says hook stdout is ignored in a sentence naming "
+                f"{', '.join(named)} — tools/audit_vocab.json lists it under "
+                f"hook_stdout_reaches_model, and this repository's SessionStart hook "
+                f"relies on that: \"{sentence[:110]}\"")
+    return problems
+
+
+def check_hook_stdout_docs() -> None:
+    for path in tracked("docs/*.md"):
+        with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+        for problem in hook_stdout_conflicts(path, text):
+            fail(problem)
 
 
 def print_cautions() -> None:
@@ -1333,6 +1501,9 @@ def main() -> int:
     check_gate_has_a_runner()
     check_headless_can_spawn()
     check_features()
+    check_probe_contract()
+    check_reference_thresholds()
+    check_hook_stdout_docs()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
@@ -1349,5 +1520,5 @@ if __name__ == "__main__":
     # decide whether the validator is intact.
     _problems = self_check()
     for _problem in _problems:
-        print(f"validate.py self-check: {_problem}", file=sys.stderr)
+        print(f"gate self-check: {_problem}", file=sys.stderr)
     sys.exit(1 if _problems else main())

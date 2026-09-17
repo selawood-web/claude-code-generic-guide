@@ -159,7 +159,8 @@ probe per line: `label | expect | shell mutation`), clones the repository into a
 directory, and for each probe hard-resets, applies the mutation, stages, runs the gate,
 and records caught/missed. Output: `probes.json` and a catch-rate line. In CI, the job
 fails when a probe whose `expect` is `caught` is missed — the gate's guarantees become
-tests of the gate. The twenty-one probes from the research are the initial list.
+tests of the gate. The twenty-one probes from the research are the initial list; the shipped list has
+grown well past it since, and the live count is the one in `tools/probes.txt`.
 
 *Why a separate scratch clone and not a worktree:* the harness mutates tracked files
 and the git index; a fresh clone gives a hard reset that is provably complete.
@@ -337,6 +338,8 @@ Deployable on this repository's CI from the first pull request:
    `.github/workflows/validate.yml` as a job that prints the catch rate and fails on a
    missed `expect: caught`. All twenty-one start as `expect: missed` or `caught` per the
    research table, so the first run is green and the table becomes a living contract.
+   (As planned on 2026-09-16. The list has grown with every check that landed since;
+   `tools/probes.txt` is the count, and no number here is a current claim.)
 2. `tools/audit_facts.py` with the hook cross-check, hidden-character scan, frontmatter
    vocabulary, and command resolution — the four checks the research found missing.
 3. `.claude/agents/audit-harness.md` and `audit-verifier.md`, the validator check for

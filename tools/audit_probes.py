@@ -204,8 +204,11 @@ def main(argv: list[str]) -> int:
     ).strip()
     probes_path = os.path.join(repo, args.probes)
     if not os.path.isfile(probes_path):
-        print(f"audit-probes: no probes file at {args.probes} — nothing to measure")
-        return 0
+        # Not "nothing to measure, all clear": a harness pointed at a file that
+        # is not there measured the gate's whole contract as zero probes, and a
+        # mistyped --probes path was a silent success in CI (finding T-001).
+        print(f"audit-probes: no probes file at {args.probes} — the gate's contract is unmeasured")
+        return 1
     try:
         with open(probes_path, encoding="utf-8") as fh:
             probes = parse_probes(fh.read())
@@ -213,8 +216,8 @@ def main(argv: list[str]) -> int:
         print(f"audit-probes: {args.probes}: {exc}")
         return 1
     if not probes:
-        print(f"audit-probes: {args.probes} lists no probes")
-        return 0
+        print(f"audit-probes: {args.probes} lists no probes — the gate's contract is unmeasured")
+        return 1
 
     gate = shlex.split(args.gate)
     started = time.time()

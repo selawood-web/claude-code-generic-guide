@@ -973,7 +973,255 @@ class SelfCheckTests(unittest.TestCase):
     def test_an_unreadable_source_is_reported_not_swallowed(self):
         problems = self_check(os.path.join(validate.ROOT, "no-such-file.py"))
         self.assertEqual(len(problems), 1)
-        self.assertIn("cannot read its own source", problems[0])
+        self.assertIn("cannot be read", problems[0])
+        self.assertIn("no-such-file.py", problems[0])
+
+    def test_the_scan_covers_the_whole_gate_not_only_the_validator(self):
+        """T-006: the same mutation went uncaught one file across."""
+        covered = set(validate.gate_sources())
+        for path in ("tools/validate.py", "tools/audit_probes.py", "tools/audit_redteam.py",
+                     "tools/audit_facts.py", "tools/audit_report.py", "tools/feature_lint.py",
+                     "tools/catalog.py"):
+            with self.subTest(path=path):
+                self.assertIn(path, covered)
+
+    def test_the_shipped_gate_passes_the_widened_scan(self):
+        self.assertEqual(self_check(), [])
+
+    def test_a_neutered_harness_main_is_reported_with_its_file(self):
+        source = open(os.path.join(validate.ROOT, "tools", "audit_redteam.py"), encoding="utf-8").read()
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "audit_redteam.py")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(source.replace("def main(argv: list[str]) -> int:",
+                                        "def main(argv: list[str]) -> int:\n    return 0", 1))
+            problems = self_check(path)
+        self.assertTrue(problems, "a neutered red-team main passed the gate's self-check")
+        self.assertIn("unreachable", problems[0])
+        self.assertIn("audit_redteam.py", problems[0])
+
+
+class AuditLeavesTheTreeAloneTests(unittest.TestCase):
+    """P-001: F002 claims an audit run changes no file, measured by CI. It was not."""
+
+    WORKFLOW = os.path.join(validate.ROOT, ".github", "workflows", "audit.yml")
+    STEP = "- name: The audited tree is unchanged"
+
+    def setUp(self):
+        with open(self.WORKFLOW, encoding="utf-8") as fh:
+            self.text = fh.read()
+
+    def test_both_jobs_that_run_the_audit_check_the_tree_after(self):
+        """The deterministic and model jobs check out separately; each measures its own."""
+        self.assertEqual(self.text.count(self.STEP), 2, "the step is missing from a job that runs the audit")
+
+    def test_the_step_measures_it_and_fails_on_output(self):
+        for block in self.text.split(self.STEP)[1:]:
+            head = block[:900]
+            with self.subTest(step=head.splitlines()[0] if head else ""):
+                self.assertIn("git status --porcelain", head)
+                self.assertIn("exit 1", head)
+                self.assertIn("if: always()", head)
+
+    def test_the_report_directory_is_excluded_by_pathspec(self):
+        """A checkout whose root .gitignore lacks the pattern must still pass."""
+        self.assertIn("':(exclude)CCGG-AUDIT-*'", self.text)
+
+
+class ReferenceThresholdTests(unittest.TestCase):
+    """P-003: a number AGENTS.md makes binding must name what measures it."""
+
+    def test_a_threshold_with_no_measurement_is_reported(self):
+        del validate.findings[:]
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                refs = os.path.join(tmp, ".claude", "references")
+                os.makedirs(refs)
+                with open(os.path.join(refs, "gate.md"), "w", encoding="utf-8") as fh:
+                    fh.write("# Gate\n\nTarget 90 percent coverage on changed lines.\n")
+                subprocess.run(["git", "init", "-q", tmp], check=True)
+                subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+                old_root, validate.ROOT = validate.ROOT, tmp
+                old_cwd = os.getcwd()
+                try:
+                    os.chdir(tmp)
+                    validate.check_reference_thresholds()
+                    problems = list(validate.findings)
+                finally:
+                    os.chdir(old_cwd)
+                    validate.ROOT = old_root
+        finally:
+            del validate.findings[:]
+        self.assertTrue(problems)
+        self.assertIn("numeric threshold", problems[0])
+
+    def test_naming_the_command_satisfies_it(self):
+        blocks = validate.paragraphs("Target 90 percent, measured by `pytest --cov`.\n")
+        self.assertTrue(all(validate.MEASURED_RE.search(b) for _, b in blocks))
+
+    def test_saying_it_is_unmeasured_satisfies_it(self):
+        self.assertTrue(validate.MEASURED_RE.search("Aim for 90 percent — an unmeasured aspiration."))
+
+    def test_paragraphs_are_blank_line_separated_and_numbered(self):
+        blocks = validate.paragraphs("one\n\n\nthree\nfour\n")
+        self.assertEqual(blocks, [(1, "one"), (4, "three\nfour")])
+
+    def test_the_shipped_references_satisfy_the_rule(self):
+        del validate.findings[:]
+        try:
+            validate.check_reference_thresholds()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.paragraphs(None)
+
+
+class ProbeCountDriftTests(unittest.TestCase):
+    """P-006: F002 quoted '19 of 21 (90%)' against a list that had grown past 40."""
+
+    # The documents that make claims about now. A dated evidence record quotes the
+    # numbers a past run measured and must not be dragged forward with the list.
+    DOCS = ("features/F002-audit-skill.md",
+            "decisions/2026-09-16-ccgg-audit-architecture.md")
+    COUNT_RE = re.compile(r"(\d+)\s+probes\b")
+
+    def live_total(self):
+        with open(os.path.join(validate.ROOT, "tools", "probes.txt"), encoding="utf-8") as fh:
+            return len(validate.probe_lines(fh.read()))
+
+    def test_every_digit_probe_count_in_the_docs_is_the_current_one(self):
+        """A count in words is history; a count in digits is a claim about now."""
+        live = self.live_total()
+        for doc in self.DOCS:
+            with open(os.path.join(validate.ROOT, doc), encoding="utf-8") as fh:
+                text = fh.read()
+            for quoted in self.COUNT_RE.findall(text):
+                with self.subTest(doc=doc, quoted=quoted):
+                    self.assertEqual(int(quoted), live,
+                                     f"{doc} says '{quoted} probes'; tools/probes.txt has {live}")
+
+    def test_the_feature_states_the_count_at_all(self):
+        with open(os.path.join(validate.ROOT, self.DOCS[0]), encoding="utf-8") as fh:
+            self.assertTrue(self.COUNT_RE.search(fh.read()),
+                            "F002 states no probe count, so nothing pins it to the list")
+
+
+class HookStdoutDocTests(unittest.TestCase):
+    """C-CONFLICT-001: the guide said SessionStart stdout is ignored; everything
+    else in the repository treats it as a trust boundary."""
+
+    def test_a_sentence_denying_a_reaching_event_is_reported(self):
+        bad = "For events like `SessionStart` or `PostToolUse`, stdout is ignored."
+        self.assertTrue(validate.hook_stdout_conflicts("docs/x.md", bad))
+
+    def test_the_other_spellings_are_caught_too(self):
+        for phrase in ("stdout is discarded", "stdout is dropped", "stdout is not read",
+                       "stdout is thrown away"):
+            with self.subTest(phrase=phrase):
+                self.assertTrue(validate.hook_stdout_conflicts(
+                    "docs/x.md", f"On `UserPromptSubmit`, {phrase}."))
+
+    def test_denying_it_for_an_event_that_really_is_passive_is_fine(self):
+        text = "For `PostToolUse` and `Stop`, stdout is ignored. Just exit 0."
+        self.assertEqual(validate.hook_stdout_conflicts("docs/x.md", text), [])
+
+    def test_naming_a_reaching_event_without_denying_anything_is_fine(self):
+        text = "`SessionStart` stdout goes into the model's context."
+        self.assertEqual(validate.hook_stdout_conflicts("docs/x.md", text), [])
+
+    def test_the_claim_and_the_denial_are_matched_per_sentence_not_per_file(self):
+        """A page may describe both kinds of event without contradicting itself."""
+        text = ("Into the model's context: `SessionStart`, `UserPromptSubmit`.\n\n"
+                "Debug log only: every other passive event, whose stdout is ignored.")
+        self.assertEqual(validate.hook_stdout_conflicts("docs/x.md", text), [])
+
+    def test_wrapped_lines_do_not_hide_a_conflict(self):
+        text = ("For events like `SessionStart` or `PostToolUse`,\n"
+                "stdout is ignored. Just exit 0 on success.")
+        self.assertTrue(validate.hook_stdout_conflicts("docs/x.md", text))
+
+    def test_the_shipped_docs_agree_with_the_vocabulary(self):
+        del validate.findings[:]
+        try:
+            validate.check_hook_stdout_docs()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_hooks_chapter_states_the_reaching_events(self):
+        with open(os.path.join(validate.ROOT, "docs", "10-hooks.md"), encoding="utf-8") as fh:
+            text = fh.read()
+        for event in validate.hook_stdout_reaches_model():
+            with self.subTest(event=event):
+                self.assertIn(f"`{event}`", text)
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.hook_stdout_conflicts("docs/x.md", None)
+
+
+class ProbeContractTests(unittest.TestCase):
+    """T-001: a probes file that lists nothing measured the whole contract as zero."""
+
+    def _check(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            old_cwd = os.getcwd()
+            del validate.findings[:]
+            try:
+                os.chdir(tmp)
+                validate.check_probe_contract()
+                return list(validate.findings)
+            finally:
+                os.chdir(old_cwd)
+                validate.ROOT = old_root
+                del validate.findings[:]
+
+    HARNESS = "print('stand-in for the real harness')\n"
+
+    def test_a_repository_without_the_harness_is_not_asked_for_probes(self):
+        self.assertEqual(self._check({"README.md": "no harness here\n"}), [])
+
+    def test_a_harness_with_no_probes_file_is_reported(self):
+        problems = self._check({"tools/audit_probes.py": self.HARNESS})
+        self.assertTrue(any("tools/probes.txt" in p for p in problems), problems)
+
+    def test_a_probes_file_with_only_comments_is_reported(self):
+        problems = self._check({"tools/audit_probes.py": self.HARNESS,
+                                "tools/probes.txt": "# all commented out\n\n"})
+        self.assertTrue(any("no probes" in p for p in problems), problems)
+
+    def test_a_malformed_line_is_left_to_the_harness(self):
+        """The field contract is the harness's, and it now exits 1 on a bad line."""
+        self.assertEqual(self._check({"tools/audit_probes.py": self.HARNESS,
+                                      "tools/probes.txt": "only | two\n"}), [])
+
+    def test_a_populated_probes_file_passes(self):
+        self.assertEqual(self._check({"tools/audit_probes.py": self.HARNESS,
+                                      "tools/probes.txt": "a probe | caught | true\n"}), [])
+
+    def test_the_red_team_probes_file_is_held_to_the_same_rule(self):
+        problems = self._check({"tools/audit_redteam.py": self.HARNESS,
+                                "tools/redteam_probes.txt": "# nothing\n"})
+        self.assertTrue(any("redteam_probes.txt" in p for p in problems), problems)
+
+    def test_the_shipped_repository_satisfies_its_own_contract(self):
+        del validate.findings[:]
+        try:
+            validate.check_probe_contract()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
 
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
