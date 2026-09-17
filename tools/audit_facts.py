@@ -429,7 +429,10 @@ def ensure_report_dir(repo: str, out: str | None) -> str:
     ignore = os.path.join(out, ".gitignore")
     if not os.path.exists(ignore):
         with open(ignore, "w", encoding="utf-8") as fh:
-            fh.write("# Audit reports are ignored by default; keep one deliberately with git add -f.\n*\n")
+            fh.write("# Audit reports are ignored by default. `git add -f` keeps one, but a\n"
+                     "# committed report's candidates/ is then present in every later verifier\n"
+                     "# worktree under the same filenames, and a verifier that cannot find its\n"
+                     "# own run's batch has been observed reading the committed one instead.\n*\n")
     return out
 
 
