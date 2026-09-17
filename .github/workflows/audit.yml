@@ -31,6 +31,16 @@ permissions:
   contents: read          # the audit reads the tree and never writes to it
   pull-requests: write    # one comment carrying the report
 
+env:
+  # Pinned, not `latest`: this job installs the CLI into a runner that later holds
+  # ANTHROPIC_API_KEY, so an unpinned install is an unreviewed dependency with a
+  # secret in scope. 2.1.273 is the version this design was measured against — the
+  # flag behaviour recorded in features/F002-audit-skill.md and
+  # decisions/2026-09-16-ccgg-audit-architecture.md ("measured against the installed
+  # CLI (2.1.273)"). npm's `latest` moves; what the corrections were written against
+  # does not. Bump this deliberately, re-measuring those flags, never incidentally.
+  CLAUDE_CODE_VERSION: "2.1.273"
+
 concurrency:
   group: audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -297,7 +307,14 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Fail here, not mid-run: an install that resolved to something else is a
+          # different tool than the one these flags were measured against.
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
           python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
             --trusted-source "$SOURCE" --probe-tools
@@ -318,7 +335,14 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           set -euo pipefail
-          npm install -g @anthropic-ai/claude-code
+          npm install -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+          # Fail here, not mid-run: an install that resolved to something else is a
+          # different tool than the one these flags were measured against.
+          installed=$(claude --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+          if [ "$installed" != "$CLAUDE_CODE_VERSION" ]; then
+            echo "claude --version reports '${installed:-unknown}', expected $CLAUDE_CODE_VERSION" >&2
+            exit 1
+          fi
           python "$LAUNCHER" --repo "$GITHUB_WORKSPACE" \
             --report-dir "$STAMP" --scope "$SCOPE" --guard "$GUARD" \
             --trusted-source "$SOURCE" --budget-usd "$BUDGET"
