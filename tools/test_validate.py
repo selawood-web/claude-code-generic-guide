@@ -527,6 +527,29 @@ class GateIntegrationTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, proc.stdout)
         self.assertIn("no Task tool", proc.stdout)
 
+    def test_an_unstaged_skill_is_still_checked(self):
+        # update.sh drops a new skill into a wired project's tree without
+        # staging it. The index-only listing made that skill invisible to the
+        # frontmatter checks and "does not exist" to the catalog check until
+        # somebody ran git add (MemoMe audit 2026-09-17, H-5).
+        import subprocess
+        self.reset()
+        src = os.path.join(self.repo, ".claude/skills/debug")
+        dst = os.path.join(self.repo, ".claude/skills/unstaged-skill")
+        shutil.copytree(src, dst)
+        skill = os.path.join(dst, "SKILL.md")
+        with open(skill, encoding="utf-8") as fh:
+            text = fh.read()
+        text = re.sub(r"^name: .*$", "name: unstaged-skill", text, count=1, flags=re.M)
+        text = re.sub(r"^description:.*$", "description: ", text, count=1, flags=re.M)
+        with open(skill, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        # Deliberately NOT staged: the validator must find it on disk.
+        proc = subprocess.run([sys.executable, "tools/validate.py"], cwd=self.repo, env=self.env, capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("unstaged-skill/SKILL.md: frontmatter 'description' is empty", proc.stdout)
+        self.assertNotIn("unstaged-skill/ does not exist", proc.stdout)
+
     def test_unregistered_hook_fails_both_ways(self):
         self.reset()
         with open(os.path.join(self.repo, ".claude/hooks/orphan.sh"), "w") as fh:

@@ -69,10 +69,21 @@ def fail(msg: str) -> None:
 
 
 def tracked(pattern: str) -> list[str]:
+    """Files git knows or would add: the index plus untracked, minus ignored.
+
+    The index alone made a skill that update.sh had just dropped into
+    .claude/skills/ — real, on disk, listed in the catalog — invisible to the
+    frontmatter checks and "does not exist" to the catalog check, until
+    somebody staged it (MemoMe audit 2026-09-17, H-5). Ignored files stay
+    out, so scratch and build output never count.
+    """
     out = subprocess.check_output(
-        ["git", "ls-files", pattern], cwd=ROOT, text=True, encoding="utf-8"
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", pattern],
+        cwd=ROOT,
+        text=True,
+        encoding="utf-8",
     )
-    return [line for line in out.splitlines() if line]
+    return sorted({line for line in out.splitlines() if line})
 
 
 def strip_code_blocks(lines: list[str]) -> list[str]:
