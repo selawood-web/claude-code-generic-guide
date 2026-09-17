@@ -41,12 +41,19 @@ ccgg_at_ref() { # $1 = clone, $2 = ref name or commit
   fi
   [ -n "$head" ] && [ "$head" = "$want" ]
 }
+ccgg_move_to_ref() { # $1 = clone, $2 = ref name or commit: fetch it from origin, detach there
+  git -C "$1" fetch -q --depth 1 --force origin "$2" \
+    && git -C "$1" update-ref refs/ccgg/pin FETCH_HEAD \
+    && git -C "$1" checkout -q --detach refs/ccgg/pin
+}
 ccgg_clone() { # $1 = repo URL, $2 = ref name or commit, $3 = destination
+  # core.autocrlf=false: on Windows a CRLF checkout of the guide makes every
+  # sync copy every file (cmp sees CR bytes) and ships hooks that fail on
+  # Linux with "bad interpreter: /bin/bash^M".
   git init -q "$3" \
+    && git -C "$3" config core.autocrlf false \
     && git -C "$3" remote add origin "$1" \
-    && git -C "$3" fetch -q --depth 1 origin "$2" \
-    && git -C "$3" update-ref refs/ccgg/pin FETCH_HEAD \
-    && git -C "$3" checkout -q --detach refs/ccgg/pin \
+    && ccgg_move_to_ref "$3" "$2" \
     && return 0
   rm -rf "$3"
   return 1
@@ -66,8 +73,12 @@ if [ -n "${CCGG_HOME:-}" ]; then
       echo "-- ccgg: CCGG_HOME is not owned by this user; live sync skipped --"
     elif ! ccgg_origin_ok "$CCGG_HOME" "${CCGG_REPO:-}"; then
       echo "-- ccgg: CCGG_HOME's origin is not CCGG_REPO; live sync skipped --"
-    elif [ -n "${CCGG_REF:-}" ] && ! ccgg_at_ref "$CCGG_HOME" "$CCGG_REF"; then
-      echo "-- ccgg: CCGG_HOME is not at CCGG_REF; live sync skipped --"
+    elif [ -n "${CCGG_REF:-}" ] && ! ccgg_at_ref "$CCGG_HOME" "$CCGG_REF" \
+        && ! { ccgg_move_to_ref "$CCGG_HOME" "$CCGG_REF" >/dev/null 2>&1 && ccgg_at_ref "$CCGG_HOME" "$CCGG_REF"; }; then
+      # A project that bumps CCGG_REF is followed, not stranded: the clone is
+      # moved to the new pin (from the origin verified just above), and only a
+      # clone that still is not there is refused.
+      echo "-- ccgg: CCGG_HOME could not be moved to CCGG_REF; live sync skipped --"
     else
       "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || echo "-- ccgg: update.sh failed --"
     fi
