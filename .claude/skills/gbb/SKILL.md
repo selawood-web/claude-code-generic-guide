@@ -37,6 +37,7 @@ Companions in this directory:
 - [`research-protocol.md`](research-protocol.md) — who it is for, context of use, the stranger walk, the spatial map
 - [`design-council.md`](design-council.md) — the ten council members and their output contract
 - [`gbb-ladder.md`](gbb-ladder.md) — the ladder record: template, scoring, the stranger tests
+- [`design-ownership.md`](design-ownership.md) — CODEOWNERS and the pull-request checklist that make the intent enforceable in a project
 
 ## Modes
 | Invocation | Path | What runs |
@@ -145,6 +146,8 @@ of the file with the date.
   Dependencies; the change is done when the intent's tests for that surface pass in
   the running product, with screenshots. Post to the tracker per the charter's
   channel rule; render, do not post, anywhere else.
+- On a project's first intent, offer the CODEOWNERS file and the pull-request
+  checklist from [`design-ownership.md`](design-ownership.md) as a pick-list.
 - Add the ladder to `design/README.md`'s index (create both on first use, like
   `features/`).
 - Promote the design principles to memory:

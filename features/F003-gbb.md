@@ -49,6 +49,9 @@ to spectacular, each with a number that proves when it has been reached.
 - A builder can treat a user-facing change as done only when the intent's tests pass
   in the running product with screenshots, and a feature for a surface names the
   intent file under Dependencies
+- An owner can have `/gbb --intent` write a CODEOWNERS file and a pull-request
+  checklist into their project, so a change to a design-owned path requests the
+  design owner's review and carries the intent's test results as evidence
 - An owner can scope a run to one screen or flow with `--screen`, which runs three
   council members instead of ten
 - An owner can run `--rerun` after changes and see every stranger test re-timed, passed
@@ -155,6 +158,11 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   designer's order of thought (who, where, feeling, references, language) and verified
   in the order the user's mind meets a screen (sense, attention, recognition, feeling,
   action); done means the tests pass in the running product, not that it renders — [in]
+- 2026-09-18 — Owner proposed a CODEOWNERS file for design-owned paths. Adopted as a
+  shipped template in the skill, paths aligned to GBB's `design/` folder plus tokens,
+  styles, components, icons and design exports, with the pull-request checklist that
+  gives the review something to check and the note that it binds only when the base
+  branch requires code-owner review — [in]
 - 2026-09-18 — Lint that a feature touching a user-facing surface names an intent file
   under Dependencies — [deferred] until two products carry an intent and the check can
   be tested against them
