@@ -79,7 +79,10 @@ Set all three of `CCGG_HOME`, `CCGG_REPO` and `CCGG_REF` in each project's
     "CCGG_REF": "<a 40-hex commit of the guide>"
 } }
 ```
-…and record the origin you expect in `.claude/ccgg-origins`, one URL per line:
+…and record the origin you expect, one URL per line, in two places: the
+project's `.claude/ccgg-origins` (what the validator checks) and, once per
+machine, `~/.claude/ccgg-origins` (what the hook checks before it clones or
+syncs anything):
 ```
 https://github.com/<owner>/claude-code-generic-guide.git
 ```
@@ -101,6 +104,12 @@ re-pointing the sync at a different repository is a named change in a diff
 rather than one line inside a settings file. The validator fails any
 `CCGG_REPO` the record does not list, fails a `CCGG_REPO` with no record at all,
 and cautions only when the record exists but lists nothing.
+
+The hook does not read that in-tree record: a branch that adds the env block
+can add the record beside it. It reads `~/.claude/ccgg-origins` (or
+`$CLAUDE_CONFIG_DIR/ccgg-origins`), a file no repository ships, and clones or
+syncs only a `CCGG_REPO` listed there. No record allows nothing, and the hook
+prints a line saying so.
 The session-start hook then runs `update.sh` on every session start, resume, and
 compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
 files (skills, hooks, validator) in the project. Rules files you customized
