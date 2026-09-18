@@ -1786,5 +1786,113 @@ class AlwaysLoadedAreImportedTests(unittest.TestCase):
             del validate.findings[:]
 
 
+class HookHeaderTests(unittest.TestCase):
+    """H-001: a hook on a debug-log-only event may not claim to tell the model anything."""
+
+    REACHING = ["SessionStart", "UserPromptSubmit"]
+
+    def test_the_shipped_hooks_pass(self):
+        del validate.findings[:]
+        try:
+            validate.check_hook_headers()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_pre_fix_session_end_header_is_reported(self):
+        text = "#!/usr/bin/env bash\n# Hook: session-end\n# This hook reminds the AI to flush memory at session end.\necho x >> log\n"
+        problems = validate.hook_header_problems("session-end.sh", ["SessionEnd"], text, self.REACHING)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("SessionEnd", problems[0])
+
+    def test_the_same_claim_on_a_reaching_event_is_fine(self):
+        text = "#!/usr/bin/env bash\n# reminds the AI to run /flush\necho '-- flush --'\n"
+        self.assertEqual(validate.hook_header_problems("session-start.sh", ["SessionStart"], text, self.REACHING), [])
+
+    def test_a_claim_in_the_body_not_the_header_is_not_read(self):
+        text = "#!/usr/bin/env bash\n# writes a marker\nx=1\n# reminds the AI later\n"
+        self.assertEqual(validate.hook_header_problems("h.sh", ["SessionEnd"], text, self.REACHING), [])
+
+    def test_registered_events_are_read_from_settings(self):
+        settings = {"hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-end.sh"}]}],
+                              "SessionStart": [{"hooks": [{"type": "command", "command": ".claude/hooks/session-start.sh"}]}]}}
+        self.assertEqual(validate.registered_hook_events(settings),
+                         {"session-end.sh": ["SessionEnd"], "session-start.sh": ["SessionStart"]})
+
+
+class CurrencyRuleHomeTests(unittest.TestCase):
+    """C-001: the rule's item list lives in the charter; everywhere else points there."""
+
+    def test_the_shipped_files_pass(self):
+        del validate.findings[:]
+        try:
+            validate.check_currency_rule_home()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_pre_fix_agents_line_is_reported(self):
+        text = '- Answer "what exists now" from memory — versions, prices, APIs, model names get searched first.\n'
+        self.assertTrue(validate.currency_restatements("AGENTS.md", text))
+
+    def test_the_pre_fix_reference_line_is_reported(self):
+        text = "Versions, prices, API shapes, model names, part numbers — searched, never recalled.\n"
+        self.assertTrue(validate.currency_restatements(".claude/references/tool-choice.md", text))
+
+    def test_a_pointer_without_a_list_passes(self):
+        text = '- Answer "what exists now" from memory — see the charter\'s Currency check.\n'
+        self.assertEqual(validate.currency_restatements("AGENTS.md", text), [])
+
+    def test_the_charter_is_the_home_and_is_exempt(self):
+        text = "versions, prices, APIs, part numbers, model names — never answer what exists now from memory"
+        self.assertEqual(validate.currency_restatements("WORKING-CHARTER.md", text), [])
+
+
+class GateScriptTests(unittest.TestCase):
+    """S-009: the audit workflow's Gate must fail when a required stage did not run.
+
+    The real step script is extracted from audit.yml and run under bash with the
+    environment the workflow would give it, so what is tested is what CI runs.
+    """
+
+    BASE = {"BLOCKERS": "0", "COMPLETE": "true", "FINDINGS": "3", "STAGES_MISSING": "",
+            "DRY_RUN": "false", "PROBE": "false", "AUTHENTICATED": "true", "MODEL_RESULT": "success"}
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            cls.script = validate.step_script(fh.read(), "Gate")
+        assert cls.script, "no Gate step script found"
+
+    def run_gate(self, **overrides):
+        env = {**os.environ, **self.BASE, **overrides}
+        with tempfile.TemporaryDirectory() as tmp:
+            env["GITHUB_STEP_SUMMARY"] = os.path.join(tmp, "summary.md")
+            proc = subprocess.run(["bash", "-c", self.script], env=env, capture_output=True, text=True)
+            summary = open(env["GITHUB_STEP_SUMMARY"]).read() if os.path.exists(env["GITHUB_STEP_SUMMARY"]) else ""
+        return proc.returncode, proc.stdout + summary
+
+    def test_a_complete_run_with_no_blockers_passes(self):
+        rc, _ = self.run_gate()
+        self.assertEqual(rc, 0)
+
+    def test_a_missing_required_stage_fails(self):
+        rc, out = self.run_gate(STAGES_MISSING="redteam")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("measured nothing", out)
+
+    def test_a_dry_run_with_missing_stages_is_judged_as_a_dry_run(self):
+        rc, _ = self.run_gate(STAGES_MISSING="probes,redteam", COMPLETE="false", DRY_RUN="true")
+        self.assertEqual(rc, 0)
+
+    def test_an_incomplete_run_still_fails(self):
+        rc, _ = self.run_gate(COMPLETE="false")
+        self.assertEqual(rc, 1)
+
+    def test_a_blocker_still_fails(self):
+        rc, _ = self.run_gate(BLOCKERS="2")
+        self.assertEqual(rc, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,10 @@ GATES = {
     # like a clean one. --fail-on-findings is not this gate: it fails on the
     # gating kinds only, and an inventory fact is for review, not a verdict.
     "facts": "python3 -m unittest discover -s tools -t tools -p test_audit_facts.py -q",
+    # The validator's own tests, for defects the validator must not execute the
+    # tree to see — the audit workflow's Gate script is run by a test, never by
+    # validate.py, because a branch chooses what that script says.
+    "validate-tests": "python3 -m unittest discover -s tools -t tools -p test_validate.py -q",
 }
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
