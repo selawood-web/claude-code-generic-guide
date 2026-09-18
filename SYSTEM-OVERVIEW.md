@@ -35,7 +35,7 @@ start from than this one had.
 
 ```mermaid
 flowchart LR
-    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>27 skills, quality gate</i>"]
+    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>28 skills, quality gate</i>"]
     B --> C["Save knowledge<br/><i>learn · flush</i>"]
     C --> D["Session ends<br/><i>hook leaves a marker</i>"]
     D -. "the next session starts<br/>already knowing what this one learned" .-> A
@@ -90,7 +90,7 @@ through a pull request that the owner merges**. The AI proposes; the human decid
 
 ---
 
-## The workers: 27 skills
+## The workers: 28 skills
 
 A skill is a written procedure the AI follows instead of improvising — like a
 checklist an experienced engineer would use. Each triggers when you type its command
@@ -105,6 +105,7 @@ one line of explanation.
 |-------|------|----------|
 | `/decide` | A researched, debated, recorded decision | Criteria before options, live research before recommending, five personas argue, and the choice lands in `decisions/` with a revisit trigger |
 | `/product-brief` | Know if an idea is worth building | Market research, viability debate, an explicit Go / No-go / Pivot verdict — the spec is only written on Go |
+| `/gbb` | Close the gap between the vision and how the product feels | Researches who it is for, walks the running product as a stranger, runs a nine-member design council, and returns a Good / Better / Best ladder with a timed test per rung — a rerun moves the bar |
 
 ### Build — from vague idea to working code
 
@@ -214,7 +215,7 @@ twice by a human becomes a check run forever by the machine**.
 |------|----------------|
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks at most one question at a time, escalates instead of proceeding on anything destructive |
-| **The 27 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
+| **The 28 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
 | **The 3 hooks** | Run automatically at session start, before compaction, and at session end — the part of the memory system that needs no one to remember it |
 | **The validator + CI** | Check every proposed change against twelve rules and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |

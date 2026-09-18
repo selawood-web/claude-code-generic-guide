@@ -4,7 +4,7 @@
 #
 #     ./install.sh /path/to/your-project
 #
-# Copies the behavior rules, their on-demand companions, the 27 skills, the
+# Copies the behavior rules, their on-demand companions, the 28 skills, the
 # lifecycle hooks, the validator, and the CI workflow. Never overwrites anything that already exists — existing
 # files are reported and left alone. Safe to run twice.
 #
@@ -60,7 +60,7 @@ if [ -e "$TARGET/.claude/skills" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/skills" "$TARGET/.claude/skills"
-  note_copied ".claude/skills/ (27 skills)"
+  note_copied ".claude/skills/ (28 skills)"
 fi
 if [ -e "$TARGET/.claude/hooks" ]; then
   note_skipped ".claude/hooks/"
@@ -204,7 +204,7 @@ echo "  3. Seed global memory ONCE per machine (skip if done before):"
 echo "       cat $SRC/MEMORY.md >> ~/.claude/CLAUDE.md"
 echo "  4. Verify: open a fresh session in the project, run /context —"
 echo "     CLAUDE.md must appear under Memory files. Then ask:"
-echo "     'what skills are available?' — expect twenty-seven."
+echo "     'what skills are available?' — expect twenty-eight."
 echo "  5. Optional — live updates: in the project's .claude/settings.json env"
 echo "     block set all three of CCGG_HOME=$SRC, CCGG_REPO=<the guide's clone"
 echo "     URL> and CCGG_REF=<a 40-hex commit>, and list that URL in both"
