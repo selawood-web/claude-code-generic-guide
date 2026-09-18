@@ -9,12 +9,15 @@ verifier may do, and belongs in the same pull request as its justification.
 
 import json
 import os
+import sys
 import re
 import shutil
 import stat
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     ".claude", "hooks", "audit-verifier-guard.sh")
@@ -30,6 +33,9 @@ ALLOWED = [
     "for c in a b; do printf '%s' \"$c\" | bash .claude/hooks/audit-verifier-guard.sh; done",
     "git log --oneline -3 && git diff HEAD~1 --stat",
     "git -C . rev-parse HEAD",
+    "git -C tools rev-parse --show-prefix",
+    "git -P log -1",
+    "git --no-optional-locks status --porcelain",
     "git ls-files -- 'decisions/*.md'",
     "git config --get remote.origin.url",
     "git branch --show-current",
@@ -73,6 +79,17 @@ ALLOWED = [
     "python3 tools/test_validate.py",
     "python3 ./tools/validate.py",
     "cd tools && python3 validate.py",
+    # S-001: the repository's own shell scripts stay runnable.
+    "bash -n .claude/hooks/session-start.sh",
+    "bash -n update.sh",
+    "sh install.sh --help",
+    # S-002: the assignment prefixes a reproduction actually needs.
+    "CCGG_HOME=/tmp/x CCGG_REF=v1 bash -n .claude/hooks/session-start.sh",
+    "LC_ALL=C grep -n foo AGENTS.md",
+    # S-004: the pinned module and script names.
+    "python3 -m unittest discover -s tools",
+    "python3 -m unittest test_validate",
+    "python3 tools/test_verifier_guard.py",
 ]
 
 REFUSED = [
@@ -91,6 +108,26 @@ REFUSED = [
     "python3 -Sc 'import os'",
     "python3 -IBc 'import os'",
     "python3 -Zz tools/validate.py",
+    # S-001: check_shell returned on the first non-flag argument, so any .sh the
+    # audited branch carried ran — the hole R-012 closed for python, four lines up.
+    "bash tools/whatever.sh",
+    "bash /tmp/evil.sh",
+    "sh ../outside.sh",
+    "bash .claude/hooks/../../etc/x.sh",
+    "bash",
+    # S-002: the VAR= prefix was popped without reading the name, so a variable
+    # that names a program to run passed behind an allow-listed one.
+    "LD_PRELOAD=tools/evil.so cat README.md",
+    "LESSOPEN=@tools/x.sh less README.md",
+    "GIT_EXTERNAL_DIFF=./payload.sh git diff HEAD~1 HEAD",
+    "PAGER=./payload.sh git log",
+    "PYTHONSTARTUP=tools/x.py python3 tools/validate.py",
+    # S-004: the python allow-list matched a prefix, not a name.
+    "python3 tools/test_pwn.py",
+    "python3 tools/audit_pwn.py",
+    "python3 -m unittest discover -s /tmp",
+    "python3 -m unittest test_pwn",
+    "python3 -m doctest tools/pwn.py",
     # R-012: `python3 <path>` was allowed unconditionally as "the repository's
     # own code", so any .py file an audited branch carries ran inside the
     # verifier's worktree — in CI, on the runner that holds the API key.
@@ -98,6 +135,13 @@ REFUSED = [
     "python3 scripts/deploy.py",
     "python3 evil.py",
     "python3 /tmp/x.py",
+    # An absolute path at the filesystem root: rpartition leaves the directory
+    # empty, which is one of PY_SCRIPT_DIRS, and the basename is an allowed name.
+    # Only the worktree check stands between `python3 /validate.py` and whatever
+    # is at that path. Found by the guard mutation probes, which is what they are
+    # for — no row covered it, so the check that stops it was untested.
+    "python3 /validate.py",
+    "bash /install.sh",
     "python3 ../outside.py",
     "python3 tools/../setup.py",
     "python3 .github/x.py",
@@ -125,6 +169,24 @@ REFUSED = [
     "git branch new",
     "git tag v9",
     "git --git-dir=/x/.git log",
+    # S-003: git's options before the subcommand were skipped, not read, so every
+    # spelling that names a program to run reached an allow-listed read subcommand.
+    # `git -c diff.external=<cmd> diff` really does run <cmd>; the environment
+    # spellings of that same capability were already refused two blocks up.
+    "git -c diff.external=id diff",
+    "git -c core.pager=id log",
+    "git -c core.sshCommand=id ls-remote",
+    "git -c alias.x=!id x",
+    "git --config-env=diff.external=EVIL diff",
+    "git --exec-path=/tmp log",
+    "git -p log",
+    "git --namespace=x log",
+    # -C carries a path, and the refusal it walked past said "pointed at another
+    # repository" — which --git-dir alone was never the only way to do.
+    "git -C /etc rev-parse",
+    "git -C ../other log",
+    "git -C tools/../.. log",
+    "git -C",
     "git apply p.diff",
     "sed -i s/a/b/ AGENTS.md",
     "sed -n 's/x/y/w out.txt' f",
@@ -247,6 +309,25 @@ class AllowListTests(unittest.TestCase):
     def test_non_json_input_refused(self):
         proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
+
+
+class CanaryTests(unittest.TestCase):
+    """R-008: the canary only means something while the guard still refuses it."""
+
+    def canary(self):
+        import audit_report
+        return audit_report.GUARD_CANARY
+
+    def test_the_canary_is_refused_by_the_guard(self):
+        rc, err = run_guard(self.canary())
+        self.assertEqual(rc, 2, "the canary command is no longer refused — it proves nothing")
+        self.assertIn("audit-verifier-guard: refused", err)
+
+    def test_the_canary_is_harmless(self):
+        """A canary that changed something would be a poor thing to run every time."""
+        self.assertNotIn(">", self.canary())
+        self.assertNotIn("rm", self.canary())
+        self.assertNotIn("|", self.canary())
 
 
 class GuardFailureTests(unittest.TestCase):

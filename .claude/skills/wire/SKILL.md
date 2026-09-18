@@ -45,7 +45,7 @@ one — add the keys):
 { "env": {
     "CCGG_HOME": "~/.claude/ccgg-guide",
     "CCGG_REPO": "<the guide repo's clone URL>",
-    "CCGG_REF": "<a tag, branch, or 40-hex commit of the guide the owner controls — the pin the hook trusts; a commit is the only pin nobody can move>"
+    "CCGG_REF": "<the 40-hex commit of the guide the owner controls — the only pin nobody can move; tools/validate.py fails a tag or branch>"
 } }
 ```
 All three are required: the hook runs nothing when any is missing, and

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 import validate
 
@@ -373,12 +374,18 @@ class HookReferenceTests(unittest.TestCase):
 
 
 class CcggEnvTests(unittest.TestCase):
+    # A complete block: a listed origin and a commit pin. Anything less is a
+    # finding of its own now (R-003, S-005) and would mask the row under test.
+    GOOD_ORIGINS = ["https://example.org/g.git"]
+
     def test_clean_block(self):
-        env = {"CCGG_HOME": "~/.claude/ccgg-guide", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
-        self.assertEqual(validate.ccgg_env_problems(env), [])
+        env = {"CCGG_HOME": "~/.claude/ccgg-guide", "CCGG_REPO": "https://example.org/g.git",
+               "CCGG_REF": "0" * 40}
+        self.assertEqual(validate.ccgg_env_problems(env, origins=self.GOOD_ORIGINS), [])
 
     def test_repo_without_ref(self):
-        problems = validate.ccgg_env_problems({"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git"})
+        problems = validate.ccgg_env_problems({"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git"},
+                                              origins=self.GOOD_ORIGINS)
         self.assertEqual(len(problems), 1)
         self.assertIn("without CCGG_REF", problems[0])
 
@@ -393,8 +400,9 @@ class CcggEnvTests(unittest.TestCase):
         The block is otherwise complete, because CCGG_HOME on its own is now a
         finding of its own and would mask what this row is here to measure.
         """
-        env = {"CCGG_HOME": "/tmpfs/x", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
-        self.assertEqual(validate.ccgg_env_problems(env), [])
+        env = {"CCGG_HOME": "/tmpfs/x", "CCGG_REPO": "https://example.org/g.git",
+               "CCGG_REF": "0" * 40}
+        self.assertEqual(validate.ccgg_env_problems(env, origins=self.GOOD_ORIGINS), [])
 
     def test_plain_http(self):
         problems = validate.ccgg_env_problems({"CCGG_REPO": "http://example.org/g.git", "CCGG_REF": "v1"})
@@ -420,7 +428,7 @@ class CcggEnvTests(unittest.TestCase):
         self.assertTrue(any("ccgg-origins" in p for p in problems), problems)
 
     def test_repo_inside_the_trusted_record(self):
-        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
         self.assertEqual(validate.ccgg_env_problems(env, origins=["https://example.org/g.git"]), [])
 
     def test_empty_record_allows_nothing(self):
@@ -428,9 +436,38 @@ class CcggEnvTests(unittest.TestCase):
         env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
         self.assertTrue(any("ccgg-origins" in p for p in validate.ccgg_env_problems(env, origins=[])))
 
-    def test_no_record_is_not_a_hard_failure(self):
-        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
-        self.assertEqual(validate.ccgg_env_problems(env, origins=None), [])
+    def test_no_record_is_a_hard_failure(self):
+        """S-005: this used to be a caution, and a caution never changed the verdict,
+        so a settings.json pointing the sync at any repository at all passed the gate."""
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
+        problems = validate.ccgg_env_problems(env, origins=None)
+        self.assertTrue(any("ccgg-origins" in p for p in problems), problems)
+
+    def test_a_movable_ref_is_a_hard_failure(self):
+        """R-003: update.sh re-fetches a movable name into skills, hooks, agents and
+        tools/ on every session start, so whoever can move it chooses the code."""
+        for ref in ("main", "master", "v1", "HEAD", "a" * 39, "a" * 41, "A" * 40, "deadbeef"):
+            with self.subTest(ref=ref):
+                env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": ref}
+                problems = validate.ccgg_env_problems(env, origins=[env["CCGG_REPO"]])
+                self.assertTrue(any("move" in p for p in problems), f"{ref}: {problems}")
+
+    def test_a_ref_that_is_not_a_refname_is_reported_as_its_own_problem(self):
+        """S-006: `-` in the first position reaches git in option position."""
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git",
+               "CCGG_REF": "--upload-pack=id"}
+        problems = validate.ccgg_env_problems(env, origins=[env["CCGG_REPO"]])
+        self.assertTrue(any("not a refname" in p for p in problems), problems)
+
+    def test_ordinary_refnames_are_not_reported_as_malformed(self):
+        for ref in ("main", "v1.2.3", "release/2026-09", "a_b", "0" * 40):
+            with self.subTest(ref=ref):
+                self.assertTrue(validate.REF_NAME_RE.match(ref), ref)
+
+    def test_refnames_the_hook_refuses_are_refused_here_too(self):
+        for ref in ("-x", "--upload-pack=id", "a..b", "a b", "a;id", "", "a$(id)", "main\n--upload-pack=x", "x\n"):
+            with self.subTest(ref=ref):
+                self.assertFalse(validate.REF_NAME_RE.match(ref), ref)
 
 
 class CcggOriginRecordTests(unittest.TestCase):
@@ -459,19 +496,20 @@ class CcggEnvWarningTests(unittest.TestCase):
 
     GOOD = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
 
-    def test_movable_ref_warns(self):
-        for ref in ("main", "master", "v1", "HEAD", "a" * 39, "a" * 41, "A" * 40, "deadbeef"):
-            with self.subTest(ref=ref):
-                env = dict(self.GOOD, CCGG_REF=ref)
-                warnings = validate.ccgg_env_warnings(env, origins=[env["CCGG_REPO"]])
-                self.assertTrue(any("CCGG_REF" in w for w in warnings), f"{ref}: {warnings}")
-
     def test_commit_ref_with_a_record_is_silent(self):
         self.assertEqual(validate.ccgg_env_warnings(self.GOOD, origins=[self.GOOD["CCGG_REPO"]]), [])
 
-    def test_missing_origin_record_warns(self):
-        warnings = validate.ccgg_env_warnings(self.GOOD, origins=None)
+    def test_an_empty_record_still_only_cautions(self):
+        """It refuses every sync rather than allowing the wrong one, so it is safe
+        by itself — the failure comes from ccgg_env_problems, which lists it."""
+        warnings = validate.ccgg_env_warnings(self.GOOD, origins=[])
         self.assertTrue(any("ccgg-origins" in w for w in warnings), warnings)
+
+    def test_the_two_promoted_cautions_no_longer_only_caution(self):
+        """R-003 and S-005: both decide whose code runs at every session start."""
+        self.assertEqual(validate.ccgg_env_warnings(self.GOOD, origins=None), [])
+        movable = dict(self.GOOD, CCGG_REF="main")
+        self.assertEqual(validate.ccgg_env_warnings(movable, origins=[self.GOOD["CCGG_REPO"]]), [])
 
     def test_no_repo_configured_warns_about_nothing(self):
         self.assertEqual(validate.ccgg_env_warnings({}, origins=None), [])
@@ -1072,6 +1110,93 @@ class HiddenCharacterParityTests(unittest.TestCase):
                 self.assertEqual(facts.hidden_characters(text), [])
 
 
+class GuardAllowListTests(unittest.TestCase):
+    """S-001/S-004: the guard names the scripts it allows, so the tree must match."""
+
+    def test_the_shipped_lists_match_the_tree(self):
+        del validate.findings[:]
+        try:
+            validate.check_guard_allow_lists()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_script_the_guard_does_not_name_is_reported(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py"}, "SH_SCRIPTS": {"install.sh"}},
+            py_tree={"validate.py", "test_new.py"}, sh_tree={"install.sh"})
+        self.assertTrue(any("test_new.py" in p for p in problems), problems)
+
+    def test_a_name_the_guard_allows_that_is_not_in_the_tree_is_reported(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py", "gone.py"}, "SH_SCRIPTS": {"install.sh"}},
+            py_tree={"validate.py"}, sh_tree={"install.sh"})
+        self.assertTrue(any("gone.py" in p for p in problems), problems)
+
+    def test_shell_scripts_are_held_to_the_same_rule(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": set(), "SH_SCRIPTS": {"install.sh"}},
+            py_tree=set(), sh_tree={"install.sh", "deploy.sh"})
+        self.assertTrue(any("deploy.sh" in p for p in problems), problems)
+
+    def test_an_installed_project_is_not_asked_to_trim_the_list(self):
+        """It gets the guard and validate.py but not tools/test_*.py or install.sh."""
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py", "test_validate.py"}, "SH_SCRIPTS": {"install.sh"}},
+            py_tree={"validate.py"}, sh_tree=set(), authored_here=False)
+        self.assertEqual(problems, [])
+
+    def test_an_unnamed_script_is_still_reported_in_an_installed_project(self):
+        problems = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"validate.py"}, "SH_SCRIPTS": set()},
+            py_tree={"validate.py", "surprise.py"}, sh_tree=set(), authored_here=False)
+        self.assertTrue(any("surprise.py" in p for p in problems), problems)
+
+    def test_matching_lists_pass(self):
+        self.assertEqual(validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": {"a.py"}, "SH_SCRIPTS": {"b.sh"}},
+            py_tree={"a.py"}, sh_tree={"b.sh"}), [])
+
+    def test_the_lists_are_read_from_the_guard_itself(self):
+        lists = validate.guard_allow_lists()
+        self.assertIn("validate.py", lists["PY_SCRIPTS"])
+        self.assertIn("install.sh", lists["SH_SCRIPTS"])
+        self.assertNotIn("test_pwn.py", lists["PY_SCRIPTS"])
+
+
+class GuardCanaryWiringTests(unittest.TestCase):
+    """R-008: a run stops measuring the guard the moment the canary leaves the brief."""
+
+    def test_the_shipped_brief_carries_the_canary(self):
+        del validate.findings[:]
+        try:
+            validate.check_guard_canary()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_brief_without_the_canary_is_reported(self):
+        problems = validate.guard_canary_problems(
+            ".claude/agents/audit-verifier.md",
+            "---\nname: audit-verifier\n---\n\nVerify things. No canary here.\n")
+        self.assertTrue(problems)
+        self.assertIn("canary", problems[0].lower())
+
+    def test_a_brief_that_names_a_different_command_is_reported(self):
+        text = "GUARD-CANARY: refused\n\n```\nls -la\n```\n"
+        problems = validate.guard_canary_problems(".claude/agents/audit-verifier.md", text)
+        self.assertTrue(any(validate.GUARD_CANARY in p for p in problems), problems)
+
+    def test_the_canary_matches_the_renderers(self):
+        sys.path.insert(0, os.path.dirname(validate.__file__))
+        import audit_report
+        self.assertEqual(validate.GUARD_CANARY, audit_report.GUARD_CANARY)
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.guard_canary_problems("x", None)
+
+
 class AutomaticRunnerTests(unittest.TestCase):
     """T-008/T-009: detectors and tests that ran only when somebody remembered."""
 
@@ -1534,6 +1659,276 @@ class GateIntegrationTests(unittest.TestCase):
         os.remove(os.path.join(self.repo, ".claude/hooks/pre-compact.sh"))
         proc = self.run_gate()
         self.assertIn("pre-compact.sh, which is not a tracked file", proc.stdout)
+
+
+class PinnedGrantRescueTests(unittest.TestCase):
+    """S-007: a grant that pre-approves a path is a promise about whose copy runs."""
+
+    def test_the_shipped_workflow_rescues_every_grant_target(self):
+        del validate.findings[:]
+        try:
+            validate.check_pinned_grants_are_rescued()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_grant_targets_are_read_from_the_launcher(self):
+        with open(os.path.join(validate.ROOT, validate.HEADLESS_PATH), encoding="utf-8") as fh:
+            scripts = validate.pinned_grant_scripts(fh.read())
+        self.assertEqual(scripts, ["tools/audit_facts.py", "tools/audit_probes.py",
+                                   "tools/audit_redteam.py", "tools/audit_report.py"])
+
+    def test_non_bash_grants_name_no_script(self):
+        text = 'PINNED_GRANTS = ("Read", "Glob", "Write(CCGG-AUDIT-*/**)")\n'
+        self.assertEqual(validate.pinned_grant_scripts(text), [])
+
+    def test_a_grant_target_outside_the_rescue_list_is_reported(self):
+        problems = validate.pinned_grant_rescue_problems(
+            ["tools/audit_report.py"], {"tools/audit_headless.py"})
+        self.assertTrue(any("tools/audit_report.py" in p for p in problems), problems)
+
+    def test_a_rescued_target_passes(self):
+        self.assertEqual(validate.pinned_grant_rescue_problems(
+            ["tools/audit_report.py"], {"tools/audit_report.py"}), [])
+
+    def test_what_a_grant_target_imports_is_rescued_too(self):
+        """audit_facts.py imports audit_env.py; rescuing only the first leaves the gap."""
+        problems = validate.pinned_grant_rescue_problems(
+            ["tools/audit_facts.py"], {"tools/audit_facts.py"})
+        self.assertTrue(any("tools/audit_env.py" in p for p in problems), problems)
+
+    def test_the_rescue_list_is_read_from_the_workflow(self):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            rescued = validate.rescued_paths(fh.read())
+        self.assertIn("tools/audit_headless.py", rescued)
+        self.assertIn("tools/audit_report.py", rescued)
+        self.assertIn(".claude/hooks/audit-verifier-guard.sh", rescued)
+
+    def test_an_unreadable_pin_fails_rather_than_passing_quietly(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "pinned_grant_scripts", return_value=[]):
+                validate.check_pinned_grants_are_rescued()
+            self.assertTrue(any("stopped being readable" in f for f in validate.findings),
+                            list(validate.findings))
+        finally:
+            del validate.findings[:]
+
+
+
+class AuditWorkflowTrustAnchorTests(unittest.TestCase):
+    """S-008: the trusted set is read from a base a pull request chooses itself."""
+
+    def setUp(self):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            self.text = fh.read()
+
+    def test_the_shipped_workflow_pins_both_anchors(self):
+        self.assertEqual(validate.audit_workflow_problems(self.text), [])
+
+    def test_the_condition_is_read_whole_across_its_folded_lines(self):
+        condition = validate.job_condition(self.text, "deterministic")
+        self.assertIn("workflow_dispatch", condition)
+        self.assertIn(validate.BASE_REF_PIN, condition)
+        self.assertIn(validate.HEAD_REPO_PIN, condition)
+
+    def test_dropping_the_base_ref_pin_is_reported(self):
+        problems = validate.audit_workflow_problems(self.text.replace(validate.BASE_REF_PIN, "true"))
+        self.assertTrue(any("not the pinned one" in p for p in problems), problems)
+
+    def test_dropping_the_fork_pin_is_reported(self):
+        problems = validate.audit_workflow_problems(self.text.replace(validate.HEAD_REPO_PIN, "true"))
+        self.assertTrue(any("not the pinned one" in p for p in problems), problems)
+
+    # Review of #75: `pin in condition` was a substring test.
+    def test_or_ing_the_pin_in_is_reported(self):
+        mutated = self.text.replace("github.repository &&\n       github.base_ref",
+                                    "github.repository ||\n       github.base_ref")
+        self.assertNotEqual(mutated, self.text)
+        self.assertTrue(validate.audit_workflow_problems(mutated))
+
+    def test_negating_the_pin_is_reported(self):
+        mutated = self.text.replace(validate.BASE_REF_PIN, "!(" + validate.BASE_REF_PIN + ")")
+        self.assertTrue(validate.audit_workflow_problems(mutated))
+
+    def test_a_pin_inside_a_yaml_comment_is_not_a_pin(self):
+        text = f"jobs:\n  deterministic:\n    if: true # {validate.BASE_REF_PIN} {validate.HEAD_REPO_PIN}\n    runs-on: x\n"
+        self.assertEqual(validate.job_condition(text, "deterministic"), "true")
+        self.assertTrue(validate.audit_workflow_problems(text))
+
+    def test_a_step_level_if_is_not_the_jobs(self):
+        text = ("jobs:\n  deterministic:\n    runs-on: x\n    steps:\n      - name: a\n"
+                f"        if: {validate.AUDIT_JOB_CONDITION}\n        run: true\n")
+        self.assertEqual(validate.job_condition(text, "deterministic"), "")
+        self.assertTrue(any("no job-level" in p for p in validate.audit_workflow_problems(text)))
+
+    def test_a_single_line_pinned_condition_passes(self):
+        text = f"jobs:\n  deterministic:\n    if: {validate.AUDIT_JOB_CONDITION}\n    runs-on: x\n"
+        self.assertEqual(validate.audit_workflow_problems(text), [])
+
+    def test_a_job_with_no_condition_at_all_is_reported(self):
+        text = "jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n    steps: []\n"
+        problems = validate.audit_workflow_problems(text)
+        self.assertTrue(any("no job-level" in p for p in problems), problems)
+
+    def test_a_following_job_does_not_supply_the_condition(self):
+        """The reader must stop at the next job, or every job lends its `if:` to the
+        one before it and a job with none would read as pinned."""
+        text = ("jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n"
+                f"  model:\n    if: {validate.BASE_REF_PIN} && {validate.HEAD_REPO_PIN}\n")
+        self.assertEqual(validate.job_condition(text, "deterministic"), "")
+        self.assertTrue(any("no job-level" in p for p in validate.audit_workflow_problems(text)))
+
+    def test_an_unknown_job_has_no_condition(self):
+        self.assertEqual(validate.job_condition(self.text, "nonesuch"), "")
+
+
+class AlwaysLoadedAreImportedTests(unittest.TestCase):
+    """R-006: the budget check assumed these load; the import graph decided it."""
+
+    def test_every_always_loaded_file_is_reachable_today(self):
+        del validate.findings[:]
+        try:
+            validate.check_always_loaded_are_imported()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_charter_is_in_the_closure(self):
+        self.assertIn("WORKING-CHARTER.md", validate.imported_closure())
+
+    def test_the_closure_follows_imports_transitively_and_survives_a_cycle(self):
+        """Review of #75: the shipped tree has no two-hop chain and no cycle, so
+        this runs on a fixture that has both."""
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "rules"))
+            files = {"CLAUDE.md": "@AGENTS.md\n", "AGENTS.md": "@rules/mid.md\n",
+                     "rules/mid.md": "@deep.md\n@../CLAUDE.md\n", "rules/deep.md": "leaf\n",
+                     "orphan.md": "@AGENTS.md\n"}
+            for name, text in files.items():
+                with open(os.path.join(tmp, name), "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            closure = validate.imported_closure(tmp)
+        self.assertEqual(closure, {"CLAUDE.md", "AGENTS.md", "rules/mid.md", "rules/deep.md"})
+
+    def test_dropping_the_import_is_reported(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "imported_closure",
+                                   return_value={"CLAUDE.md", "AGENTS.md"}):
+                validate.check_always_loaded_are_imported()
+            self.assertTrue(any("WORKING-CHARTER.md" in f for f in validate.findings),
+                            list(validate.findings))
+        finally:
+            del validate.findings[:]
+
+
+class HookHeaderTests(unittest.TestCase):
+    """H-001: a hook on a debug-log-only event may not claim to tell the model anything."""
+
+    REACHING = ["SessionStart", "UserPromptSubmit"]
+
+    def test_the_shipped_hooks_pass(self):
+        del validate.findings[:]
+        try:
+            validate.check_hook_headers()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_pre_fix_session_end_header_is_reported(self):
+        text = "#!/usr/bin/env bash\n# Hook: session-end\n# This hook reminds the AI to flush memory at session end.\necho x >> log\n"
+        problems = validate.hook_header_problems("session-end.sh", ["SessionEnd"], text, self.REACHING)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("SessionEnd", problems[0])
+
+    def test_the_same_claim_on_a_reaching_event_is_fine(self):
+        text = "#!/usr/bin/env bash\n# reminds the AI to run /flush\necho '-- flush --'\n"
+        self.assertEqual(validate.hook_header_problems("session-start.sh", ["SessionStart"], text, self.REACHING), [])
+
+    def test_a_claim_in_the_body_not_the_header_is_not_read(self):
+        text = "#!/usr/bin/env bash\n# writes a marker\nx=1\n# reminds the AI later\n"
+        self.assertEqual(validate.hook_header_problems("h.sh", ["SessionEnd"], text, self.REACHING), [])
+
+    def test_registered_events_are_read_from_settings(self):
+        settings = {"hooks": {"SessionEnd": [{"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-end.sh"}]}],
+                              "SessionStart": [{"hooks": [{"type": "command", "command": ".claude/hooks/session-start.sh"}]}]}}
+        self.assertEqual(validate.registered_hook_events(settings),
+                         {"session-end.sh": ["SessionEnd"], "session-start.sh": ["SessionStart"]})
+
+
+class CurrencyRuleHomeTests(unittest.TestCase):
+    """C-001: the rule's item list lives in the charter; everywhere else points there."""
+
+    def test_the_shipped_files_pass(self):
+        del validate.findings[:]
+        try:
+            validate.check_currency_rule_home()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_pre_fix_agents_line_is_reported(self):
+        text = '- Answer "what exists now" from memory — versions, prices, APIs, model names get searched first.\n'
+        self.assertTrue(validate.currency_restatements("AGENTS.md", text))
+
+    def test_the_pre_fix_reference_line_is_reported(self):
+        text = "Versions, prices, API shapes, model names, part numbers — searched, never recalled.\n"
+        self.assertTrue(validate.currency_restatements(".claude/references/tool-choice.md", text))
+
+    def test_a_pointer_without_a_list_passes(self):
+        text = '- Answer "what exists now" from memory — see the charter\'s Currency check.\n'
+        self.assertEqual(validate.currency_restatements("AGENTS.md", text), [])
+
+    def test_the_charter_is_the_home_and_is_exempt(self):
+        text = "versions, prices, APIs, part numbers, model names — never answer what exists now from memory"
+        self.assertEqual(validate.currency_restatements("WORKING-CHARTER.md", text), [])
+
+
+class GateScriptTests(unittest.TestCase):
+    """S-009: the audit workflow's Gate must fail when a required stage did not run.
+
+    The real step script is extracted from audit.yml and run under bash with the
+    environment the workflow would give it, so what is tested is what CI runs.
+    """
+
+    BASE = {"BLOCKERS": "0", "COMPLETE": "true", "FINDINGS": "3", "STAGES_MISSING": "",
+            "DRY_RUN": "false", "PROBE": "false", "AUTHENTICATED": "true", "MODEL_RESULT": "success"}
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            cls.script = validate.step_script(fh.read(), "Gate")
+        assert cls.script, "no Gate step script found"
+
+    def run_gate(self, **overrides):
+        env = {**os.environ, **self.BASE, **overrides}
+        with tempfile.TemporaryDirectory() as tmp:
+            env["GITHUB_STEP_SUMMARY"] = os.path.join(tmp, "summary.md")
+            proc = subprocess.run(["bash", "-c", self.script], env=env, capture_output=True, text=True)
+            summary = open(env["GITHUB_STEP_SUMMARY"]).read() if os.path.exists(env["GITHUB_STEP_SUMMARY"]) else ""
+        return proc.returncode, proc.stdout + summary
+
+    def test_a_complete_run_with_no_blockers_passes(self):
+        rc, _ = self.run_gate()
+        self.assertEqual(rc, 0)
+
+    def test_a_missing_required_stage_fails(self):
+        rc, out = self.run_gate(STAGES_MISSING="redteam")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("measured nothing", out)
+
+    def test_a_dry_run_with_missing_stages_is_judged_as_a_dry_run(self):
+        rc, _ = self.run_gate(STAGES_MISSING="probes,redteam", COMPLETE="false", DRY_RUN="true")
+        self.assertEqual(rc, 0)
+
+    def test_an_incomplete_run_still_fails(self):
+        rc, _ = self.run_gate(COMPLETE="false")
+        self.assertEqual(rc, 1)
+
+    def test_a_blocker_still_fails(self):
+        rc, _ = self.run_gate(BLOCKERS="2")
+        self.assertEqual(rc, 1)
 
 
 if __name__ == "__main__":

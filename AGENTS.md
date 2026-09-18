@@ -142,7 +142,7 @@ Run `/skillify` after completing a new workflow to capture it as a reusable skil
 - Leave TODO comments without creating a tracked issue.
 - Merge code that fails its own tests.
 - Return from a task without verifying the change works.
-- Answer "what exists now" from memory — versions, prices, APIs, model names get searched first.
+- Answer "what exists now" from memory — the charter's *Currency* check ([`WORKING-CHARTER.md`](WORKING-CHARTER.md), *How I think*) lists what gets searched first.
 
 ### Escalate instead of proceeding
 - "Stop" from the owner is absolute: it immediately halts every automatic behavior — steward commits and pushes, deploys, PR watching, scheduled follow-ups — no argument, nothing finished beyond what safety requires.

@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Hook: session-end
 # Triggered: at the end of every session
-# Purpose: Ensure knowledge is persisted before the session closes
+# Purpose: record that the session ended, for the next session to read
 
-# This hook reminds the AI to flush memory at session end.
-# It writes a marker that the AI can read at next session start.
+# This hook prints nothing for the model, and could not: SessionEnd stdout goes
+# to the debug log, never to the context (tools/audit_vocab.json,
+# hook_stdout_reaches_model). What it does is write a timestamped marker;
+# session-start.sh reads that file back and surfaces the timestamp only — never
+# the sentence after it, which is for a human reading the log. A reminder the
+# model should see belongs in session-start.sh as a fixed string (finding H-001).
 
 SESSION_DIR="${HOME}/.claude/sessions"
 MEMORY_DIR="${HOME}/.claude/memory"

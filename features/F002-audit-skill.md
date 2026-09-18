@@ -30,10 +30,12 @@ nothing runs them.
 A repository owner learns what their gate cannot see, in one command, without the audit
 being able to change anything.
 
-- Metric: validator mutation-probe catch rate on this repository, from the research
+- Metric: mutation-probe catch rate on this repository, from the research
   run's baseline of 10 caught out of 21 planted defects to no probe listed `caught`
-  being missed, measured by the probe harness the audit ships and runs in CI. The list
-  is 62 probes today and grows with every check that lands; the target is the rule the
+  being missed, measured by the probe harness the audit ships and runs in CI. Each
+  probe names the gate that must catch it — the validator by default, the verifier
+  guard's unit table for a defect the validator cannot see. The list
+  is 99 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`
@@ -222,16 +224,30 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `anthropics/claude-code-action`: `--agents` takes only literal JSON, which an argv
   element carries cleanly and a YAML argument string does not — [in]
 - 2026-09-16 — The audit workflow is invoked, never automatic: manual dispatch, or the
-  `audit` label on a pull request, and never on a fork, where GitHub withholds the
-  secret the run needs — [in]
+  `audit` label on a pull request against the default branch, and never on a fork
+  or against any other base, where a pull request could choose its own trust anchor
+  and GitHub withholds the secret the run needs — [in]
 - 2026-09-16 — Whether the headless run honours `isolation: worktree` on an inline agent
   is undocumented; the first authenticated CI run that spawns a specialist is the check,
   and the fallback the architecture record names (one `claude -p` per specialist) still
   stands — [open]
 - 2026-09-16 — Whether a `hooks` block inside an inline `--agents` definition fires is
   also unproven, and it is the verifier's guard: until a run shows the guard refusing a
-  command, treat headless verification as unguarded — [in] (answered 2026-09-17: it
-  fires, and the refusal named the trusted guard's own path)
+  command, treat headless verification as unguarded — [open]
+- 2026-09-17 — Answered, in the negative and wider than the question asked. A run
+  measured it from inside an interactive verifier: the guard script refuses `uname -a`
+  with exit 2 when piped the hook input directly, and the same command issued as a Bash
+  tool call ran, as did `python3 -c` — the form the guard refuses by name. So the gap is
+  not specific to the inline `--agents` path; it was observed on the ordinary one. On the
+  inline path a headless probe the same day measured the hook firing — a redirect refused,
+  naming the trusted guard's own path — so the two runs disagree by dispatch path, not
+  about the guard's rules. The
+  product documents a frontmatter `hooks` block as firing for the subagent that declares
+  it, so this is a wiring gap in the dispatch path, not a wrong design. Consequence: the
+  guard is no longer claimed anywhere as a boundary that holds. Every run records the
+  canary in `guard.json`, the report banners a run whose guard did not fire, and what
+  bounds the verifier meanwhile is worktree isolation, the removed write tools, and the
+  orchestrator's task-message constraints (finding R-008) — [in]
 - 2026-09-16 — The first audit run that reached a model spawned no subagent and reported
   no `Agent` tool, after 42 turns and 1.38 USD. Read against the installed CLI (2.1.273)
   rather than a summary: `--bare` skips "hooks, LSP, plugin sync, attribution,

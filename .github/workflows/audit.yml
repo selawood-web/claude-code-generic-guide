@@ -3,8 +3,8 @@ name: audit
 # The headless half of /ccgg-audit (F002 slice 3). An audit is invoked, never
 # automatic: the skill carries `disable-model-invocation: true` for the same
 # reason this workflow does not run on every push. Start it by hand, or put the
-# `audit` label on a pull request. A labelled pull request re-audits on each
-# push to it, each run capped by its own budget.
+# `audit` label on a pull request that targets the default branch. A labelled
+# pull request re-audits on each push to it, each run capped by its own budget.
 on:
   workflow_dispatch:
     inputs:
@@ -68,12 +68,21 @@ concurrency:
 jobs:
   # 1. The audited tree's own code runs here, where there is nothing to steal.
   deterministic:
-    # A labeled pull request, or a manual run. Never a fork: GitHub withholds
-    # secrets from fork pull requests, so the run could only fail at auth.
+    # A labeled pull request against the default branch, or a manual run. Never a
+    # fork: GitHub withholds secrets from fork pull requests, so the run could
+    # only fail at auth.
+    #
+    # base_ref is pinned because the whole trusted set below is read from
+    # pull_request.base.sha, and a pull request chooses its own base. Without
+    # this, a labeled same-repo PR could target a branch it authored, and the
+    # guard, skill, agent briefs and launcher "rescued from the base branch the
+    # maintainers own" would be rescued from the attacker's (finding S-008).
+    # Gating this job gates the run: `model` and `report` both need it.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (contains(github.event.pull_request.labels.*.name, 'audit') &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.base_ref == github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -195,15 +204,16 @@ jobs:
             echo "No ANTHROPIC_API_KEY — the deterministic stage ran and the model run is skipped." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Everything that TELLS this run what to do must come from the base branch the
-      # maintainers own, never from the tree under audit. Four things qualify, and
-      # the guard was only the first of them:
+      # Everything that TELLS this run what to do, or that it may RUN without a
+      # prompt, must come from the base branch the maintainers own, never from the
+      # tree under audit. The guard was only the first of them:
       #   the verifier's guard hook  — or a pull request ships a guard permitting all
       #   the audit skill           — its body becomes the orchestrator's system prompt
       #   the audit agent briefs    — each body becomes a subagent's system prompt
       #   the launcher itself       — it holds the pinned grant set and does this rescue
+      #   the pinned grants' targets — the four audit_*.py the run may execute unasked
       # The head checkout is still what gets audited; it just no longer gets a say in
-      # how. audit_agents_json.py comes along because audit_headless.py imports it.
+      # how. audit_agents_json.py and audit_env.py come along as imports.
       - name: Trusted copies of the files that configure the run
         id: trusted
         env:
@@ -234,6 +244,16 @@ jobs:
           fetch ".claude/skills/ccgg-audit/SKILL.md"
           fetch "tools/audit_headless.py"
           fetch "tools/audit_agents_json.py"
+          # The launcher's pinned grants pre-approve these four by name, and the run's
+          # cwd is the audited head — so without a trusted copy the head supplies the
+          # code those grants allow to run unprompted. audit_env.py comes along because
+          # three of them import it. tools/validate.py keeps this list and PINNED_GRANTS
+          # in step (finding S-007).
+          fetch "tools/audit_facts.py"
+          fetch "tools/audit_probes.py"
+          fetch "tools/audit_redteam.py"
+          fetch "tools/audit_report.py"
+          fetch "tools/audit_env.py"
 
           # The agent list itself comes from the base ref when there is one, so a
           # pull request cannot add a specialist or drop the verifier.
@@ -585,12 +605,15 @@ jobs:
           MODEL_RESULT: ${{ needs.model.result }}
         run: |
           set -euo pipefail
-          # A deterministic stage that did not run measured nothing. It does not
-          # by itself mean nothing was audited, so it warns rather than fails —
-          # but it must never pass in silence (finding S-011).
-          if [ -n "${STAGES_MISSING:-}" ]; then
+          # A deterministic stage the scope required did not run: that part of the
+          # audit measured nothing. It used to warn and fall through (finding
+          # S-011 made it visible; S-009 makes it count), so a crashed catch-rate
+          # measurement ended green. A dry run or tool probe asked for no audit
+          # and is judged below on its own terms.
+          if [ -n "${STAGES_MISSING:-}" ] && [ "$DRY_RUN" != "true" ] && [ "$PROBE" != "true" ]; then
             echo "Deterministic stage incomplete: $STAGES_MISSING did not run. That part of the audit measured nothing."
-            echo "⚠ Deterministic stage incomplete: $STAGES_MISSING did not run — that part measured nothing." >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠ Deterministic stage incomplete: $STAGES_MISSING did not run — that part measured nothing, so this run is not a clean bill." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           if [ "$COMPLETE" != "true" ]; then
             if [ "$DRY_RUN" = "true" ]; then

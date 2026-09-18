@@ -19,6 +19,13 @@
 # Not registered in settings.json on purpose: this guard is scoped to one
 # subagent. The audit's deterministic stage knows that and does not flag it.
 # The table of allowed forms is tested by tools/test_verifier_guard.py.
+#
+# What that table proves is this program's verdicts, not that anything consults
+# them. A 2026-09-17 run measured the wiring from inside a live verifier and the
+# hook did not fire: the commands below were refused here, with exit 2, and ran
+# as Bash tool calls (finding R-008). Every audit run now starts its verifiers
+# with a canary and records the answer; until it comes back refused, treat this
+# file as a description of an intended boundary rather than an enforced one.
 set -uo pipefail
 
 if ! command -v python3 >/dev/null 2>&1; then
@@ -65,6 +72,19 @@ GIT_READ = {
     "var", "count-objects", "verify-commit", "verify-tag", "merge-base", "whatchanged",
     "reflog", "fsck", "version", "help",
 }
+# git's options before the subcommand, named rather than skipped. A deny-list here
+# would have to spell every option that names a program — `-c diff.external=`,
+# `-c core.pager=`, `-c core.sshCommand=`, `--config-env=`, `--exec-path=` — and then
+# keep pace with every git release. The environment spellings of that same
+# capability (GIT_EXTERNAL_DIFF, PAGER) were already refused by the environment
+# prefix rule; `-c` was the unlocked door to the same room (finding S-003).
+# `-C` is handled separately: it takes a path, and that path may not leave the tree.
+GIT_GLOBAL_FLAGS = frozenset((
+    "-v", "--version", "-P", "--no-pager", "--no-replace-objects",
+    "--no-optional-locks", "--no-lazy-fetch", "--no-advice",
+    "--literal-pathspecs", "--glob-pathspecs", "--noglob-pathspecs",
+    "--icase-pathspecs",
+))
 GIT_LISTING = {"branch": {"--list", "-a", "-r", "-v", "-vv", "--show-current", "--contains",
                           "--merged", "--no-merged", "-l"},
                "tag": {"--list", "-l", "-n", "--contains", "--points-at"},
@@ -83,9 +103,23 @@ PY_MODULES = {"unittest", "json.tool", "doctest", "py_compile", "tokenize"}
 # code", which on an audited branch means any .py file the branch carries
 # (finding R-012). The verifier reproduces with the gate's own tooling; that is
 # what these name.
+# By name, never by prefix: `tools/test_*.py` matched anything a branch chose to
+# call test_something, which is the capability PY_SCRIPT_NAMES existed to remove
+# (finding S-004). check_guard_allow_lists in tools/validate.py keeps this equal
+# to the tree, so adding a script to the gate is a visible change to this list.
 PY_SCRIPT_DIRS = frozenset(("", "tools"))
-PY_SCRIPT_NAMES = frozenset(("validate.py", "feature_lint.py", "catalog.py"))
-PY_SCRIPT_PREFIXES = ("audit_", "test_")
+PY_SCRIPTS = frozenset((
+    "audit_agents_json.py", "audit_env.py", "audit_facts.py", "audit_headless.py",
+    "audit_pr_comment.py", "audit_probes.py", "audit_redteam.py", "audit_report.py",
+    "catalog.py", "feature_lint.py", "validate.py",
+    "test_audit_agents_json.py", "test_audit_env.py", "test_audit_facts.py",
+    "test_audit_headless.py", "test_audit_pr_comment.py", "test_audit_probes.py",
+    "test_audit_redteam.py", "test_audit_report.py", "test_feature_lint.py",
+    "test_install.py", "test_session_start_hook.py", "test_validate.py",
+    "test_verifier_guard.py",
+))
+PY_TEST_MODULES = frozenset(n[:-3] for n in PY_SCRIPTS if n.startswith("test_"))
+UNITTEST_DISCOVER_DIRS = frozenset(("tools",))
 # python's option letters cluster and may carry their value attached, so `-c`,
 # `-Sc`, `-cCODE` and `-IBc CODE` are all the code flag (finding S-002). The
 # letters are split and classified rather than matched as whole tokens.
@@ -95,6 +129,26 @@ PY_LONG_FLAGS = {"--help", "--help-env", "--help-xoptions", "--help-all", "--ver
 PY_LONG_VALUE_FLAGS = {"--check-hash-based-pycs"}
 NODE_CODE_FLAGS = frozenset("epi")                # -e, -p, -i and their clusters
 NODE_CODE_LONG = {"--eval", "--print", "--interactive"}
+# A `VAR=value cmd` prefix used to be popped without reading the name, so a
+# variable that names a program to run — LD_PRELOAD, LESSOPEN, GIT_EXTERNAL_DIFF,
+# PAGER, PYTHONSTARTUP — passed behind an allow-listed program (finding S-002).
+# These are the names a reproduction in this repository actually needs.
+ENV_PREFIX_ALLOWED = frozenset((
+    "CCGG_HOME", "CCGG_REPO", "CCGG_REF", "CLAUDE_PROJECT_DIR",
+    "LANG", "LC_ALL", "TZ", "NO_COLOR", "GIT_CONFIG_NOSYSTEM", "PYTHONHASHSEED",
+))
+# The repository's own shell scripts, by name. check_shell used to return on the
+# first non-flag argument, so `bash <anything>.sh` — including an absolute path —
+# ran whatever the audited branch carried (finding S-001). Kept in step with the
+# tree by check_guard_allow_lists in tools/validate.py.
+SH_SCRIPTS = frozenset((
+    ".claude/hooks/audit-verifier-guard.sh",
+    ".claude/hooks/pre-compact.sh",
+    ".claude/hooks/session-end.sh",
+    ".claude/hooks/session-start.sh",
+    "install.sh",
+    "update.sh",
+))
 _ADDR = r"(?:\d+|\$|/(?:[^/\\]|\\.)*/)?(?:,(?:\d+|\$|/(?:[^/\\]|\\.)*/))?"
 SED_WRITE_RE = re.compile(r"(?:^|[;\n{])\s*" + _ADDR + r"\s*[wWe]\b")
 SED_SUBST_WRITE_RE = re.compile(
@@ -198,10 +252,39 @@ def check_py_script(path):
     directory, _, name = norm.rpartition("/")
     if directory not in PY_SCRIPT_DIRS:
         refuse("python script outside tools/")
-    if name.endswith(".py") and (name in PY_SCRIPT_NAMES
-                                 or name.startswith(PY_SCRIPT_PREFIXES)):
+    if name in PY_SCRIPTS:
         return
     refuse(f"{name} is not one of the gate's own scripts")
+
+
+def check_sh_script(path):
+    """Allow the repository's own shell scripts, and nothing else (finding S-001)."""
+    norm = posixpath.normpath(path)
+    if posixpath.isabs(norm) or norm == ".." or norm.startswith("../"):
+        refuse("shell script outside the worktree")
+    if norm in SH_SCRIPTS:
+        return
+    refuse(f"{norm} is not one of the repository's own shell scripts")
+
+
+def check_py_module(module, rest):
+    """`-m unittest` may discover only in the gate's own directory, or name a pinned
+    test module; `-m doctest` takes a file, so it goes through the script rule."""
+    if module == "unittest":
+        target = next((a for a in rest if not a.startswith("-")), "")
+        if target == "discover":
+            where = rest[rest.index("-s") + 1] if "-s" in rest[:-1] else "tools"
+            if posixpath.normpath(where) not in UNITTEST_DISCOVER_DIRS:
+                refuse(f"unittest discover outside {'/'.join(sorted(UNITTEST_DISCOVER_DIRS))}/")
+            return
+        if target and target.split(".")[0] not in PY_TEST_MODULES:
+            refuse(f"unittest target '{target}' is not one of the gate's own test modules")
+        return
+    if module == "doctest":
+        target = next((a for a in rest if not a.startswith("-")), "")
+        if target:
+            check_py_script(target)
+        return
 
 
 def check_python(args):
@@ -239,9 +322,10 @@ def check_python(args):
                 if letter == "c":
                     refuse("python code on the command line")
                 if letter == "m":
+                    attached = bool(rest)
                     module = rest or (args[i + 1] if i + 1 < len(args) else "")
                     if module in PY_MODULES:
-                        return
+                        return check_py_module(module, args[i + (1 if attached else 2):])
                     refuse("python -m with a module outside the allow-list")
                 if letter in PY_SKIP_FLAGS:
                     i += 1 if rest else 2
@@ -269,7 +353,7 @@ def check_shell(args):
         if a.startswith("-"):
             i += 1
             continue
-        return  # a script path
+        return check_sh_script(a)
     refuse("shell with no script")
 
 
@@ -277,14 +361,21 @@ def check_git(args):
     i = 0
     while i < len(args):
         a = args[i]
-        if a in ("-C", "-c"):
+        if a == "-C":
+            # git takes -C's path as its own token; an attached -Cpath is git's own
+            # error, not a spelling to cover here. The path may not leave the
+            # worktree, or "git pointed at another repository" is a claim the
+            # shorter option walks straight past.
+            path = args[i + 1] if i + 1 < len(args) else ""
+            if not path or path.startswith("-") or path.startswith("/") or ".." in path.split("/"):
+                refuse("git -C pointed outside the worktree")
             i += 2
             continue
-        if a.startswith("--git-dir") or a.startswith("--work-tree"):
-            refuse("git pointed at another repository")
-        if a.startswith("-"):
+        if a in GIT_GLOBAL_FLAGS:
             i += 1
             continue
+        if a.startswith("-"):
+            refuse(f"git global option {a}")
         break
     if i >= len(args):
         refuse("git with no subcommand")
@@ -373,12 +464,22 @@ def check_node(args):
 
 def check_segment(seg):
     seg = strip_redirects(seg)
+    assigned = []
     while seg and (seg[0] in KEYWORDS or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", seg[0], re.S)):
         head = seg.pop(0)
         if head in ("for", "select", "case"):
             return  # the words of a for-list are data, not a command; case bodies follow
+        name, sep, _ = head.partition("=")
+        if sep:
+            assigned.append(name)
     if not seg:
-        return
+        return  # `x=$(...)` on its own is a shell variable, not an environment prefix
+    # A name only matters once a command follows it: `VAR=value cmd` puts VAR in that
+    # command's environment, and a variable can name a program to run (finding S-002).
+    for name in assigned:
+        if name not in ENV_PREFIX_ALLOWED:
+            refuse(f"{name}= before a command is not an assignment the verifier may set — "
+                   f"a variable can name a program for that command to run")
     prog = seg[0].rsplit("/", 1)[-1]
     args = seg[1:]
     if prog in ("timeout", "nice", "nohup", "command", "builtin", "exec"):

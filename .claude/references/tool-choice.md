@@ -43,9 +43,10 @@ When it is not close, decide, state the choice in one line, and keep moving.
 blog posts, or anywhere outside the ecosystem's own registry. This is a standing
 constraint, not a judgment call, and no amount of "it looks fine" overrides it.
 
-**The web is for facts that change.** Versions, prices, API shapes, model names,
-part numbers — searched, never recalled. A library whose behaviour I already know
-does not need a search; a library's *current version* does.
+**The web is for facts that change.** What counts as changing is the charter's
+*Currency* check (WORKING-CHARTER.md, *How I think*) — that list has one home. A
+library whose behaviour I already know does not need a search; a library's
+*current version* does.
 
 ---
 

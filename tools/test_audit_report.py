@@ -246,6 +246,60 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class GuardCanaryTests(unittest.TestCase):
+    """R-008: the verifier's guard was assumed to fire. A run must measure it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+        self.addCleanup(self.tmp.cleanup)
+
+    def write(self, **fields):
+        with open(os.path.join(self.dir, "guard.json"), "w", encoding="utf-8") as fh:
+            json.dump(fields, fh)
+
+    def test_no_canary_recorded_reads_as_unproven(self):
+        state = audit_report.guard_state(self.dir)
+        self.assertIsNone(state["refused"])
+        self.assertFalse(state["proven"])
+
+    def test_a_refused_canary_is_the_only_thing_that_proves_it(self):
+        self.write(canary=audit_report.GUARD_CANARY, refused=True)
+        self.assertTrue(audit_report.guard_state(self.dir)["proven"])
+
+    def test_a_canary_that_ran_is_recorded_as_unguarded(self):
+        self.write(canary=audit_report.GUARD_CANARY, refused=False)
+        state = audit_report.guard_state(self.dir)
+        self.assertFalse(state["proven"])
+        self.assertIs(state["refused"], False)
+
+    def test_a_canary_for_a_different_command_does_not_count(self):
+        """Recording a refusal of some other command proves nothing about the guard."""
+        self.write(canary="ls", refused=True)
+        self.assertFalse(audit_report.guard_state(self.dir)["proven"])
+
+    def test_the_report_says_so_when_the_guard_did_not_fire(self):
+        self.write(canary=audit_report.GUARD_CANARY, refused=False)
+        text = audit_report.render([], None, None, None, audit_report.run_evidence(self.dir))
+        self.assertIn("unguarded", text.lower())
+        self.assertIn("worktree", text.lower())
+
+    def test_the_report_says_so_when_nothing_was_measured(self):
+        text = audit_report.render([], None, None, None, audit_report.run_evidence(self.dir))
+        self.assertIn("not measured", text.lower())
+
+    def test_a_proven_guard_gets_no_banner(self):
+        self.write(canary=audit_report.GUARD_CANARY, refused=True)
+        text = audit_report.render([], None, None, None, audit_report.run_evidence(self.dir))
+        self.assertNotIn("unguarded", text.lower())
+
+    def test_status_json_carries_the_guard_state(self):
+        self.write(canary=audit_report.GUARD_CANARY, refused=False)
+        evidence = audit_report.run_evidence(self.dir)
+        self.assertIn("guard", evidence)
+        self.assertFalse(evidence["guard"]["proven"])
+
+
 class DeterministicStageTests(unittest.TestCase):
     """A stage that did not run measured nothing, and the report says so (S-011)."""
 

@@ -791,6 +791,9 @@ SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
 # ccgg_is_sha accepts 40 lowercase hex characters and nothing else, so anything
 # this does not match resolves through a name that its owner can move.
 COMMIT_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+# What .claude/hooks/session-start.sh's ccgg_ref_ok accepts, in the one other
+# place that reads CCGG_REF. A refname cannot begin with '-' or hold '..'.
+REF_NAME_RE = re.compile(r"\A(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+\Z")
 ORIGIN_RECORD = os.path.join(".claude", "ccgg-origins")
 
 
@@ -830,20 +833,40 @@ def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
         problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
     if repo and origins is not None and repo not in origins:
         problems.append(f"env sets CCGG_REPO to {repo}, which {ORIGIN_RECORD} does not list — add it there deliberately, or correct the env block")
+    if repo and origins is None:
+        # Was a caution, which never changed the verdict, so a settings.json
+        # pointing the sync at any repository passed the gate (finding S-005).
+        # The record is cheap to add and the whole point of it is that adding it
+        # is a reviewed change; absent it, nothing cross-checks which repository
+        # executes code at every session start.
+        problems.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record — create it listing the origins this project accepts, so which repository executes code at every session start is a reviewed fact")
+    if repo and ref and not COMMIT_RE.match(ref):
+        # Also a caution before. session-start.sh's own comment calls the 40-hex
+        # form "the only one nobody can move", and update.sh re-fetches a movable
+        # name on every session start into skills, hooks, agents and tools/ — so
+        # whoever can move that name chooses the code every downstream project
+        # runs (finding R-003). A claim the gate does not enforce is a claim.
+        problems.append(f"env pins CCGG_REF to '{ref}', a name its owner can move — pin the 40-hex commit instead; a tag or branch hands whoever can move it the contents of every sync")
+    if repo and ref and not REF_NAME_RE.match(ref):
+        # The hook refuses this before any git call; the gate says so earlier
+        # (finding S-006).
+        problems.append(f"env sets CCGG_REF to '{ref}', which is not a refname — a value starting with '-' reaches git in option position, where --upload-pack names a program to run")
     return problems
 
 
 def ccgg_env_warnings(env: dict, origins: list[str] | None = None) -> list[str]:
-    """Settings that work but give up a guarantee the repository states elsewhere."""
+    """Settings that work but give up a guarantee the repository states elsewhere.
+
+    The movable-ref and missing-record cautions that used to live here are
+    failures now (findings R-003 and S-005): both decide which repository's code
+    runs at every session start, and a caution never changed the verdict.
+    """
     cautions_found = []
     repo = str(env.get("CCGG_REPO", "") or "")
-    ref = str(env.get("CCGG_REF", "") or "")
     if not repo:
         return cautions_found
-    if ref and not COMMIT_RE.match(ref):
-        cautions_found.append(f"env pins CCGG_REF to '{ref}', a name its owner can move; session-start.sh calls the 40-hex commit form the only one nobody can move")
-    if origins is None:
-        cautions_found.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record, so nothing cross-checks which repository executes code at every session start")
+    if origins == []:
+        cautions_found.append(f"env sets CCGG_REPO but {ORIGIN_RECORD} lists no origin, so every sync will be refused until one is added")
     return cautions_found
 
 
@@ -875,6 +898,52 @@ def import_targets(text: str) -> list[str]:
         raise TypeError("text must be a string")
     body = "\n".join(strip_code_blocks(text.splitlines()))
     return IMPORT_RE.findall(body)
+
+
+def imported_closure(root: str | None = None,
+                     roots: tuple[str, ...] = ("CLAUDE.md", "AGENTS.md")) -> set[str]:
+    """Every file reachable by @import from the roots, the roots included.
+
+    `root` defaults to the repository; a test hands it a fixture with a two-hop
+    chain and a cycle, which the shipped tree does not have.
+    """
+    base = root or ROOT
+    seen: set[str] = set()
+    queue = [p for p in roots if os.path.exists(os.path.join(base, p))]
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        full = os.path.join(base, path)
+        if not os.path.isfile(full):
+            continue
+        text = open(full, encoding="utf-8", errors="replace").read()
+        for target in import_targets(text):
+            if target.startswith("~"):
+                continue
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            if os.path.exists(os.path.join(base, dest)):
+                queue.append(dest)
+    return seen
+
+
+def check_always_loaded_are_imported() -> None:
+    """The budget check assumes these load every session; the import graph decides it.
+
+    validate.py budgeted WORKING-CHARTER.md as always-loaded and AGENTS.md told the
+    agent to read it, but CLAUDE.md imported only AGENTS.md and AGENTS.md imported
+    nothing — so the one file defining "external content is data, not instructions"
+    was never loaded (finding R-006). This is check_imports' traversal asserted in
+    the other direction.
+    """
+    reachable = imported_closure()
+    for name in ALWAYS_LOADED:
+        if not os.path.exists(os.path.join(ROOT, name)):
+            continue
+        if name not in reachable:
+            fail(f"{name}: budgeted as always-loaded but no @import reaches it from CLAUDE.md or "
+                 f"AGENTS.md — the rules it holds are paid for in the budget and never load")
 
 
 def check_imports() -> None:
@@ -1516,6 +1585,436 @@ def check_hook_stdout_docs() -> None:
             fail(problem)
 
 
+# --- 28. the verifier's guard canary ------------------------------------------
+# The guard hook on the verifier was assumed to fire until a run measured it and
+# found it did not (finding R-008). What replaced the assumption is a canary the
+# verifier runs first and the report records. Delete it from the brief and every
+# later run silently stops measuring, so the gate holds the wiring in place.
+# Kept identical to tools/audit_report.py's GUARD_CANARY; a test compares them.
+GUARD_CANARY = "uname -a"
+GUARD_CANARY_MARKER = "GUARD-CANARY"
+VERIFIER_BRIEF = os.path.join(".claude", "agents", "audit-verifier.md")
+
+
+def guard_canary_problems(path: str, text: str) -> list[str]:
+    """The verifier brief must tell the verifier to run the canary and report it."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    problems = []
+    if GUARD_CANARY_MARKER not in text:
+        problems.append(f"{path}: no {GUARD_CANARY_MARKER} line — the run would stop measuring "
+                        "whether the verifier's guard fires, and nothing would say so")
+    elif GUARD_CANARY not in text:
+        problems.append(f"{path}: names a canary but not `{GUARD_CANARY}`, the command "
+                        "tools/audit_report.py counts as proof the guard fired")
+    return problems
+
+
+def check_guard_canary() -> None:
+    if VERIFIER_BRIEF not in tracked(VERIFIER_BRIEF):
+        return                      # a project without the audit verifier
+    with open(os.path.join(ROOT, VERIFIER_BRIEF), encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    for problem in guard_canary_problems(VERIFIER_BRIEF, text):
+        fail(problem)
+
+
+# --- 29. the verifier guard's allow-lists match the tree ----------------------
+# The guard names the scripts it will run. Before finding S-004 it matched a
+# prefix, so a branch adding tools/test_anything.py was allowed by construction;
+# and `-m unittest discover` imports whatever is in the directory whatever the
+# list says. Holding the list equal to the tree is what makes adding a script to
+# the gate a visible, named change to the guard rather than a silent one.
+GUARD_PATH = os.path.join(".claude", "hooks", "audit-verifier-guard.sh")
+GUARD_HEREDOC_RE = re.compile(r"<<'PY'[^\n]*\n(.*?)\nPY\n", re.S)
+GUARD_LIST_NAMES = ("PY_SCRIPTS", "SH_SCRIPTS")
+
+
+def guard_allow_lists(path: str | None = None) -> dict:
+    """The guard's own script allow-lists, read from its embedded python."""
+    full = path or os.path.join(ROOT, GUARD_PATH)
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        match = GUARD_HEREDOC_RE.search(fh.read())
+    if not match:
+        return {}
+    try:
+        tree = ast.parse(match.group(1))
+    except SyntaxError:
+        return {}
+    found = {}
+    for node in tree.body:
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id in GUARD_LIST_NAMES:
+            value = node.value
+            # The lists are written `frozenset((...))` — a call, not a literal.
+            if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                    and value.func.id in ("frozenset", "set", "tuple") and len(value.args) == 1):
+                value = value.args[0]
+            try:
+                found[target.id] = set(ast.literal_eval(value))
+            except (ValueError, TypeError):
+                continue
+    return found
+
+
+def guard_allow_list_problems(lists: dict, py_tree: set, sh_tree: set,
+                              authored_here: bool = True) -> list[str]:
+    """Differences between what the guard names and what the repository ships.
+
+    The two directions are not symmetrical. A script in the tree the guard does
+    not name is a finding everywhere: nobody decided to allow it. A name the guard
+    keeps with no file behind it is a finding only where the list is authored —
+    an installed project gets the guard and validate.py but neither tools/test_*.py
+    nor install.sh/update.sh, and a list trimmed to each install would stop being
+    one list.
+    """
+    problems = []
+    for name, tree in (("PY_SCRIPTS", py_tree), ("SH_SCRIPTS", sh_tree)):
+        listed = set(lists.get(name) or ())
+        for missing in sorted(tree - listed):
+            problems.append(f"{GUARD_PATH}: {missing} is in the tree but not in {name} — "
+                            f"the verifier cannot run it, and a script the guard does not "
+                            f"name is a script nobody decided to allow")
+        if not authored_here:
+            continue
+        for stale in sorted(listed - tree):
+            problems.append(f"{GUARD_PATH}: {name} allows {stale}, which the repository does "
+                            f"not ship — a name kept after its file went is a name a branch "
+                            f"can reintroduce")
+    return problems
+
+
+def check_guard_allow_lists() -> None:
+    if not tracked(GUARD_PATH):
+        return                      # a project without the audit verifier
+    py_tree = {os.path.basename(p) for p in tracked("tools/*.py")
+               if os.path.basename(p) != "__init__.py"}
+    sh_tree = set(tracked(".claude/hooks/*.sh")) | set(tracked("*.sh"))
+    for problem in guard_allow_list_problems(guard_allow_lists(), py_tree, sh_tree,
+                                             authored_here=bool(tracked("install.sh"))):
+        fail(problem)
+
+
+AUDIT_WORKFLOW_PATH = ".github/workflows/audit.yml"
+HEADLESS_PATH = "tools/audit_headless.py"
+# The one grant shape that names a path the run may execute without a prompt.
+PINNED_GRANT_SCRIPT_RE = re.compile(r"Bash\(python3 (tools/[A-Za-z0-9_]+\.py) \*\)")
+RESCUE_FETCH_RE = re.compile(r'^\s*fetch "([^"]+)"', re.M)
+LOCAL_IMPORT_RE = re.compile(r"^import ([A-Za-z_][A-Za-z0-9_]*)", re.M)
+
+
+def pinned_grant_scripts(text: str) -> list[str]:
+    """The repository paths PINNED_GRANTS lets a headless run execute unprompted.
+
+    Read with ast, never by importing: validating a module by running it is how the
+    audited tree would get its say back.
+    """
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return []
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        target = node.targets[0]
+        if not (isinstance(target, ast.Name) and target.id == "PINNED_GRANTS"):
+            continue
+        value = node.value
+        if (isinstance(value, ast.Call) and isinstance(value.func, ast.Name)
+                and value.func.id in ("frozenset", "set", "tuple") and len(value.args) == 1):
+            value = value.args[0]
+        try:
+            grants = ast.literal_eval(value)
+        except (ValueError, TypeError):
+            continue
+        for grant in grants:
+            match = PINNED_GRANT_SCRIPT_RE.fullmatch(str(grant).strip())
+            if match and match.group(1) not in found:
+                found.append(match.group(1))
+    return found
+
+
+def local_imports(path: str) -> set[str]:
+    """Sibling modules under tools/ that `path` imports, one level deep."""
+    full = os.path.join(ROOT, path)
+    if not os.path.isfile(full):
+        return set()
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        names = set(LOCAL_IMPORT_RE.findall(fh.read()))
+    return {f"tools/{n}.py" for n in names if os.path.isfile(os.path.join(ROOT, "tools", n + ".py"))}
+
+
+def rescued_paths(text: str) -> set[str]:
+    """The paths the workflow's trusted-copies step takes from the base ref."""
+    return set(RESCUE_FETCH_RE.findall(text))
+
+
+def pinned_grant_rescue_problems(scripts: list[str], rescued: set[str]) -> list[str]:
+    """Grant targets — and what they import — that the base-ref rescue leaves behind.
+
+    A pinned grant is a pre-approval to run a path, and the headless run's cwd is the
+    audited checkout. A target the workflow does not rescue is therefore the head's
+    own code, executing unprompted in the job that holds the API key (finding S-007).
+    """
+    problems = []
+    for script in scripts:
+        needed = [script] + sorted(local_imports(script))
+        for path in needed:
+            if path in rescued:
+                continue
+            why = ("a pinned grant pre-approves it" if path == script
+                   else f"{script} imports it and a pinned grant pre-approves that")
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: {path} is not in the base-ref rescue list, and "
+                            f"{why} — the audited head would supply the code that runs")
+    return problems
+
+
+def check_pinned_grants_are_rescued() -> None:
+    if not (tracked(HEADLESS_PATH) and tracked(AUDIT_WORKFLOW_PATH)):
+        return                      # a project without the headless audit or its workflow
+    with open(os.path.join(ROOT, HEADLESS_PATH), encoding="utf-8", errors="replace") as fh:
+        scripts = pinned_grant_scripts(fh.read())
+    if not scripts:
+        fail(f"{HEADLESS_PATH}: PINNED_GRANTS names no script to run; either it moved or it "
+             f"stopped being readable, and this check silently stopped checking")
+        return
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        rescued = rescued_paths(fh.read())
+    for problem in pinned_grant_rescue_problems(scripts, rescued):
+        fail(problem)
+
+
+# --- 31. decision record names ------------------------------------------------
+# session-start.sh prints the name of every open decision record straight into
+# the prompt. Its old allow-list forbade spaces, which read as safe, but hyphens
+# join words as well as spaces do (finding R-001). The hook now requires the slug
+# the /decide skill produces; this keeps the tree to names the hook will print,
+# so a record does not go silently unlisted for being misnamed.
+DECISION_SLUG_RE = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+){0,6}\.md\Z")
+DECISION_EXEMPT = ("README.md",)
+
+
+def decision_name_problems(names: list[str]) -> list[str]:
+    problems = []
+    for name in names:
+        base = os.path.basename(name)
+        if base in DECISION_EXEMPT or DECISION_SLUG_RE.match(base):
+            continue
+        problems.append(f"decisions/{base}: not a date-prefixed slug (YYYY-MM-DD-words.md, at most 7 words) — "
+                        f"session-start.sh counts a record it cannot name, so this one would never be listed")
+    return problems
+
+
+def check_decision_names() -> None:
+    for problem in decision_name_problems(tracked("decisions/*.md")):
+        fail(problem)
+
+
+# --- 32. the audit workflow's trust anchor ------------------------------------
+# The trusted set — guard, skill, agent briefs, launcher, grant targets — is read
+# from pull_request.base.sha, and a pull request chooses its own base. Pinning
+# base_ref to the default branch is what makes "the base branch the maintainers
+# own" true rather than aspirational (finding S-008).
+BASE_REF_PIN = "github.base_ref == github.event.repository.default_branch"
+HEAD_REPO_PIN = "github.event.pull_request.head.repo.full_name == github.repository"
+
+
+def job_condition(text: str, job: str) -> str:
+    """The job-level `if:` of a named job, flattened to one line.
+
+    Job-level means the four-space property indent, before `steps:`. The first
+    version took the first `if:` at any depth, so a step's condition stood in
+    for a job that had none (review of #75).
+    """
+    lines = text.splitlines()
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.rstrip() == f"  {job}:")
+    except StopIteration:
+        return ""
+    collecting = False
+    block = False
+    parts = []
+    for ln in lines[start + 1:]:
+        if ln.startswith("  ") and not ln.startswith("   ") and ln.rstrip().endswith(":"):
+            break                       # the next job
+        if ln.startswith("    steps:"):
+            break                       # anything below is a step's, not the job's
+        if ln.startswith("    if:"):
+            collecting = True
+            value = ln[len("    if:"):].strip()
+            block = value in (">", ">-", "|", "|-")
+            if not block:
+                # A plain scalar's ` #` starts a YAML comment GitHub never evaluates.
+                parts.append(re.split(r"\s#", value, 1)[0].strip())
+                break
+            continue
+        if collecting and block:
+            if not ln.strip() or re.match(r"^    [a-z-]+:", ln):
+                break
+            parts.append(ln.strip())
+    return " ".join(p for p in parts if p)
+
+
+def normalized_condition(condition: str) -> str:
+    return re.sub(r"\s+", " ", condition).strip()
+
+
+# The one condition the deterministic job may carry, whitespace-normalized. An
+# equality test, not a substring test: `pin in condition` was satisfied by a
+# pin inside a comment, OR-ed in, or negated (review of #75). Any rewrite fails
+# and is reviewed, the way AUDIT_SKILL_GRANTS pins the skill's grants.
+AUDIT_JOB_CONDITION = normalized_condition(
+    "github.event_name == 'workflow_dispatch' || "
+    "(contains(github.event.pull_request.labels.*.name, 'audit') && "
+    f"{HEAD_REPO_PIN} && {BASE_REF_PIN})")
+
+
+def audit_workflow_problems(text: str) -> list[str]:
+    condition = job_condition(text, "deterministic")
+    if not condition:
+        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job has no job-level `if:` — every push "
+                f"would start a run that reads a pull request's chosen base as its trusted source"]
+    if normalized_condition(condition) != AUDIT_JOB_CONDITION:
+        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job's condition is not the pinned one — "
+                f"got `{normalized_condition(condition)[:120]}`; it must be exactly "
+                f"`{AUDIT_JOB_CONDITION}` (a fork pull request, or one choosing its own base, "
+                f"would otherwise reach the job that reads the trusted set)"]
+    return []
+
+
+def check_audit_workflow_trust_anchor() -> None:
+    if not tracked(AUDIT_WORKFLOW_PATH):
+        return
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        for problem in audit_workflow_problems(fh.read()):
+            fail(problem)
+
+
+# --- 33. hook headers promise only what their event delivers --------------------
+# session-end.sh's header said it "reminds the AI to flush memory". SessionEnd
+# stdout goes to the debug log and the script printed nothing anyway, so the
+# reminder existed only in the comment (finding H-001). A header is what the
+# next reader believes; on an event whose stdout never reaches the model it may
+# not claim to tell the model anything.
+HOOK_CLAIM_RE = re.compile(
+    r"\b(remind(?:s|ed|ing)?|tell(?:s|ing)?|instruct(?:s|ed|ing)?|prompt(?:s|ed|ing)?|"
+    r"inform(?:s|ed|ing)?|nudg(?:es|ed|ing))\s+(?:the\s+)?(AI|model|agent|assistant|Claude)\b", re.I)
+
+
+def hook_header(text: str) -> str:
+    """The leading comment block of a shell script, shebang excluded."""
+    lines = []
+    for line in text.splitlines():
+        if line.startswith("#!"):
+            continue
+        if line.startswith("#"):
+            lines.append(line.lstrip("#").strip())
+        elif line.strip():
+            break
+    return " ".join(lines)
+
+
+def registered_hook_events(settings: dict) -> dict[str, list[str]]:
+    """{script name: [events]} for every .claude/hooks/*.sh settings.json registers."""
+    out: dict[str, list[str]] = {}
+    hooks = settings.get("hooks") if isinstance(settings, dict) else None
+    if not isinstance(hooks, dict):
+        return out
+    for event, matchers in hooks.items():
+        for matcher in matchers if isinstance(matchers, list) else []:
+            for hook in (matcher.get("hooks") if isinstance(matcher, dict) else []) or []:
+                command = hook.get("command", "") if isinstance(hook, dict) else ""
+                for name in re.findall(r"\.claude/hooks/([A-Za-z0-9_.-]+\.sh)", str(command)):
+                    out.setdefault(name, []).append(event)
+    return out
+
+
+def hook_header_problems(name: str, events: list[str], text: str, reaching: list[str]) -> list[str]:
+    if any(e in reaching for e in events):
+        return []
+    claim = HOOK_CLAIM_RE.search(hook_header(text))
+    if not claim:
+        return []
+    return [f".claude/hooks/{name}: its header says it {claim.group(0)!r}, but it runs on "
+            f"{', '.join(events)}, whose stdout never reaches the model — say what the script "
+            f"does, or move the message to a SessionStart hook"]
+
+
+def check_hook_headers() -> None:
+    path = os.path.join(ROOT, ".claude", "settings.json")
+    if not os.path.exists(path):
+        return
+    try:
+        settings = json.load(open(path, encoding="utf-8"))
+    except json.JSONDecodeError:
+        return                      # check 6 reports it
+    reaching = hook_stdout_reaches_model()
+    for name, events in registered_hook_events(settings).items():
+        script = os.path.join(ROOT, ".claude", "hooks", name)
+        if not os.path.isfile(script):
+            continue                # check 11 reports it
+        with open(script, encoding="utf-8", errors="replace") as fh:
+            for problem in hook_header_problems(name, events, fh.read(), reaching):
+                fail(problem)
+
+
+# --- 34. the currency rule has one home -----------------------------------------
+# "Never answer 'what exists now' from memory" was restated in three files with
+# three item lists, and they had drifted (finding C-001). The rule's home is the
+# charter's Currency check; everywhere else names the rule and points there.
+CURRENCY_MARKER = "what exists now"
+CURRENCY_LIST_RE = re.compile(r"\b(versions?|prices?|APIs?|API shapes|model names|part numbers)\b"
+                              r"[^.\n]*\b(versions?|prices?|APIs?|API shapes|model names|part numbers)\b", re.I)
+CURRENCY_HOME = "WORKING-CHARTER.md"
+
+
+def currency_restatements(path: str, text: str) -> list[str]:
+    """A file other than the charter that carries the rule with its own item list."""
+    if path == CURRENCY_HOME:
+        return []
+    body = "\n".join(strip_code_blocks(text.splitlines()))
+    if CURRENCY_MARKER not in body.lower() and "searched, never recalled" not in body:
+        return []
+    if not CURRENCY_LIST_RE.search(body):
+        return []
+    return [f"{path}: restates the currency rule with its own list of what to search — the list "
+            f"has one home, {CURRENCY_HOME}'s Currency check; name the rule and point there"]
+
+
+def check_currency_rule_home() -> None:
+    paths = ["AGENTS.md"] + list(tracked(".claude/references/*.md")) + list(tracked(".claude/skills/*/SKILL.md"))
+    for path in paths:
+        full = os.path.join(ROOT, path)
+        if not os.path.isfile(full):
+            continue
+        with open(full, encoding="utf-8", errors="replace") as fh:
+            for problem in currency_restatements(path, fh.read()):
+                fail(problem)
+
+
+# --- the audit workflow's step scripts, for tests that run them ------------------
+def step_script(text: str, step_name: str) -> str:
+    """The `run:` block of a named workflow step, dedented, or '' when absent."""
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == f"- name: {step_name}"), None)
+    if start is None:
+        return ""
+    run_at = next((i for i in range(start + 1, len(lines))
+                   if lines[i].strip().startswith("run:") or lines[i].strip().startswith("- name:")), None)
+    if run_at is None or not lines[run_at].strip().startswith("run:"):
+        return ""
+    indent = len(lines[run_at + 1]) - len(lines[run_at + 1].lstrip()) if run_at + 1 < len(lines) else 0
+    body = []
+    for ln in lines[run_at + 1:]:
+        if ln.strip() and (len(ln) - len(ln.lstrip())) < indent:
+            break
+        body.append(ln[indent:] if len(ln) >= indent else ln)
+    return "\n".join(body).rstrip() + "\n"
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1542,6 +2041,7 @@ def main() -> int:
     check_hook_registration()
     check_ccgg_env()
     check_imports()
+    check_always_loaded_are_imported()
     check_skill_grants()
     check_agents_serialize()
     check_workflow_pins()
@@ -1553,6 +2053,13 @@ def main() -> int:
     check_probe_contract()
     check_reference_thresholds()
     check_hook_stdout_docs()
+    check_guard_canary()
+    check_guard_allow_lists()
+    check_pinned_grants_are_rescued()
+    check_decision_names()
+    check_audit_workflow_trust_anchor()
+    check_hook_headers()
+    check_currency_rule_home()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

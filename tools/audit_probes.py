@@ -32,6 +32,30 @@ import time
 from dataclasses import asdict, dataclass
 
 DEFAULT_GATE = "python3 tools/validate.py"
+DEFAULT_GATE_NAME = "validator"
+# Gates by name, never by command. A probe row may say which gate has to catch
+# it, because the validator is not the whole gate: the verifier's guard is ~450
+# lines of security decisions whose only enforcement is a unit table, so before
+# this map no mutation of the guard could be measured at all — every probe
+# written for one read `missed` against a validator that never looks at it
+# (finding S-003's leftover). The names resolve here and nowhere else: probes.txt
+# is a data file this harness already executes as shell, and a free-form gate
+# command in it would be a second way out of the same file.
+GATES = {
+    DEFAULT_GATE_NAME: DEFAULT_GATE,
+    "guard": "python3 -m unittest discover -s tools -t tools -p test_verifier_guard.py -q",
+    "hooks": "python3 -m unittest discover -s tools -t tools -p test_session_start_hook.py -q",
+    # The deterministic fact stage's own tests, which run collect() on the tree
+    # and assert each surface still produces its fact: a surface nobody
+    # inventories is one the audit reports nothing about, which reads exactly
+    # like a clean one. --fail-on-findings is not this gate: it fails on the
+    # gating kinds only, and an inventory fact is for review, not a verdict.
+    "facts": "python3 -m unittest discover -s tools -t tools -p test_audit_facts.py -q",
+    # The validator's own tests, for defects the validator must not execute the
+    # tree to see — the audit workflow's Gate script is run by a test, never by
+    # validate.py, because a branch chooses what that script says.
+    "validate-tests": "python3 -m unittest discover -s tools -t tools -p test_validate.py -q",
+}
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
 RESULTS = ("caught", "missed", "skipped", "error")
@@ -44,6 +68,7 @@ class Probe:
     expect: str
     mutation: str
     line: int
+    gate: str = DEFAULT_GATE_NAME
 
 
 @dataclass
@@ -53,6 +78,7 @@ class ProbeResult:
     result: str
     detail: str
     line: int
+    gate: str = DEFAULT_GATE_NAME
 
 
 class ProbeFileError(ValueError):
@@ -61,6 +87,12 @@ class ProbeFileError(ValueError):
 
 def parse_probes(text: str) -> list[Probe]:
     """Parse the probes file: `label | expect | mutation`, `#` comments, blank lines.
+
+    `expect` is `caught` or `missed`, optionally followed by `:<gate>` naming which
+    gate must catch the defect — `caught:guard` for a mutation only the verifier
+    guard's unit table sees. The gate name has to be in GATES; an unknown one is a
+    parse error, because a probe that names a gate nobody runs measures nothing and
+    would report as a clean `missed`.
 
     Raises ProbeFileError on the first malformed line — a probe that cannot be
     parsed must not silently vanish from the contract.
@@ -78,11 +110,20 @@ def parse_probes(text: str) -> list[Probe]:
         label, expect, mutation = (p.strip() for p in parts)
         if not label:
             raise ProbeFileError(f"line {no}: empty label")
-        if expect not in EXPECTATIONS:
-            raise ProbeFileError(f"line {no}: expect must be one of {EXPECTATIONS}, got '{expect}'")
+        verdict, sep, gate = expect.partition(":")
+        verdict, gate = verdict.strip(), gate.strip()
+        if sep and not gate:
+            raise ProbeFileError(f"line {no}: '{expect}' names no gate after the colon")
+        gate = gate or DEFAULT_GATE_NAME
+        if verdict not in EXPECTATIONS:
+            raise ProbeFileError(f"line {no}: expect must be one of {EXPECTATIONS}, got '{verdict}'")
+        if gate not in GATES:
+            raise ProbeFileError(f"line {no}: unknown gate '{gate}'; known gates are {sorted(GATES)}")
         if not mutation:
             raise ProbeFileError(f"line {no}: empty mutation")
-        probes.append(Probe(label, expect, mutation, no))
+        # The label is committed, contributor-editable text that lands in
+        # probes.json and from there in a specialist's input (finding R-007).
+        probes.append(Probe(audit_env.quote(label), verdict, mutation, no, gate))
     return probes
 
 
@@ -112,6 +153,7 @@ def summarize(results: list[ProbeResult]) -> dict:
         "regressions": [r.label for r in regressions],
         "promotions": [r.label for r in promotions],
         "error_labels": [r.label for r in errors],
+        "gates": sorted({r.gate for r in results}),
     }
 
 
@@ -148,30 +190,53 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
     return dest, env
 
 
-def run_probe(probe: Probe, scratch_repo: str, gate: list[str], env: dict[str, str]) -> ProbeResult:
-    """Reset, mutate, stage, run the gate. Never raises on a bad mutation — it records `error`."""
+def run_probe(probe: Probe, scratch_repo: str, gates: dict[str, list[str]],
+              env: dict[str, str]) -> ProbeResult:
+    """Reset, mutate, stage, run the probe's gate. Never raises on a bad mutation — it records `error`."""
+    def result(verdict: str, detail: str) -> ProbeResult:
+        # detail is the gate's own output, which quotes file content back.
+        return ProbeResult(probe.label, probe.expect, verdict, audit_env.quote(detail),
+                           probe.line, probe.gate)
+
     for cmd in (["git", "reset", "-q", "--hard", "HEAD"], ["git", "clean", "-fdq"]):
         proc = _run(cmd, scratch_repo, env)
         if proc.returncode != 0:
-            return ProbeResult(probe.label, probe.expect, "error", f"reset failed: {proc.stderr.strip()}", probe.line)
+            return result("error", f"reset failed: {proc.stderr.strip()}")
     if not probe.mutation.strip():
-        return ProbeResult(probe.label, probe.expect, "error", "empty mutation plants nothing", probe.line)
+        return result("error", "empty mutation plants nothing")
+    gate = gates.get(probe.gate)
+    if not gate:
+        return result("error", f"no command for gate '{probe.gate}'")
     mutated = _run(["bash", "-c", probe.mutation], scratch_repo, env)
     if mutated.returncode == SKIP_EXIT:
-        return ProbeResult(probe.label, probe.expect, "skipped", "mutation reported not applicable (exit 3)", probe.line)
+        return result("skipped", "mutation reported not applicable (exit 3)")
     if mutated.returncode != 0:
-        return ProbeResult(probe.label, probe.expect, "error",
-                           f"mutation exited {mutated.returncode}: {mutated.stderr.strip()[:200]}", probe.line)
+        return result("error", f"mutation exited {mutated.returncode}: {mutated.stderr.strip()[:200]}")
     _run(["git", "add", "-A"], scratch_repo, env)
+    # A mutation that changed nothing is not a blind spot, it is a broken probe —
+    # a sed whose pattern stopped matching plants no defect, the gate passes, and
+    # the row reads `missed` as if the gate had a hole. Two of the first guard
+    # probes written failed exactly this way, so the harness says so itself.
+    if _run(["git", "diff", "--cached", "--quiet", "HEAD"], scratch_repo, env).returncode == 0:
+        return result("error", "mutation left the tree unchanged — it plants nothing to catch")
     gated = _run(gate, scratch_repo, env)
     if gated.returncode == 0:
-        return ProbeResult(probe.label, probe.expect, "missed", "gate exited 0", probe.line)
+        return result("missed", "gate exited 0")
+    # The validator prints its findings indented; a test runner prints to stderr.
+    # Either way the detail is the first line that says something.
     first = next((ln.strip() for ln in gated.stdout.splitlines() if ln.startswith("  ")), "")
-    return ProbeResult(probe.label, probe.expect, "caught", first[:200], probe.line)
+    if not first:
+        first = next((ln.strip() for ln in gated.stderr.splitlines()
+                      if ln.strip() and not ln.startswith("-")), "")
+    return result("caught", first[:200])
 
 
 def format_table(results: list[ProbeResult], summary: dict) -> str:
     width = max((len(r.label) for r in results), default=10)
+    # The gate column appears only when more than one gate ran: which gate caught
+    # a defect is the thing worth reading once the answer is not always the same.
+    gates = summary.get("gates") or [DEFAULT_GATE_NAME]
+    gate_width = max(len(g) for g in gates) if len(gates) > 1 else 0
     lines = []
     for r in results:
         flag = ""
@@ -181,10 +246,12 @@ def format_table(results: list[ProbeResult], summary: dict) -> str:
             flag = "  <- promote to caught"
         elif r.result == "error":
             flag = f"  <- {r.detail}"
-        lines.append(f"{r.result.upper():7} {r.label.ljust(width)}{flag}")
+        gate_col = f"{r.gate.ljust(gate_width)}  " if gate_width else ""
+        lines.append(f"{r.result.upper():7} {gate_col}{r.label.ljust(width)}{flag}")
     lines.append("")
+    across = f" across {len(gates)} gates" if len(gates) > 1 else ""
     lines.append(
-        f"catch rate: {summary['caught']}/{summary['total']} ({summary['catch_rate']:.0%}) — "
+        f"catch rate: {summary['caught']}/{summary['total']} ({summary['catch_rate']:.0%}){across} — "
         f"{len(summary['regressions'])} regression(s), {len(summary['promotions'])} promotion(s), "
         f"{summary['skipped']} skipped, {summary['errors']} error(s)"
     )
@@ -195,7 +262,8 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", default=None, help="repository root (default: the current git toplevel)")
     parser.add_argument("--probes", default=DEFAULT_PROBES, help="probes file, relative to the repo")
-    parser.add_argument("--gate", default=DEFAULT_GATE, help="gate command run in the scratch copy")
+    parser.add_argument("--gate", default=DEFAULT_GATE,
+                        help="command for the default gate; probes naming another gate are unaffected")
     parser.add_argument("--out", default=None, help="directory to write probes.json into")
     args = parser.parse_args(argv)
 
@@ -219,13 +287,16 @@ def main(argv: list[str]) -> int:
         print(f"audit-probes: {args.probes} lists no probes — the gate's contract is unmeasured")
         return 1
 
-    gate = shlex.split(args.gate)
+    gates = {name: shlex.split(cmd) for name, cmd in GATES.items()}
+    gates[DEFAULT_GATE_NAME] = shlex.split(args.gate)
     started = time.time()
     with tempfile.TemporaryDirectory(prefix="ccgg-probes-") as scratch:
         scratch_repo, env = make_scratch_copy(repo, scratch)
-        results = [run_probe(p, scratch_repo, gate, env) for p in probes]
+        results = [run_probe(p, scratch_repo, gates, env) for p in probes]
     summary = summarize(results)
     summary["gate"] = args.gate
+    summary["gate_commands"] = {name: " ".join(cmd) for name, cmd in gates.items()
+                                if name in summary["gates"]}
     summary["duration_s"] = round(time.time() - started, 1)
 
     print(format_table(results, summary))

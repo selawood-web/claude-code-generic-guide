@@ -150,7 +150,11 @@ class Facts:
             raise ValueError(f"bad status {status!r}")
         n = self._counts.get(kind, 0) + 1
         self._counts[kind] = n
-        fact = Fact(f"{kind}-{n:03d}", kind, status, location, evidence, detail)
+        # location, evidence and detail are built from tree-controlled text and
+        # become a specialist's first input; audit_env.quote bounds them to one
+        # line so a frontmatter key cannot be a paragraph (finding R-007).
+        fact = Fact(f"{kind}-{n:03d}", kind, status,
+                    audit_env.quote(location), audit_env.quote(evidence), audit_env.quote(detail))
         self.items.append(fact)
         return fact
 
@@ -403,6 +407,9 @@ def permission_surface(settings: dict) -> dict:
         "defaultMode": perms.get("defaultMode"),
         "env": sorted((settings.get("env") or {}).keys()) if isinstance(settings, dict) else [],
         "enableAllProjectMcpServers": settings.get("enableAllProjectMcpServers") if isinstance(settings, dict) else None,
+        # Pre-approves the named .mcp.json servers the way enableAllProjectMcpServers
+        # pre-approves all of them: a committed list that skips the prompt (R-005).
+        "enabledMcpjsonServers": list(settings.get("enabledMcpjsonServers") or []) if isinstance(settings, dict) else [],
         "hooks": sorted({e for e, _ in hook_commands(settings)}),
     }
 
@@ -483,6 +490,81 @@ def run_gate(repo: str, label: str, cmd: list[str], facts: Facts, execute: bool 
     facts.add("gate", status, " ".join(cmd), f"{label} exited {proc.returncode}", tail[:600])
 
 
+# --- project-scoped MCP configuration -----------------------------------------
+# Every configuration check read .claude/settings.json and stopped there. Claude
+# Code's project-scoped MCP file is .mcp.json at the repository root — the file
+# `claude mcp add --scope project` writes, under a top-level `mcpServers` key —
+# and settings.json's enableAllProjectMcpServers / enabledMcpjsonServers decide
+# which of its servers load without a prompt. This repository's docs/ snapshot
+# also documents .claude/config.toml with an [mcp_servers] section; the current
+# product does not read that file (docs/index.md says the snapshot differs), but
+# a tree that carries one is still a tree that meant to configure a server, so it
+# is inventoried too. Neither was, so a server added to either executed commands
+# and passed the gate silently (finding R-005). Parsing is deliberately shallow:
+# the fact is that the surface exists and what it names, not a TOML or schema
+# implementation.
+MCP_CONFIG_FILES = (".mcp.json", ".claude/config.toml")
+TOML_TABLE_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$", re.M)
+TOML_COMMAND_RE = re.compile(r"^\s*(command|args|url)\s*=", re.M)
+
+
+def mcp_servers_declared(path: str, text: str) -> tuple[int, int]:
+    """(server count, command/url line count) declared by one MCP config file."""
+    if path.endswith(".json"):
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            return (0, 0)
+        servers = data.get("mcpServers") if isinstance(data, dict) else None
+        if not isinstance(servers, dict):
+            return (0, 0)
+        commands = sum(1 for v in servers.values() if isinstance(v, dict)
+                       for k in ("command", "args", "url") if k in v)
+        return (len(servers), commands)
+    tables = TOML_TABLE_RE.findall(text)
+    servers = [t for t in tables if t.split(".")[0] in ("mcp_servers", "mcpServers")]
+    return (len(servers), len(TOML_COMMAND_RE.findall(text)))
+
+
+def mcp_config_facts(present: dict[str, str], facts: "Facts") -> None:
+    """One fact per MCP config file the tree carries, or one `ok` when it carries none.
+
+    `present` maps each existing file's path to its text.
+    """
+    if not present:
+        facts.add("mcp-config", "ok", " or ".join(MCP_CONFIG_FILES), "no project-scoped MCP configuration")
+        return
+    for path, text in present.items():
+        servers, commands = mcp_servers_declared(path, text)
+        facts.add("mcp-config", "finding" if servers else "ok", path,
+                  f"{servers} MCP server(s), {commands} command/url line(s)",
+                  "class: supply-chain; a project-scoped MCP server runs with the session's permissions")
+
+
+# --- the global-memory seed ---------------------------------------------------
+# install.sh prints `cat MEMORY.md >> ~/.claude/CLAUDE.md` as a setup step, so
+# this file's rules land in every project on the machine. It was in the scanned
+# set for invisible characters and fetch-execute patterns and nothing else, so a
+# directive added to it reached every session unexamined (finding R-010).
+DIRECTIVE_RE = re.compile(r"^\s*(?:[-*]\s+|\d+\.\s+)?"
+                          r"(always|never|do not|don't|must|you must|ignore|disregard|prefer|use|run|"
+                          r"avoid|treat|assume|report|send|read|write|install|enable|disable)\b",
+                          re.I | re.M)
+NAMES_A_TOOL_RE = re.compile(r"`[^`]*(?:/|\.(?:py|sh|json|md|toml)|\bcurl\b|\bcat\b|\bgit\b)[^`]*`")
+
+
+def memory_seed_facts(text: str | None, facts: "Facts") -> None:
+    if text is None:
+        return
+    lines = text.split("\n")
+    directives = [(i + 1, ln) for i, ln in enumerate(lines) if DIRECTIVE_RE.match(ln)]
+    naming = [(i + 1, ln) for i, ln in enumerate(lines) if NAMES_A_TOOL_RE.search(ln)]
+    facts.add("global-memory-seed", "finding" if naming else "ok", "MEMORY.md",
+              f"{len(directives)} directive line(s), {len(naming)} naming a tool, path or command",
+              "class: supply-chain; install.sh appends this file to ~/.claude/CLAUDE.md, which loads "
+              "in every project on the machine — read the named lines before seeding")
+
+
 def build_inventory(repo: str, settings: dict | None) -> dict:
     files = set(tracked(repo, "*"))
     head = git(repo, "rev-parse", "HEAD")
@@ -493,6 +575,7 @@ def build_inventory(repo: str, settings: dict | None) -> dict:
         "dirty": dirty,
         "stack": sorted({lang for marker, lang in STACK_MARKERS.items() if marker in files}),
         "rule_files": [f for f in RULE_FILES if f in files],
+        "config_surfaces": [f for f in (".claude/settings.json", *MCP_CONFIG_FILES) if f in files],
         "skills": sorted(p.split("/")[2] for p in files if p.startswith(".claude/skills/") and p.endswith("/SKILL.md")),
         "agents": sorted(p for p in files if p.startswith(".claude/agents/") and p.endswith(".md")),
         "hooks": sorted(p for p in files if p.startswith(".claude/hooks/")),
@@ -580,8 +663,14 @@ def collect(repo: str, scope: str, vocab: dict, run_gates: bool = False) -> tupl
         if not net_total:
             facts.add("network-exec", "ok", "hooks and scripts", "no fetch-or-execute patterns")
 
+        # One call each, on one line each: tools/probes.txt removes them to prove
+        # the tests notice a surface going uninventoried.
+        mcp_config_facts({p: read(repo, p) for p in MCP_CONFIG_FILES if os.path.exists(os.path.join(repo, p))}, facts)
+        memory_seed_facts(read(repo, "MEMORY.md") if "MEMORY.md" in inventory["rule_files"] else None, facts)
+
         surface = inventory["permission_surface"]
-        facts.add("permission-surface", "finding" if (surface["allow"] or surface["env"] or surface["additionalDirectories"]) else "ok",
+        facts.add("permission-surface", "finding" if (surface["allow"] or surface["env"] or surface["additionalDirectories"]
+                                                    or surface["enableAllProjectMcpServers"] or surface["enabledMcpjsonServers"]) else "ok",
                   ".claude/settings.json", json.dumps(surface, sort_keys=True),
                   "grants in a committed file apply after trust in a session and without trust under -p")
 

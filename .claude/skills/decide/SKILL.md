@@ -43,7 +43,7 @@ Interview the user for:
 Criteria come before candidates. Options proposed first anchor the criteria to fit them.
 
 ### Step 4 — Research
-Current facts are searched, never recalled — per AGENTS.md → Never → "Answer 'what exists now' from memory". First check the research cache per [`research-cache.md`](research-cache.md): a fresh dated entry replaces the duplicate search; a stale one gets re-searched and updated. Then, for each candidate area: current versions, pricing, maintenance status, real-world comparisons — written back to the cache.
+Current facts are searched, never recalled — the charter's *Currency* check (WORKING-CHARTER.md, *How I think*) says which. First check the research cache per [`research-cache.md`](research-cache.md): a fresh dated entry replaces the duplicate search; a stale one gets re-searched and updated. Then, for each candidate area: current versions, pricing, maintenance status, real-world comparisons — written back to the cache.
 
 If web tools are unavailable: say so explicitly, and tag every claim drawn from model knowledge `[UNVERIFIED as of model knowledge cutoff]` — in conversation and in the record's Research section.
 
@@ -70,7 +70,7 @@ Produce a recommendation that:
 
 ### Step 8 — Record
 1. If `decisions/` does not exist in the project root, create it with a `README.md` index (structure in [`decision-record.md`](decision-record.md)).
-2. Write `decisions/YYYY-MM-DD-<slug>.md` from the template with **Status: proposed**.
+2. Write `decisions/YYYY-MM-DD-<slug>.md` from the template with **Status: proposed** — the slug at most seven lowercase words joined by hyphens; shorten it before writing.
 3. Present the recommendation. When the user confirms, set **Status: decided** and add the index row. If they pick differently, record *their* choice and rationale — the record captures the real decision, not the recommendation.
 
 ### Step 9 — Promote to memory
