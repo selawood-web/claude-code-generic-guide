@@ -90,6 +90,20 @@ The product, running, walked by someone who has never seen it, with no instructi
 The "someone" is the primary portrait: adopt their goal, their context and their
 patience, and say so at the top of the walk log.
 
+### B0. Accounts, data, and the paper path
+**Walk a seeded account, never a real one.** Screenshots go into the repository under
+`design/walks/<date>/` and are committed, so whatever is on screen is published to
+everyone with repository access. Use test or seeded data. Where real data is
+unavoidable, redact it in the image before saving, and never save a screen showing a
+token, a session URL, or another person's details.
+
+**When the product cannot be started** (the paper path, `/gbb --paper`): the owner
+supplies screenshots and one line per screen saying what reaches it and what returns.
+B1 and B2's timings are skipped, B3's spatial map is built from those two inputs and
+marked `from supplied screens`, and B4's five tests all report `not run`. Every ladder
+row a paper run produces carries `unmeasured` until a real walk measures it. A paper
+run never passes a rung.
+
 ### B1. Start it for real
 Use the project's own run path — its README, tasks, or a `run` skill if the session
 has one — and a browser or simulator that can take screenshots (Playwright is

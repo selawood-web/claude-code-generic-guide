@@ -52,7 +52,7 @@ jobs:
             echo "No deterministic fact checks in this repo — skipping."
           fi
       - name: Mutation probes against the validator
-        run: python tools/audit_probes.py
+        run: python tools/audit_probes.py --fail-on-skip
       - name: Unit tests for the validator
         run: |
           if ls tools/test_*.py >/dev/null 2>&1; then

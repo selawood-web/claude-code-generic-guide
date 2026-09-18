@@ -166,6 +166,25 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-18 — Lint that a feature touching a user-facing surface names an intent file
   under Dependencies — [deferred] until two products carry an intent and the check can
   be tested against them
+- 2026-09-18 — `/ccgg-audit .claude/skills/gbb` on `7a6e462`: 10 findings, 0 blockers,
+  all verified, guard canary refused in all three verifiers. Five were the skill's own
+  and are fixed here: the paper path is now a real mode with a B0 procedure behind it
+  rather than an offer contradicting the light path's definition (H-001); the
+  argument-hint enumerates the modes (H-002); Step 3 decides whose product it is before
+  running anyone's run path, referencing the charter rather than restating it (S-001);
+  the five principles are promoted to memory only on the owner's mark, and never when
+  their only source is Step 2's external text (S-002); B0 requires a seeded account and
+  redaction because walk screenshots are committed (S-003) — [in]
+- 2026-09-18 — The same run found five gate defects that GBB merely exposed, fixed in
+  the same branch because a gate that cannot see them is what let them land: the
+  skill-count probe pinned "27 skill" and died silently when the 28th skill arrived, so
+  probes are now count-agnostic and `--fail-on-skip` makes a dead probe fail CI (T-001);
+  `catalog.py` had no test and the counts it writes into SYSTEM-OVERVIEW.md and
+  install.sh had no check, so both now exist (T-002); the install-set link rule ran on
+  three files and now runs on every installed file, relative links resolved from the
+  file that holds them (T-003); outward acts are detected from a skill's body, not a
+  name list (T-004); SYSTEM-OVERVIEW rows are checked, which immediately found
+  `efficiency` and `momentum` missing since before this work (T-005) — [in]
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]

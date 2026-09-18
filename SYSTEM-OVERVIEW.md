@@ -140,6 +140,7 @@ one line of explanation.
 | `/learn` | Keep a lesson forever | Extracts the reusable rule (not just what happened) and saves it with its reason and tags |
 | `/flush` | Save the session before it's lost | Writes a structured summary — goal, decisions with reasons, open threads — to the session log |
 | `/dream` | Turn piled-up logs into organized knowledge | Merges, removes duplicates, flags contradictions — never deletes sources, only archives them |
+| `/momentum` | Never stall halfway | Every reply names the next step, work continues until the whole task is done, and a blocker arrives as one precise, answerable request |
 | `/standup` | A clear progress report | Done / in progress / next / notes — specific and verifiable, never "worked on X" |
 
 ### Evolve — the system improving itself
@@ -148,6 +149,7 @@ one line of explanation.
 |-------|------|----------|
 | `/skillify` | Turn a workflow that worked into a new skill | Checks it's worth keeping, writes the procedure *including what went wrong*, adds it to the catalog |
 | `/reconcile-docs` | One home per rule | Finds every restatement, picks the authoritative home, turns the rest into references — then sweeps again, because drift always hides in more places than the first search finds |
+| `/efficiency` | Spend tokens where judgment lives | Audits the auto-loaded context for cache stability, subagent isolation and model right-sizing, and reports concrete fixes |
 | `/wire` | CCGG rolled into another repo in one command | Installs, adds the live-sync env config, validates in the target, opens the PR — already-wired projects get update-only |
 
 ---

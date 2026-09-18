@@ -27,7 +27,7 @@ rules file links outside the install set | caught | sed -i 's|(WORKING-CHARTER.m
 link to a heading that does not exist | caught | sed -i 's|(strategy.md)|(strategy.md#no-such-heading)|' .claude/skills/testing/SKILL.md
 tracked markdown file emptied | caught | test -e docs/index.md || exit 3; : > docs/index.md
 always-loaded file over its byte budget | caught | yes 'padding that no reader needs' | head -300 >> WORKING-CHARTER.md
-stated skill count drifted in a catalog | caught | test -e README.md || exit 3; grep -q '27 skill' README.md || exit 3; sed -i 's/27 skill/26 skill/' README.md
+stated skill count drifted in a catalog | caught | test -e README.md || exit 3; grep -qE '[0-9]+ skill' README.md || exit 3; sed -i -E 's/[0-9]+ (skill)/999 \1/g' README.md
 catalog row for a skill that does not exist | caught | grep -q '^| `/architecture` |' AGENTS.md || exit 3; sed -i '0,/^| `\/architecture` |/s//| `\/phantom` | Nothing |\n&/' AGENTS.md
 CLAUDE.md imports a file that does not exist | caught | printf '@notes/private.md\n' >> CLAUDE.md
 an import below the two roots points at a file that does not exist | caught | python3 -c "open('.claude/references/code-gate.md','a').write('\n@rules/deep.md\n');open('AGENTS.md','a').write('\n@.claude/references/code-gate.md\n')"
@@ -161,3 +161,9 @@ verifier guard's settings.json registration moves to an event that never sees Ba
 guard decides every agent's Bash although scoped to one | caught:guard | sed -i 's/^    \*) exit 0 ;;$/    *) ;;/' .claude/hooks/audit-verifier-guard.sh
 guard accepts an empty --only-agent and so decides unscoped | caught:guard | sed -i 's/        \*\[!A-Za-z0-9_-\]\*|"")$/        *[!A-Za-z0-9_-]*)/' .claude/hooks/audit-verifier-guard.sh
 audit workflow ORs the base-ref pin in instead of requiring it | caught | python3 -c "p='.github/workflows/audit.yml';t=open(p).read();n=t.replace('github.repository &&\n       github.base_ref','github.repository ||\n       github.base_ref',1);assert n!=t;open(p,'w').write(n)"
+stated skill count drifted in SYSTEM-OVERVIEW | caught | grep -qE '[0-9]+ skills' SYSTEM-OVERVIEW.md || exit 3; sed -i -E 's/([0-9]+) skills/999 skills/g' SYSTEM-OVERVIEW.md
+installer's spelled-out skill count drifted | caught | grep -qE 'expect [a-z-]+\.' install.sh || exit 3; sed -i -E 's/expect [a-z-]+\./expect eleven./' install.sh
+skill row dropped from SYSTEM-OVERVIEW | caught | grep -q '^| `/gbb` |' SYSTEM-OVERVIEW.md || exit 3; sed -i '/^| `\/gbb` |/d' SYSTEM-OVERVIEW.md
+SYSTEM-OVERVIEW row for a skill that does not exist | caught | grep -q '^| `/gbb` |' SYSTEM-OVERVIEW.md || exit 3; sed -i '0,/^| `\/gbb` |/s//| `\/phantom` | Nothing | Nothing |\n&/' SYSTEM-OVERVIEW.md
+skill companion links outside the install set | caught | grep -q 'decide/research-cache.md' .claude/skills/gbb/SKILL.md || exit 3; sed -i 's|(../decide/research-cache.md)|(../../../docs/index.md)|' .claude/skills/gbb/SKILL.md
+push command added to a model-invocable skill body | caught | test -e .claude/skills/debug/SKILL.md || exit 3; printf '\nRun `git push origin HEAD` when finished.\n' >> .claude/skills/debug/SKILL.md

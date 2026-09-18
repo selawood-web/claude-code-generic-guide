@@ -148,6 +148,43 @@ class LinkInstallSetTests(unittest.TestCase):
         self.assertFalse(link_leaves_install_set("mailto:someone@example.com"))
 
 
+class LinkInstallSetFromDirTests(unittest.TestCase):
+    """A link is followed from the file that holds it, not from the repository root.
+
+    Without from_dir the rule only ever saw root-level files, so a skill could
+    link to docs/ and the check passed (audit finding T-003).
+    """
+
+    def test_sibling_companion_ok(self):
+        self.assertFalse(link_leaves_install_set("gbb-ladder.md", ".claude/skills/gbb"))
+
+    def test_cross_skill_companion_ok(self):
+        self.assertFalse(link_leaves_install_set("../decide/research-cache.md", ".claude/skills/gbb"))
+
+    def test_reference_from_a_skill_ok(self):
+        self.assertFalse(link_leaves_install_set("../../references/code-gate.md", ".claude/skills/gbb"))
+
+    def test_climb_to_uninstalled_directory_fails(self):
+        self.assertTrue(link_leaves_install_set("../../../docs/index.md", ".claude/skills/gbb"))
+        self.assertTrue(link_leaves_install_set("../../../decisions/README.md", ".claude/skills/gbb"))
+
+    def test_climb_out_of_the_repository_fails(self):
+        self.assertTrue(link_leaves_install_set("../../../../elsewhere.md", ".claude/skills/gbb"))
+
+    def test_root_file_behaviour_unchanged(self):
+        self.assertFalse(link_leaves_install_set(".claude/references/code-gate.md"))
+        self.assertTrue(link_leaves_install_set("docs/index.md"))
+
+    def test_every_installed_file_is_scanned(self):
+        scanned = validate.installed_linking_files()
+        self.assertIn("AGENTS.md", scanned)
+        self.assertIn(".claude/skills/gbb/SKILL.md", scanned)
+        self.assertTrue(any(f.startswith(".claude/references/") for f in scanned),
+                        "references carry links too")
+        self.assertGreater(len(scanned), len(validate.ALWAYS_LOADED),
+                           "the check must reach past the three always-loaded files")
+
+
 class SlugifyTests(unittest.TestCase):
     # punctuation is deleted in place, leaving two spaces -> two hyphens
     def test_plus_leaves_double_hyphen(self):
@@ -727,6 +764,30 @@ class SkillGrantTests(unittest.TestCase):
 
     def test_inward_skill_unconstrained(self):
         self.assertEqual(validate.skill_grant_problems(".claude/skills/debug/SKILL.md", {}), [])
+
+    def test_outward_verb_in_body_needs_user_invocation(self):
+        """A name list cannot see a skill that grew a push step (finding T-004)."""
+        for verb in ("git push origin HEAD", "gh pr create --fill", "gh pr merge",
+                     "npm publish", "railway up", "docker push ghcr.io/x"):
+            with self.subTest(verb=verb):
+                problems = validate.skill_grant_problems(
+                    ".claude/skills/debug/SKILL.md", {}, f"Step 9\nRun `{verb}` when done.\n")
+                self.assertTrue(any("disable-model-invocation" in p for p in problems),
+                                f"{verb} in a body must require user invocation")
+
+    def test_outward_verb_in_body_allowed_when_user_invoked_only(self):
+        self.assertEqual(
+            validate.skill_grant_problems(".claude/skills/debug/SKILL.md",
+                                          {"disable-model-invocation": "true"},
+                                          "Run `git push origin HEAD`.\n"),
+            [])
+
+    def test_prose_about_pushing_is_not_a_push(self):
+        """The rule reads commands, not the English word 'push'."""
+        self.assertEqual(
+            validate.skill_grant_problems(".claude/skills/debug/SKILL.md", {},
+                                          "Do not push back on the reviewer.\n"),
+            [])
 
 
 class SkillIdentityTests(unittest.TestCase):

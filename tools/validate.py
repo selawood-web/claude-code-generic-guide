@@ -456,6 +456,14 @@ def check_configs() -> None:
             fail(f"{path}: invalid JSON — {exc}")
 
 
+SPELLED_COUNTS = {
+    18: "eighteen", 19: "nineteen", 20: "twenty", 21: "twenty-one",
+    22: "twenty-two", 23: "twenty-three", 24: "twenty-four", 25: "twenty-five",
+    26: "twenty-six", 27: "twenty-seven", 28: "twenty-eight", 29: "twenty-nine",
+    30: "thirty",
+}
+
+
 def check_catalogs() -> None:
     """Every skill directory appears in every catalog, and stated counts match.
 
@@ -501,10 +509,27 @@ def check_catalogs() -> None:
             if row_name not in skills:
                 fail(f"AGENTS.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
 
+    # SYSTEM-OVERVIEW.md's group tables are hand-written — catalog.py says so — so
+    # nothing regenerates a row for a new skill and nothing noticed a deleted one
+    # until the audit did (finding T-005).
+    overview = read_catalog("SYSTEM-OVERVIEW.md", "## The workers:")
+    if overview is not None:
+        for name in skills:
+            if f"| `/{name}` |" not in overview:
+                fail(f"SYSTEM-OVERVIEW.md: skill '{name}' missing from the skill tables")
+        for row_name in re.findall(r"^\| `/([a-z0-9-]+)` \|", overview, re.M):
+            if row_name not in skills:
+                fail(f"SYSTEM-OVERVIEW.md: table lists skill '{row_name}' but .claude/skills/{row_name}/ does not exist")
+
+    # Counts: every file catalog.py rewrites is checked here, because catalog.py is
+    # a fixer and this is the gate. SYSTEM-OVERVIEW.md and install.sh were rewritten
+    # by the fixer and checked by nothing (finding T-002).
     count_re = re.compile(
         r"\b(\d+)\s+(?:production-ready\s+|reusable\s+|installed\s+)?[Ss]kill(?:s\b| workflows\b)"
     )
-    for doc_name, text in (("README.md", readme), ("USER-MANUAL.md", manual)):
+    installer = read_catalog("install.sh", "$SRC/.claude/skills")
+    for doc_name, text in (("README.md", readme), ("USER-MANUAL.md", manual),
+                           ("SYSTEM-OVERVIEW.md", overview), ("install.sh", installer)):
         if text is None:
             continue
         for stated in count_re.findall(text):
@@ -512,6 +537,12 @@ def check_catalogs() -> None:
                 fail(
                     f"{doc_name}: states {stated} skills but .claude/skills/ contains {len(skills)}"
                 )
+    if installer is not None:
+        spelled = re.search(r"expect ([a-z-]+)\.", installer)
+        expected = SPELLED_COUNTS.get(len(skills))
+        if spelled and expected and spelled.group(1) != expected:
+            fail(f"install.sh: says 'expect {spelled.group(1)}.' but .claude/skills/ contains "
+                 f"{len(skills)} ({expected}) — run python3 tools/catalog.py --write")
 
 
 def check_context_budget() -> None:
@@ -613,8 +644,8 @@ INSTALLED_LINK_ROOTS = (
 )
 
 
-def link_leaves_install_set(link: str) -> bool:
-    """True when a link from an always-loaded file points outside install.sh's copies.
+def link_leaves_install_set(link: str, from_dir: str = "") -> bool:
+    """True when a link from an installed file points outside install.sh's copies.
 
     The drop-in contract (charter, *Must never break*) bounds where a rule file
     may point. A link to something install.sh does not copy — a decision record,
@@ -625,6 +656,11 @@ def link_leaves_install_set(link: str) -> bool:
     External links, bare anchors, and links this repo alone can resolve are the
     three cases people actually write, so each is decided explicitly rather than
     by a catch-all.
+
+    `from_dir` is the directory of the file holding the link, so a relative link
+    from a skill companion resolves the way a reader follows it. Without it the
+    check only ever saw root-level files, which is how a skill could link to
+    docs/ and pass (audit finding T-003).
     """
     if link.startswith(("http://", "https://", "mailto:", "#")):
         return False
@@ -633,14 +669,29 @@ def link_leaves_install_set(link: str) -> bool:
         return False  # a bare anchor stays inside its own file
     if file_part.startswith("./"):
         file_part = file_part[2:]
+    file_part = os.path.normpath(os.path.join(from_dir, file_part))
+    if file_part.startswith(".." + os.sep) or file_part == "..":
+        return True  # climbs out of the repository entirely
     return not any(
         file_part == root or file_part.startswith(root + "/")
         for root in INSTALLED_LINK_ROOTS
     )
 
 
+def installed_linking_files() -> list[str]:
+    """Every tracked file install.sh delivers whose links a reader will follow.
+
+    The three always-loaded rule files plus every markdown file under .claude/ —
+    skills, their companions, agents, references. All of them arrive in an
+    installed project, so a link any of them carries to something install.sh
+    does not copy is broken there (audit finding T-003).
+    """
+    names = [n for n in ALWAYS_LOADED if os.path.exists(os.path.join(ROOT, n))]
+    return names + sorted(tracked(".claude/**/*.md"))
+
+
 def check_rule_file_links() -> None:
-    for name in ALWAYS_LOADED:
+    for name in installed_linking_files():
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             continue
@@ -648,7 +699,7 @@ def check_rule_file_links() -> None:
         content = blank_inline_code("\n".join(strip_code_blocks(raw.splitlines())))
         for match in LINK_RE.finditer(content):
             target = match.group(1)
-            if link_leaves_install_set(target):
+            if link_leaves_install_set(target, os.path.dirname(name)):
                 fail(
                     f"{name}: links to {target}, which install.sh does not copy — "
                     f"the link breaks in every installed project; move the target "
@@ -982,11 +1033,22 @@ AUDIT_SKILL_GRANTS = ("Bash(python3 tools/audit_facts.py *) Bash(python3 tools/a
                       "Bash(python3 tools/audit_redteam.py *) Bash(python3 tools/audit_report.py *) "
                       "Write(CCGG-AUDIT-*/**) Read Glob Grep Agent")
 OUTWARD_SKILLS = ("ship", "git-steward", "deploy", "deploy-steward", "wire", "pr", "ccgg-audit")
+# A name list cannot see a skill that grew an outward step after it was written
+# (finding T-004). These are the verbs that reach outside the working tree.
+OUTWARD_BODY_RE = re.compile(
+    r"\b(?:git\s+push|gh\s+pr\s+(?:create|merge)|gh\s+release\s+create|"
+    r"gh\s+repo\s+create|railway\s+up|npm\s+publish|docker\s+push)\b"
+)
 BARE_GRANT_RE = re.compile(r"\b(Write|Edit|Bash|NotebookEdit)\b(?!\()")
 
 
-def skill_grant_problems(path: str, fields: dict[str, str]) -> list[str]:
-    """Grants a skill pre-approves: a bare write or shell grant approves everything."""
+def skill_grant_problems(path: str, fields: dict[str, str], body: str = "") -> list[str]:
+    """Grants a skill pre-approves: a bare write or shell grant approves everything.
+
+    `body` is the skill's prose. A skill that tells the agent to push, open a pull
+    request, publish or deploy acts outward whether or not its name was on the
+    list when the list was written.
+    """
     problems = []
     name = os.path.basename(os.path.dirname(path))
     grants = fields.get("allowed-tools", "").strip("'\" ")
@@ -994,18 +1056,27 @@ def skill_grant_problems(path: str, fields: dict[str, str]) -> list[str]:
         problems.append(f"{path}: allowed-tools grants bare {tool} — pre-approves every {tool} call; scope it with a specifier")
     if name == "ccgg-audit" and grants and grants != AUDIT_SKILL_GRANTS:
         problems.append(f"{path}: the audit's allowed-tools drifted from the pinned set (tools/validate.py AUDIT_SKILL_GRANTS)")
-    if name in OUTWARD_SKILLS and fields.get("disable-model-invocation", "").strip().lower() != "true":
+    invocable = fields.get("disable-model-invocation", "").strip().lower() != "true"
+    if name in OUTWARD_SKILLS and invocable:
         problems.append(f"{path}: acts outward (push, PR, merge, deploy, wire) but lacks disable-model-invocation: true — the model can start it unasked")
+    elif invocable:
+        outward = OUTWARD_BODY_RE.search(body)
+        if outward:
+            problems.append(
+                f"{path}: body tells the agent to run '{outward.group(0)}' but the skill lacks "
+                f"disable-model-invocation: true — an outward act the model can start unasked"
+            )
     return problems
 
 
 def check_skill_grants() -> None:
     for path in tracked(".claude/skills/*/SKILL.md"):
-        lines = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read().splitlines()
+        raw = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        lines = raw.splitlines()
         fields, _ = parse_frontmatter_fields(lines)
         if fields is None:
             continue
-        for problem in skill_grant_problems(path, fields):
+        for problem in skill_grant_problems(path, fields, raw):
             fail(problem)
 
 
