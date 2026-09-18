@@ -2,7 +2,7 @@
 name: gbb
 description: Close the gap between a product's vision and what it actually feels like to use. Researches who the app is for and how they use it, walks the running product as a stranger, convenes a council of design minds from different disciplines, and returns a ranked Good / Better / Best ladder with a re-runnable test per rung. Use when the user says "GBB", "make this spectacular", "the UX is only good enough", "design review", or "why does it feel worse than the vision".
 when_to_use: GBB, good better best, make it spectacular, design gap, UX review, design review, feels worse than the vision, usability, orientation, polish
-argument-hint: "[app name, path, or URL] [--rerun | --screen <name>]"
+argument-hint: "[app name, path, or URL] [--intent | --rerun | --screen <name>]"
 purpose: "Vision-to-product design gap: research, stranger walk, design council, GBB ladder"
 ---
 
@@ -20,12 +20,20 @@ outside software, and returns a **ladder**: for every moment that matters, what 
 (Good), the next concrete step (Better), and the version that would make someone tell
 a friend (Best) — each rung with a test that can be re-run after every change.
 
+GBB has two halves. **Intent** runs before anything is built: who the product is for,
+the environment it is met in, the feeling it must leave, and the colour, type, icons,
+layout, motion and voice derived from those, each with a reason and a test — in
+[`design-intent.md`](design-intent.md). **The ladder** runs on the built product and
+measures the gap from that intent. Nothing is built with no intended direction, and
+nothing is done until the intent's tests pass in the running product.
+
 This skill judges and ranks; it does not build. The moves it produces become
 `/feature` definitions with the acceptance test already written, so the ordinary build
 loop picks them up. It does not decide whether the product should exist — that is
 `/product-brief` — and it does not write the spec — that is `/requirements`.
 
 Companions in this directory:
+- [`design-intent.md`](design-intent.md) — the intent written before building: who, where, feeling, language, tests
 - [`research-protocol.md`](research-protocol.md) — who it is for, context of use, the stranger walk, the spatial map
 - [`design-council.md`](design-council.md) — the ten council members and their output contract
 - [`gbb-ladder.md`](gbb-ladder.md) — the ladder record: template, scoring, the stranger tests
@@ -33,6 +41,7 @@ Companions in this directory:
 ## Modes
 | Invocation | Path | What runs |
 |------------|------|-----------|
+| `/gbb --intent <product or surface>` | intent | writes or revises `design/INTENT-<slug>.md` before anything is built |
 | `/gbb <app>` | full | every step below |
 | `/gbb --screen <name>` | light | Steps 1 and 3 on one screen or flow, three council members, a ladder for that surface only |
 | `/gbb --rerun` | rerun | Steps 3, 6 and 7 against the existing ladder — re-scores every rung, promotes what passed |
@@ -43,9 +52,11 @@ the full path is for a product, a release, or the first run. Say which path in o
 ## Process
 
 ### Step 1 — Vision capture
-Find the vision before measuring the gap from it. Read `design/GBB-<slug>.md` if it
-exists (a rerun starts from it), then `decisions/`, `features/`, README, and any
-design doc. What must be written down, in the owner's words where possible:
+Find the vision before measuring the gap from it. Read `design/INTENT-<slug>.md`
+first — if it does not exist, write it now via the intent mode, because a council
+judging a product with no stated direction judges against its own taste. Then
+`design/GBB-<slug>.md` if it exists (a rerun starts from it), `decisions/`,
+`features/`, README, and any design doc. What must be written down, in the owner's words where possible:
 - **North star** — one sentence: what this product is for, and for whom.
 - **The feeling** — three words the owner wants a user to have after five minutes.
 - **The moments** — the three moments that decide whether it is loved: usually first
@@ -112,7 +123,8 @@ Synthesize into `design/GBB-<slug>.md` from [`gbb-ladder.md`](gbb-ladder.md):
 - One row per moment or surface. **Good** is what is there now, stated honestly.
   **Better** is a change small enough for one feature. **Best** is the spectacular
   version, traced to a spectacular reference or an adjacent-field finding — never
-  "more polish".
+  "more polish". A rung that contradicts the intent either loses or revises the
+  intent with a dated ledger entry.
 - Every rung carries its stranger test and the number that proves it was reached.
 - Rows ranked by reach × impact / effort. The top ten are the ladder; the rest are
   the backlog section, kept so a rerun can promote them.
@@ -129,7 +141,9 @@ of the file with the date.
 
 ### Step 8 — Handoff and record
 - The top three Better rungs become `/feature` definitions, each with the stranger
-  test copied in as an acceptance criterion. Post to the tracker per the charter's
+  test copied in as an acceptance criterion and the intent file named under
+  Dependencies; the change is done when the intent's tests for that surface pass in
+  the running product, with screenshots. Post to the tracker per the charter's
   channel rule; render, do not post, anywhere else.
 - Add the ladder to `design/README.md`'s index (create both on first use, like
   `features/`).
@@ -148,6 +162,8 @@ path first.
 
 | Anti-pattern | Correct approach |
 |--------------|-----------------|
+| Building a surface with no written intent | `--intent` first; a feature touching a surface names the intent file |
+| Done when it renders | Done when the intent's tests pass in the running product, with screenshots |
 | Judging the spec or a description of the app | Step 3 runs the product; the council sees screenshots |
 | Portraits from imagination | Step 2 builds them from evidence, cited |
 | "Best" meaning more of the same polish | Best traces to a spectacular reference or an adjacent field |

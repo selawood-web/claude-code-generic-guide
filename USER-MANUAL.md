@@ -679,6 +679,7 @@ evaluate this feature idea
 **Use when:** The product works and is well built, but what users get feels far from the vision — layout, usability, knowing where you are. GBB is the gate for how it feels, the way the code gate is the gate for whether it is correct.
 
 **What it does:**
+0. `--intent`, before anything is built: writes the design intent in a designer's order of thought — who the person is, the environment that gives the best feel and the constraints it imposes, the feeling and the anti-feeling, the borrowed mechanisms from spectacular references, then colour roles, type scale, icon set, layout and reach, motion, voice — each with a reason and a measurable test. A surface is done when those tests pass in the running product, not when it renders
 1. Captures the vision in the owner's words: north star, the feeling, the three moments that matter, and the products the owner considers spectacular
 2. Researches live who the app is really for and in what context, the current platform conventions, the two nearest competitors, and how fields outside software — airports, cockpits, game tutorials — solve the product's hardest moment
 3. Runs the product for real and walks it as a stranger with no instructions: every screen and state screenshotted, a spatial map of where you are and how you get back, five timed stranger tests
@@ -688,6 +689,7 @@ evaluate this feature idea
 
 **Examples:**
 ```
+/gbb --intent the field-service app
 /gbb the field-service app at http://localhost:3000
 /gbb --screen checkout
 /gbb --rerun

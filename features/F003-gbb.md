@@ -42,6 +42,13 @@ to spectacular, each with a number that proves when it has been reached.
   row, the Good rung as observed, a Better rung sized for one feature, a Best rung
   traced to a spectacular reference or an adjacent-field finding, and the stranger
   test that proves each
+- An owner can run `/gbb --intent` before a product or surface is built and receive
+  the intent file under `design/`: who it is for, the environment and its constraints, the
+  feeling and anti-feeling, the references' borrowed mechanisms, and the colour, type,
+  icon, layout, motion and voice decisions each with a reason and a measurable test
+- A builder can treat a user-facing change as done only when the intent's tests pass
+  in the running product with screenshots, and a feature for a surface names the
+  intent file under Dependencies
 - An owner can scope a run to one screen or flow with `--screen`, which runs three
   council members instead of ten
 - An owner can run `--rerun` after changes and see every stranger test re-timed, passed
@@ -81,6 +88,10 @@ to spectacular, each with a number that proves when it has been reached.
   then that rung becomes the row's Good, the Best becomes the Better, the score history
   gains a dated row, and no rung is marked passed on the strength of a merged pull
   request alone
+- Given a product with no intent file, when `/gbb` starts, then the intent is written
+  before the stranger walk and the council never runs without one
+- Given an intent file, when any Language decision in it is read, then it carries the
+  part of the intent it was derived from and a test with a measurable pass bar
 - Given the light path on one screen, when it completes, then exactly three council
   members ran, chosen from the surface table in `design-council.md`, and the ladder
   gains or updates only rows for that surface
@@ -139,6 +150,14 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   until three reruns on one product show which rungs the agent's timing gets wrong
 - 2026-09-18 — A visual diff of screenshots between runs as regression evidence —
   [open]
+- 2026-09-18 — Owner's philosophy: nothing is built with no intended direction. Added
+  the intent half — `--intent` writes the intent file under `design/` before building, in a
+  designer's order of thought (who, where, feeling, references, language) and verified
+  in the order the user's mind meets a screen (sense, attention, recognition, feeling,
+  action); done means the tests pass in the running product, not that it renders — [in]
+- 2026-09-18 — Lint that a feature touching a user-facing surface names an intent file
+  under Dependencies — [deferred] until two products carry an intent and the check can
+  be tested against them
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]
