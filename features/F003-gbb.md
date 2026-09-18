@@ -11,8 +11,7 @@ target: unscheduled
 ## Summary
 One command, `/gbb`, takes a running app and returns a ranked Good / Better / Best
 ladder: evidence-based portraits of who it is for, a stranger walk with screenshots and
-a spatial map, a nine-member design council from outside software, and a timed test on
-every rung. Top rungs leave as feature definitions; a rerun moves the bar.
+a spatial map, a ten-member design council, and a timed test on every rung. Top rungs leave as feature definitions; a rerun moves the bar.
 
 ## Problem
 Two projects built with this repository's process are correct, well-tested and
@@ -44,7 +43,7 @@ to spectacular, each with a number that proves when it has been reached.
   traced to a spectacular reference or an adjacent-field finding, and the stranger
   test that proves each
 - An owner can scope a run to one screen or flow with `--screen`, which runs three
-  council members instead of nine
+  council members instead of ten
 - An owner can run `--rerun` after changes and see every stranger test re-timed, passed
   Better rungs promoted to Good, and a new score-history row
 - A council member can be edited in `design-council.md` without touching the skill
@@ -102,7 +101,7 @@ to spectacular, each with a number that proves when it has been reached.
   clock
 - Risk: the council converges on the same three findings and the ladder reads as one
   reviewer. Mitigation: members are briefed with evidence only and required to
-  disagree; early signal is nine identical top gaps
+  disagree; early signal is ten identical top gaps
 - Risk: "Best" collapses into taste the owner does not share. Mitigation: Best must
   trace to the owner's own spectacular references or a cited adjacent-field mechanism;
   early signal is `[UNTRACED]` Best moves outnumbering traced ones
@@ -129,6 +128,10 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-18 — The council draws its members from outside software on purpose:
   wayfinding, choreography, editing, game design, cognitive science, accessibility,
   the primary portrait, brand direction, craft — [in]
+- 2026-09-18 — Owner asked where the UI/UX and usability specialist is: added as the
+  tenth member, the one chair from inside the interface craft, running the heuristic
+  pass and owning information architecture and form design; it takes the Cognitive
+  Scientist's seat in two light-path surfaces — [in]
 - 2026-09-18 — The rerun promotes rungs, so the ladder never runs out of a top rung;
   this is the motto as a mechanism — [in]
 - 2026-09-18 — The full path refuses to judge a product it cannot run — [in]

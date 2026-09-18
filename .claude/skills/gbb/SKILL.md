@@ -27,7 +27,7 @@ loop picks them up. It does not decide whether the product should exist — that
 
 Companions in this directory:
 - [`research-protocol.md`](research-protocol.md) — who it is for, context of use, the stranger walk, the spatial map
-- [`design-council.md`](design-council.md) — the nine council members and their output contract
+- [`design-council.md`](design-council.md) — the ten council members and their output contract
 - [`gbb-ladder.md`](gbb-ladder.md) — the ladder record: template, scoring, the stranger tests
 
 ## Modes
@@ -99,7 +99,7 @@ Run the members in [`design-council.md`](design-council.md) against the vision, 
 research, the screenshots and the spatial map. Parallel subagents on a smaller model
 when available, sequential passes fully adopting one member at a time otherwise
 (never blended). Each member returns its three ranked gaps, one Best move, and one
-kill question, per the contract in that file. The full path runs all nine; the light
+kill question, per the contract in that file. The full path runs all ten; the light
 path runs the three whose discipline the surface calls for, named in the file.
 
 ### Step 5 — Kill questions first
@@ -152,7 +152,7 @@ path first.
 | Portraits from imagination | Step 2 builds them from evidence, cited |
 | "Best" meaning more of the same polish | Best traces to a spectacular reference or an adjacent field |
 | A ladder with no numbers | Every rung has a stranger test and a measurement |
-| One design voice | Nine disciplines, each with a kill question the synthesis must answer |
+| One design voice | Ten disciplines, each with a kill question the synthesis must answer |
 | The ladder as a report | The top three Better rungs leave as `/feature` definitions |
 | Running once | `--rerun` moves the bar; the ladder is a living file in `design/` |
 

@@ -682,7 +682,7 @@ evaluate this feature idea
 1. Captures the vision in the owner's words: north star, the feeling, the three moments that matter, and the products the owner considers spectacular
 2. Researches live who the app is really for and in what context, the current platform conventions, the two nearest competitors, and how fields outside software — airports, cockpits, game tutorials — solve the product's hardest moment
 3. Runs the product for real and walks it as a stranger with no instructions: every screen and state screenshotted, a spatial map of where you are and how you get back, five timed stranger tests
-4. Convenes a nine-member design council — wayfinder, choreographer, editor, game designer, cognitive scientist, accessibility advocate, the stranger, brand director, craftsperson — each returning three ranked gaps, one Best move, and one kill question
+4. Convenes a ten-member design council — wayfinder, choreographer, editor, game designer, cognitive scientist, accessibility advocate, the stranger, brand director, craftsperson, usability specialist — each returning three ranked gaps, one Best move, and one kill question
 5. Writes the ladder to `design/GBB-<slug>.md`: per moment, Good (now), Better (one feature), Best (spectacular, traced to a reference), each with the test that proves it; hands the top three to `/feature`
 6. On `--rerun`, re-times every test and promotes what passed — the old Better becomes the new Good, so the ladder never runs out of a top rung
 

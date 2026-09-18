@@ -1,7 +1,7 @@
-# The Design Council — nine minds, one product
+# The Design Council — ten minds, one product
 
-The council exists because one reviewer has one taste. Nine disciplines, most of
-them from outside software, each with a stance, a signature move and a **kill
+The council exists because one reviewer has one taste. Ten disciplines, one from
+inside the interface craft and the rest from outside software, each with a stance, a signature move and a **kill
 question** — the one question that, unanswered, makes that member's other findings
 irrelevant. Run them as parallel subagents on a smaller model when the runner
 offers one; otherwise as sequential passes, fully adopting one member at a time,
@@ -20,7 +20,7 @@ included — and nothing else.
 3. **One kill question** — asked of the product, in one sentence, answerable yes or
    no. The synthesis must answer every kill question before it ranks anything.
 
-Members disagree on purpose. A council that returns nine versions of the same gap
+Members disagree on purpose. A council that returns ten versions of the same gap
 has been briefed with a conclusion; re-brief with the evidence only.
 
 ## The members
@@ -129,12 +129,32 @@ has been briefed with a conclusion; re-brief with the evidence only.
 - **Kill question:** *Is there any state in the walk log the product handled with a
   blank screen, a spinner with no end, or a raw error string?*
 
+### 10. The Usability Specialist — the interface craft itself
+- **From:** UX research and interaction design practice — heuristic evaluation,
+  information architecture, pattern libraries, usability testing.
+- **Stance:** the other nine bring taste from elsewhere; this chair brings the
+  discipline that already has names for most of what they find. Conventions exist
+  because they were tested. Break one only on purpose, and say why.
+- **Looks at:** the ten usability heuristics (visibility of status, match to the real
+  world, control and freedom, consistency, error prevention, recognition, flexibility,
+  minimalism, error recovery, help) applied screen by screen; affordances — does every
+  control look like what it does; the information architecture against the spatial
+  map; form design — field order, defaults, validation timing, inline help; whether
+  the platform's standard components are used in their standard way and, where they
+  are not, whether the deviation earns its cost.
+- **Signature move:** the heuristic pass — every screen scored against the ten
+  heuristics, with the violations that the stranger's hesitations already confirmed
+  ranked first. This is the member whose gaps most often become the Better rung,
+  because the fix is usually a known pattern applied correctly.
+- **Kill question:** *Is there any control on the core-action path whose function the
+  stranger could not predict before touching it?*
+
 ## Light path — three members by surface
 
 | Surface | Members |
 |---------|---------|
-| Navigation, a new section, a flow spanning screens | Wayfinder, Cognitive Scientist, Stranger |
-| A single screen or form | Editor, Cognitive Scientist, Accessibility Advocate |
+| Navigation, a new section, a flow spanning screens | Wayfinder, Usability Specialist, Stranger |
+| A single screen or form | Usability Specialist, Editor, Accessibility Advocate |
 | An animation, a transition, a loading experience | Choreographer, Craftsperson, Game Designer |
 | First run, onboarding, empty states | Game Designer, Stranger, Editor |
 | A visual refresh or brand change | Brand Director, Editor, Craftsperson |

@@ -105,7 +105,7 @@ one line of explanation.
 |-------|------|----------|
 | `/decide` | A researched, debated, recorded decision | Criteria before options, live research before recommending, five personas argue, and the choice lands in `decisions/` with a revisit trigger |
 | `/product-brief` | Know if an idea is worth building | Market research, viability debate, an explicit Go / No-go / Pivot verdict — the spec is only written on Go |
-| `/gbb` | Close the gap between the vision and how the product feels | Researches who it is for, walks the running product as a stranger, runs a nine-member design council, and returns a Good / Better / Best ladder with a timed test per rung — a rerun moves the bar |
+| `/gbb` | Close the gap between the vision and how the product feels | Researches who it is for, walks the running product as a stranger, runs a ten-member design council, and returns a Good / Better / Best ladder with a timed test per rung — a rerun moves the bar |
 
 ### Build — from vague idea to working code
 
