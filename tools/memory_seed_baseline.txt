@@ -1,0 +1,14 @@
+# The lines of MEMORY.md a reviewer has accepted as rules that land in every
+# project on the machine (install.sh appends the file to ~/.claude/CLAUDE.md).
+# One line per row, verbatim and stripped; `#` rows are comments. Read by
+# tools/audit_facts.py, whose global-memory-seed-drift fact fails the gate when
+# MEMORY.md carries a directive or tool-naming line this file does not list, or
+# this file lists one MEMORY.md no longer carries — so the change and its
+# acceptance travel in the same reviewed diff (finding S-001, 2026-09-18).
+# This file is the guide's own and is not installed into projects.
+> Append it to `~/.claude/CLAUDE.md` (or pull it in with an `@` import) and
+> customize with your own learnings. `~/.claude/CLAUDE.md` is loaded at the
+Prefer the simplest architecture that meets stated requirements. Extract complexity only when a concrete need is proven. Never add components "for future scale" without a measured reason.
+Use battle-tested, widely-supported technology for databases, queues, and infrastructure. Save cutting-edge choices for differentiated application code.
+Use `hmac.compare_digest` (Python) or equivalent for comparing secrets and tokens. String equality short-circuits and leaks timing information.
+Never fix a bug you cannot reproduce. A fix without a reproduction is a guess. A regression test that fails before the fix and passes after is proof.

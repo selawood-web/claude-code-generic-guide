@@ -105,13 +105,22 @@ INSTRUCTION_GLOBS = (
     "features/*.md",
     "knowledge-base/*.md",
 )
-# Kinds whose `finding` status is a defect a gate should stop for. Two are left
-# out on purpose: permission-surface lists what the committed settings grant — a
-# fact for review, not a defect, and an installed project that grants anything
-# would otherwise go red on its own configuration — and `gate` records how the
-# tree's own gate did, which the workflow's other steps already report.
+# Kinds whose `finding` status is a defect a gate should stop for. Every kind the
+# stage emits is in exactly one of the two tuples below, and a test holds that
+# partition: a kind in neither is a finding nobody decided about, which is how
+# the global-memory-seed inventory sat outside the gate for two audits while
+# its detail said "read the named lines" (finding S-001, 2026-09-18).
 GATING_KINDS = ("hook-registration", "hook-stdout", "hidden-characters", "frontmatter",
-                "command-resolution", "network-exec")
+                "command-resolution", "network-exec", "global-memory-seed-drift")
+# Left out on purpose, each with its reason: these report a surface for review,
+# and a project would otherwise go red on its own configuration.
+NON_GATING_KINDS = {
+    "permission-surface": "lists what the committed settings grant — a fact for review, not a defect",
+    "gate": "records how the tree's own gate did, which the workflow's other steps already report",
+    "mcp-config": "a project-scoped MCP server is a surface to review, not a defect in itself",
+    "global-memory-seed": "counts the seed's directive lines; the shipped file has some by design — "
+                          "global-memory-seed-drift is the gate, against the committed baseline",
+}
 
 
 def gating_findings(facts: list) -> list:
@@ -569,7 +578,41 @@ DIRECTIVE_RE = re.compile(r"^\s*(?:[-*]\s+|\d+\.\s+)?"
 NAMES_A_TOOL_RE = re.compile(r"`[^`]*(?:/|\.(?:py|sh|json|md|toml)|\bcurl\b|\bcat\b|\bgit\b)[^`]*`")
 
 
-def memory_seed_facts(text: str | None, facts: "Facts") -> None:
+# The count above is an inventory, and an inventory cannot gate: the shipped
+# MEMORY.md carries directives by design, so "any directive" would fail every
+# run and "none" would pass every addition. What gates is drift — a committed
+# baseline of the lines the two detectors flag today, so a pull request that adds
+# a directive or names a tool in the seed must also edit the baseline in the same
+# reviewed diff (finding S-001, 2026-09-18). The baseline is the guide's own and
+# is not installed: an installed project's MEMORY.md is its own to customize, so
+# where the file is absent the drift fact is skipped, never a finding. Headings
+# are never rules and are left out of the drift set; lines the detectors miss are
+# missed here too, which is the detectors' limit, not the gate's.
+MEMORY_SEED_BASELINE = "tools/memory_seed_baseline.txt"
+
+
+def memory_seed_lines(text: str) -> list[tuple[int, str]]:
+    """The lines of the seed a reviewer must have accepted: numbered, stripped, in order."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    flagged: list[tuple[int, str]] = []
+    for no, raw in enumerate(text.split("\n"), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if DIRECTIVE_RE.match(raw) or NAMES_A_TOOL_RE.search(raw):
+            flagged.append((no, line))
+    return flagged
+
+
+def baseline_lines(text: str) -> list[str]:
+    """The accepted lines a baseline file lists: one per row, `#` rows are comments."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    return [ln.strip() for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("#")]
+
+
+def memory_seed_facts(text: str | None, facts: "Facts", baseline: str | None = None) -> None:
     if text is None:
         return
     lines = text.split("\n")
@@ -579,6 +622,25 @@ def memory_seed_facts(text: str | None, facts: "Facts") -> None:
               f"{len(directives)} directive line(s), {len(naming)} naming a tool, path or command",
               "class: supply-chain; install.sh appends this file to ~/.claude/CLAUDE.md, which loads "
               "in every project on the machine — read the named lines before seeding")
+    if baseline is None:
+        facts.add("global-memory-seed-drift", "skipped", "MEMORY.md",
+                  f"no {MEMORY_SEED_BASELINE} — drift against an accepted set is not measured here",
+                  "the guide's own tree carries the baseline; an installed project's seed is its own")
+        return
+    flagged = memory_seed_lines(text)
+    accepted = set(baseline_lines(baseline))
+    present = {line for _, line in flagged}
+    new = [(no, line) for no, line in flagged if line not in accepted]
+    stale = [line for line in baseline_lines(baseline) if line not in present]
+    if not new and not stale:
+        facts.add("global-memory-seed-drift", "ok", "MEMORY.md",
+                  f"{len(flagged)} flagged line(s), all in {MEMORY_SEED_BASELINE}")
+        return
+    named = [f"line {no}: {line}" for no, line in new[:3]] + [f"baseline only: {line}" for line in stale[:3]]
+    facts.add("global-memory-seed-drift", "finding", "MEMORY.md",
+              f"{len(new)} flagged line(s) not in {MEMORY_SEED_BASELINE}, {len(stale)} baseline line(s) the seed no longer carries",
+              "class: supply-chain; a rule that lands in every project on the machine is accepted in the "
+              f"baseline, in the same reviewed diff, or not at all — {' | '.join(named)}")
 
 
 def build_inventory(repo: str, settings: dict | None) -> dict:
@@ -682,7 +744,8 @@ def collect(repo: str, scope: str, vocab: dict, run_gates: bool = False) -> tupl
         # One call each, on one line each: tools/probes.txt removes them to prove
         # the tests notice a surface going uninventoried.
         mcp_config_facts({p: read(repo, p) for p in MCP_CONFIG_FILES if os.path.exists(os.path.join(repo, p))}, facts)
-        memory_seed_facts(read(repo, "MEMORY.md") if "MEMORY.md" in inventory["rule_files"] else None, facts)
+        memory_seed_facts(read(repo, "MEMORY.md") if "MEMORY.md" in inventory["rule_files"] else None, facts,
+                          read(repo, MEMORY_SEED_BASELINE) if os.path.exists(os.path.join(repo, MEMORY_SEED_BASELINE)) else None)
 
         surface = inventory["permission_surface"]
         facts.add("permission-surface", "finding" if (surface["allow"] or surface["env"] or surface["additionalDirectories"]
