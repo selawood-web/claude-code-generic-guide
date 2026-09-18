@@ -97,8 +97,9 @@ them missing the hook prints a line and runs nothing, and `tools/validate.py`
 fails the project. The hook clones only at `CCGG_REF`, `update.sh` fetches only
 that ref, and the sync is skipped with a printed line when the clone is not at
 it or its working tree no longer matches it: an edited file, or anything
-untracked under the directories `update.sh` copies wholesale. A tag or branch is refused by the validator: whoever owns the guide can move
-it, and a 40-hex commit is the one form nobody can.
+untracked under the directories `update.sh` copies wholesale. A tag or branch is
+refused twice over — the hook skips the sync and the validator fails the project:
+whoever owns the guide can move a name, and a 40-hex commit is the one form nobody can.
 
 `.claude/ccgg-origins` is the other half. It lives outside the env block, so
 re-pointing the sync at a different repository is a named change in a diff

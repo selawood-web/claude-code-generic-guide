@@ -303,20 +303,31 @@ class PinFollowingTests(unittest.TestCase):
         self.assertIsNone(self.ran())
 
 
-    # --- R-004: the configured name decides, not the clone's own pin ---------
-    def test_a_moved_branch_is_followed_rather_than_answered_by_the_local_pin(self):
-        """refs/ccgg/pin exists after the first fetch, and it used to be read first,
-        so `||` short-circuited and the configured name was never consulted again."""
-        self.git(self.origin, "branch", "-f", "track", self.commits[0])
-        self.run_hook("track")
-        self.assertEqual(self.head(), self.commits[0])
+    # --- R-001 (2026-09-18): a name its owner can move is refused, never followed
+    def test_a_branch_name_is_refused_and_nothing_runs(self):
+        """Until this test the hook followed a branch every session — re-fetched it,
+        checked it out, ran its update.sh — with tools/validate.py's failing verdict
+        printed afterwards as the only brake. Whoever could move the name chose the
+        code every downstream project ran."""
+        self.run_hook(self.commits[0])
         os.remove(os.path.join(self.project, "ran.txt"))
-        # The name now points somewhere else. The clone's pin still says otherwise.
         self.git(self.origin, "branch", "-f", "track", self.commits[1])
         proc = self.run_hook("track")
-        self.assertEqual(self.head(), self.commits[1],
-                         f"the clone answered its own question: {proc.stdout}")
-        self.assertIn("update.sh two ran", self.ran())
+        # The specific refusal: a name is well-formed, so "not a refname" would be
+        # the wrong layer answering, and "could not be moved" would mean git ran.
+        self.assertIn("CCGG_REF is a name its owner can move", proc.stdout)
+        self.assertIn("live sync skipped", proc.stdout)
+        self.assertEqual(self.head(), self.commits[0], proc.stdout)
+        self.assertIsNone(self.ran())
+
+    def test_a_name_is_refused_before_the_first_clone(self):
+        """The clone path is the same trust boundary one session earlier."""
+        self.git(self.origin, "branch", "-f", "track", self.commits[1])
+        proc = self.run_hook("track")
+        self.assertIn("refusing to clone", proc.stdout)
+        self.assertIn("CCGG_REF is a name its owner can move", proc.stdout)
+        self.assertFalse(os.path.exists(self.clone), proc.stdout)
+        self.assertIsNone(self.ran())
 
     # --- S-006: CCGG_REF reaches git as argv ---------------------------------
     def test_a_ref_in_option_position_is_refused_before_any_git_call(self):
@@ -332,35 +343,37 @@ class PinFollowingTests(unittest.TestCase):
                 self.assertEqual(self.head(), self.commits[0])
                 self.assertIsNone(self.ran())
 
-    def test_a_hand_cloned_home_on_a_branch_follows_the_origin(self):
-        """Review of #75: a CCGG_HOME made with `git clone` has refs/heads/<name>,
-        which `fetch origin -- <name>` never moves. Resolving the configured name
-        first answered from that stale branch, so after origin advanced the hook
-        fetched the right commit, compared it to the wrong one, and refused —
-        every session, forever."""
+    def test_a_hand_cloned_home_on_a_branch_follows_a_commit_pin(self):
+        """Review of #75: a CCGG_HOME made with `git clone` sits on refs/heads/<name>.
+        Under a commit pin that is just a clone whose HEAD is elsewhere — moved to
+        the pin and synced, not stranded, and not refused for the branch it sits on."""
         self.git(self.origin, "branch", "-f", "track", self.commits[0])
         subprocess.run(["git", "clone", "-q", "--branch", "track", self.origin, self.clone],
                        env=self.env, check=True, capture_output=True)
         self.assertEqual(self.head(), self.commits[0])
-        self.git(self.origin, "branch", "-f", "track", self.commits[1])
-        proc = self.run_hook("track")
+        proc = self.run_hook(self.commits[1])
         self.assertNotIn("live sync skipped", proc.stdout)
         self.assertEqual(self.head(), self.commits[1], proc.stdout)
         self.assertIn("update.sh two ran", self.ran())
         # And again: the second session must not be stranded either.
         os.remove(os.path.join(self.project, "ran.txt"))
-        proc = self.run_hook("track")
+        proc = self.run_hook(self.commits[1])
         self.assertNotIn("live sync skipped", proc.stdout)
         self.assertIn("update.sh two ran", self.ran())
 
-    def test_a_stale_local_tag_does_not_answer_for_the_origin(self):
+    def test_a_tag_name_is_refused_even_when_the_clone_sits_at_it(self):
+        """A tag is a name too, and one git moves with `tag -f`."""
         self.git(self.origin, "tag", "light", self.commits[0])
         subprocess.run(["git", "clone", "-q", self.origin, self.clone],
                        env=self.env, check=True, capture_output=True)
+        # A plain clone sits at the origin's HEAD, not at the tag; what matters is
+        # that the hook moves nothing and runs nothing, wherever the clone started.
+        before = self.head()
         self.git(self.origin, "tag", "-f", "light", self.commits[1])
         proc = self.run_hook("light")
-        self.assertNotIn("live sync skipped", proc.stdout)
-        self.assertEqual(self.head(), self.commits[1], proc.stdout)
+        self.assertIn("CCGG_REF is a name its owner can move", proc.stdout)
+        self.assertEqual(self.head(), before, proc.stdout)
+        self.assertIsNone(self.ran())
 
     def test_a_ref_holding_a_newline_is_refused_whole(self):
         """ccgg_ref_ok matched a line, so 'main<newline>--upload-pack=x' passed."""
@@ -370,11 +383,27 @@ class PinFollowingTests(unittest.TestCase):
         self.assertIn("CCGG_REF is not a refname", proc.stdout)
         self.assertIsNone(self.ran())
 
-    def test_an_ordinary_refname_still_works(self):
+    def test_a_well_formed_tag_name_is_refused_at_the_name_layer(self):
+        """Well-formed, so the refname check passes it; the commit check is what
+        refuses, and its message names the pin the project should carry instead."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
         self.git(self.origin, "tag", "v1.2.3", self.commits[1])
         proc = self.run_hook("v1.2.3")
-        self.assertNotIn("live sync skipped", proc.stdout)
-        self.assertEqual(self.head(), self.commits[1])
+        self.assertNotIn("CCGG_REF is not a refname", proc.stdout)
+        self.assertIn("pin a 40-hex commit", proc.stdout)
+        self.assertEqual(self.head(), self.commits[0])
+        self.assertIsNone(self.ran())
+
+    def test_an_abbreviated_commit_is_a_name_for_this_purpose(self):
+        """Seven hex characters resolve today and collide tomorrow; only the full
+        commit is a value nobody can move."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        proc = self.run_hook(self.commits[1][:7])
+        self.assertIn("CCGG_REF is a name its owner can move", proc.stdout)
+        self.assertEqual(self.head(), self.commits[0])
+        self.assertIsNone(self.ran())
 
 
 @unittest.skipUnless(bash() and shutil.which("git"), "needs bash and git")
