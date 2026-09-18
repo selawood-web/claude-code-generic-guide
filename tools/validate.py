@@ -791,6 +791,9 @@ SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
 # ccgg_is_sha accepts 40 lowercase hex characters and nothing else, so anything
 # this does not match resolves through a name that its owner can move.
 COMMIT_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+# What .claude/hooks/session-start.sh's ccgg_ref_ok accepts, in the one other
+# place that reads CCGG_REF. A refname cannot begin with '-' or hold '..'.
+REF_NAME_RE = re.compile(r"\A(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+\Z")
 ORIGIN_RECORD = os.path.join(".claude", "ccgg-origins")
 
 
@@ -830,20 +833,40 @@ def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
         problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
     if repo and origins is not None and repo not in origins:
         problems.append(f"env sets CCGG_REPO to {repo}, which {ORIGIN_RECORD} does not list — add it there deliberately, or correct the env block")
+    if repo and origins is None:
+        # Was a caution, which never changed the verdict, so a settings.json
+        # pointing the sync at any repository passed the gate (finding S-005).
+        # The record is cheap to add and the whole point of it is that adding it
+        # is a reviewed change; absent it, nothing cross-checks which repository
+        # executes code at every session start.
+        problems.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record — create it listing the origins this project accepts, so which repository executes code at every session start is a reviewed fact")
+    if repo and ref and not COMMIT_RE.match(ref):
+        # Also a caution before. session-start.sh's own comment calls the 40-hex
+        # form "the only one nobody can move", and update.sh re-fetches a movable
+        # name on every session start into skills, hooks, agents and tools/ — so
+        # whoever can move that name chooses the code every downstream project
+        # runs (finding R-003). A claim the gate does not enforce is a claim.
+        problems.append(f"env pins CCGG_REF to '{ref}', a name its owner can move — pin the 40-hex commit instead; a tag or branch hands whoever can move it the contents of every sync")
+    if repo and ref and not REF_NAME_RE.match(ref):
+        # The hook refuses this before any git call; the gate says so earlier
+        # (finding S-006).
+        problems.append(f"env sets CCGG_REF to '{ref}', which is not a refname — a value starting with '-' reaches git in option position, where --upload-pack names a program to run")
     return problems
 
 
 def ccgg_env_warnings(env: dict, origins: list[str] | None = None) -> list[str]:
-    """Settings that work but give up a guarantee the repository states elsewhere."""
+    """Settings that work but give up a guarantee the repository states elsewhere.
+
+    The movable-ref and missing-record cautions that used to live here are
+    failures now (findings R-003 and S-005): both decide which repository's code
+    runs at every session start, and a caution never changed the verdict.
+    """
     cautions_found = []
     repo = str(env.get("CCGG_REPO", "") or "")
-    ref = str(env.get("CCGG_REF", "") or "")
     if not repo:
         return cautions_found
-    if ref and not COMMIT_RE.match(ref):
-        cautions_found.append(f"env pins CCGG_REF to '{ref}', a name its owner can move; session-start.sh calls the 40-hex commit form the only one nobody can move")
-    if origins is None:
-        cautions_found.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record, so nothing cross-checks which repository executes code at every session start")
+    if origins == []:
+        cautions_found.append(f"env sets CCGG_REPO but {ORIGIN_RECORD} lists no origin, so every sync will be refused until one is added")
     return cautions_found
 
 
@@ -1718,6 +1741,32 @@ def check_pinned_grants_are_rescued() -> None:
         fail(problem)
 
 
+# --- 31. decision record names ------------------------------------------------
+# session-start.sh prints the name of every open decision record straight into
+# the prompt. Its old allow-list forbade spaces, which read as safe, but hyphens
+# join words as well as spaces do (finding R-001). The hook now requires the slug
+# the /decide skill produces; this keeps the tree to names the hook will print,
+# so a record does not go silently unlisted for being misnamed.
+DECISION_SLUG_RE = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+){0,6}\.md\Z")
+DECISION_EXEMPT = ("README.md",)
+
+
+def decision_name_problems(names: list[str]) -> list[str]:
+    problems = []
+    for name in names:
+        base = os.path.basename(name)
+        if base in DECISION_EXEMPT or DECISION_SLUG_RE.match(base):
+            continue
+        problems.append(f"decisions/{base}: not a date-prefixed slug (YYYY-MM-DD-words.md, at most 7 words) — "
+                        f"session-start.sh counts a record it cannot name, so this one would never be listed")
+    return problems
+
+
+def check_decision_names() -> None:
+    for problem in decision_name_problems(tracked("decisions/*.md")):
+        fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1758,6 +1807,7 @@ def main() -> int:
     check_guard_canary()
     check_guard_allow_lists()
     check_pinned_grants_are_rescued()
+    check_decision_names()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

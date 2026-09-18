@@ -44,6 +44,7 @@ DEFAULT_GATE_NAME = "validator"
 GATES = {
     DEFAULT_GATE_NAME: DEFAULT_GATE,
     "guard": "python3 -m unittest discover -s tools -t tools -p test_verifier_guard.py -q",
+    "hooks": "python3 -m unittest discover -s tools -t tools -p test_session_start_hook.py -q",
 }
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
