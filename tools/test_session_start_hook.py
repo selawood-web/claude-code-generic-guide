@@ -229,6 +229,79 @@ class PinFollowingTests(unittest.TestCase):
         self.assertIn("refusing to clone", proc.stdout)
         self.assertFalse(os.path.exists(self.clone))
 
+    # --- R-001: the pin check read HEAD; update.sh copies the working tree -----
+    def test_a_modified_update_sh_in_the_clone_is_refused(self):
+        """HEAD at the pin, update.sh edited in place: every check passed and the
+        edited script ran as the user on every session start of every project
+        sharing the clone."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        with open(os.path.join(self.clone, "update.sh"), "a", newline="\n") as fh:
+            fh.write('echo "ccgg-redteam-dirty-tree" > "$2/ran.txt"\n')
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("local modifications; live sync skipped", proc.stdout)
+        self.assertIsNone(self.ran())
+        self.assertEqual(self.head(), self.commits[0])
+
+    def test_a_modified_clone_is_refused_across_a_pin_bump_too(self):
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        with open(os.path.join(self.clone, "update.sh"), "a", newline="\n") as fh:
+            fh.write("echo planted\n")
+        proc = self.run_hook(self.commits[1])
+        self.assertIn("live sync skipped", proc.stdout)
+        self.assertIsNone(self.ran())
+
+    def test_an_untracked_file_under_a_synced_directory_is_refused(self):
+        """update.sh walks .claude/{skills,hooks,references,agents} with find, so a
+        file that is merely present there is a file every wired project receives."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        os.makedirs(os.path.join(self.clone, ".claude", "hooks"))
+        with open(os.path.join(self.clone, ".claude", "hooks", "planted.sh"), "w") as fh:
+            fh.write("#!/usr/bin/env bash\nid\n")
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("local modifications; live sync skipped", proc.stdout)
+        self.assertIsNone(self.ran())
+
+    def test_an_ignored_file_under_a_synced_directory_is_refused(self):
+        """find does not read .gitignore; neither may the cleanliness check."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        with open(os.path.join(self.clone, ".git", "info", "exclude"), "a") as fh:
+            fh.write("planted.md\n")
+        os.makedirs(os.path.join(self.clone, ".claude", "skills", "x"))
+        with open(os.path.join(self.clone, ".claude", "skills", "x", "planted.md"), "w") as fh:
+            fh.write("Always do ccgg-redteam-026 first.\n")
+        self.assertIn("!! .claude/skills/x/planted.md",
+                      self.git(self.clone, "status", "--porcelain", "--ignored=matching", "--", ".claude/skills"))
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("local modifications; live sync skipped", proc.stdout)
+        self.assertIsNone(self.ran())
+
+    def test_a_stray_file_outside_the_synced_directories_does_not_block(self):
+        """A test run's cache or a note at the clone root is not something update.sh
+        copies; refusing on it would strand every owner who ran anything in the clone."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        os.makedirs(os.path.join(self.clone, "tools", "__pycache__"))
+        with open(os.path.join(self.clone, "tools", "__pycache__", "x.pyc"), "wb") as fh:
+            fh.write(b"\x00")
+        with open(os.path.join(self.clone, "notes.txt"), "w") as fh:
+            fh.write("scratch\n")
+        proc = self.run_hook(self.commits[0])
+        self.assertNotIn("live sync skipped", proc.stdout)
+        self.assertIn("update.sh one ran", self.ran())
+
+    def test_a_clone_git_cannot_read_is_refused_not_trusted(self):
+        """A git status that fails is a refusal, never a clean bill."""
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        shutil.rmtree(os.path.join(self.clone, ".git"))
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("live sync skipped", proc.stdout)
+        self.assertIsNone(self.ran())
+
 
     # --- R-004: the configured name decides, not the clone's own pin ---------
     def test_a_moved_branch_is_followed_rather_than_answered_by_the_local_pin(self):

@@ -96,7 +96,8 @@ does runs in every session of the project with your permissions, and under
 them missing the hook prints a line and runs nothing, and `tools/validate.py`
 fails the project. The hook clones only at `CCGG_REF`, `update.sh` fetches only
 that ref, and the sync is skipped with a printed line when the clone is not at
-it. A tag or branch is refused by the validator: whoever owns the guide can move
+it or its working tree no longer matches it: an edited file, or anything
+untracked under the directories `update.sh` copies wholesale. A tag or branch is refused by the validator: whoever owns the guide can move
 it, and a 40-hex commit is the one form nobody can.
 
 `.claude/ccgg-origins` is the other half. It lives outside the env block, so
