@@ -133,6 +133,7 @@ audit workflow stops refusing fork pull requests | caught | sed -i 's|github.eve
 charter dropped from the import graph while still budgeted | caught | sed -i '/^@WORKING-CHARTER.md$/d' CLAUDE.md
 facts stage stops inventorying the project-scoped MCP config surface | caught:facts | sed -i '/^        mcp_config_facts(/d' tools/audit_facts.py
 facts stage stops inventorying the global memory seed | caught:facts | sed -i '/^        memory_seed_facts(/d' tools/audit_facts.py
+facts stage counts a piped print as hook stdout again | caught:facts | sed -i 's/^                      and not piped(ln)\]$/                      ]/' tools/audit_facts.py
 
 # Suggestion-tier findings of run 3 (H-001, C-001, S-009).
 hook on a debug-log-only event claims to remind the model | caught | sed -i 's/^# This hook prints nothing for the model, and could not:/# This hook reminds the AI to flush memory at session end. It/' .claude/hooks/session-end.sh

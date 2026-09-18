@@ -340,6 +340,21 @@ def hook_registration(settings: dict, hook_files: list[str], vocab: dict, facts:
         facts.add("hook-registration", "skipped", ".claude/settings.json", "no hooks registered and no hook files")
 
 
+QUOTED_RE = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
+
+
+def piped(line: str) -> bool:
+    """True when the line's print feeds a pipe, so its output is the next program's input.
+
+    The verifier guard's `printf '%s' "$INPUT" | python3 -c "$GUARD"` was read as a
+    print to the hook's stdout on PreToolUse and reported dead (PR #79). `||` is not
+    a pipe, and a `|` inside quotes is data.
+    """
+    if not isinstance(line, str):
+        raise TypeError("line must be a string")
+    return re.search(r"(?<!\|)\|(?!\|)", QUOTED_RE.sub("", line)) is not None
+
+
 def hook_stdout_facts(settings: dict, read_script, vocab: dict, facts: Facts) -> None:
     """A hook that prints for the model on an event whose stdout only reaches the debug log."""
     reaches = set(vocab["hook_stdout_reaches_model"])
@@ -351,7 +366,8 @@ def hook_stdout_facts(settings: dict, read_script, vocab: dict, facts: Facts) ->
             if text is None:
                 continue
             prints = [ln.strip() for ln in text.splitlines()
-                      if re.match(r"\s*(echo|printf)\b", ln) and not re.search(r">\s*\S", ln)]
+                      if re.match(r"\s*(echo|printf)\b", ln) and not re.search(r">\s*\S", ln)
+                      and not piped(ln)]
             if not prints:
                 continue
             if event == "PreCompact":

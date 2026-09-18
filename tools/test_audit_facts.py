@@ -306,6 +306,35 @@ class ToolingKeysAndRedirectTests(unittest.TestCase):
         hook_stdout_facts(SETTINGS, lambda n: 'echo "marker" >> "$LOG"\n', VOCAB, facts)
         self.assertEqual(findings(facts, "hook-stdout"), [])
 
+    # PR #79: the verifier guard's `printf ... | python3 -c "$GUARD"` on PreToolUse was
+    # read as a print to the hook's stdout. A piped print feeds the next program.
+    STOP = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": ".claude/hooks/s.sh"}]}]}}
+
+    def test_a_print_piped_into_another_program_is_not_hook_stdout(self):
+        facts = Facts()
+        hook_stdout_facts(self.STOP, lambda n: 'INPUT="$(cat)"\nprintf \'%s\' "$INPUT" | python3 -c "$GUARD"\n', VOCAB, facts)
+        self.assertEqual(findings(facts, "hook-stdout"), [])
+
+    def test_a_print_followed_by_or_is_still_hook_stdout(self):
+        facts = Facts()
+        hook_stdout_facts(self.STOP, lambda n: 'echo "remember to test" || true\n', VOCAB, facts)
+        self.assertEqual(len(findings(facts, "hook-stdout")), 1)
+
+    def test_a_pipe_character_inside_quotes_is_not_a_pipe(self):
+        facts = Facts()
+        hook_stdout_facts(self.STOP, lambda n: 'echo "run a|b now"\nprintf \'%s\\n\' \'x|y\'\n', VOCAB, facts)
+        self.assertEqual(len(findings(facts, "hook-stdout")), 1)
+
+    def test_piped_reads_quotes_and_double_bars(self):
+        from audit_facts import piped
+        self.assertTrue(piped('printf \'%s\' "$X" | python3 -c "$G"'))
+        self.assertTrue(piped("echo x |& tee"))
+        self.assertFalse(piped('echo "a|b"'))
+        self.assertFalse(piped("echo x || true"))
+        self.assertFalse(piped("echo x"))
+        with self.assertRaises(TypeError):
+            piped(None)
+
     def test_regex_literal_not_network_call(self):
         self.assertEqual(network_patterns('    (r"\\b(curl|wget)\\b", "network"),\n'), [])
 
