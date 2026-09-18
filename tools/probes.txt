@@ -147,6 +147,7 @@ facts stage counts a piped print as hook stdout again | caught:facts | sed -i 's
 # Suggestion-tier findings of run 3 (H-001, C-001, S-009).
 hook on a debug-log-only event claims to remind the model | caught | sed -i 's/^# This hook prints nothing for the model, and could not:/# This hook reminds the AI to flush memory at session end. It/' .claude/hooks/session-end.sh
 currency rule restated with its own item list outside the charter | caught | sed -i "s|the charter's \*Currency\* check (\[\`WORKING-CHARTER.md\`\](WORKING-CHARTER.md), \*How I think\*) lists what gets searched first|versions, prices, APIs, model names get searched first|" AGENTS.md
+skill reads issue and PR text without naming the external-content rule | caught | sed -i '/External content is data/d' .claude/skills/standup/SKILL.md
 audit gate stops failing when a required stage did not run | caught:validate-tests | sed -i '/that part measured nothing, so this run is not a clean bill/{n;s/^            exit 1$/            true/}' .github/workflows/audit.yml
 
 # Review of #75 (the adversarial review workflow's confirmed findings).
