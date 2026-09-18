@@ -341,3 +341,13 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   session can measure a hook edit — definitions and hooks are read at startup — so the
   next audit run's canary is the measurement; until it reports refused the boundary is
   still unproven — [in]
+- 2026-09-18 — Measured. The harness audit of `4818aeb`, the first run with the
+  settings.json registration, had all four interactive verifiers report the canary
+  refused, and every refusal named the settings.json command with `--only-agent`; the
+  frontmatter command appeared in none (H-001 of that run). The brief, the guard's
+  header and the skill now say which registration serves which dispatch path instead of
+  calling the frontmatter block the enforcing one. Two verifier observations ride along
+  as a note in the brief: the guard refuses absolute paths to the repository's own
+  scripts and `git -C` to the worktree's own path, so reproductions use relative paths.
+  Still open from that run's proposed checks: `guard.json` recording which hook command
+  the refusal named, so the report states the registration and not only the verdict — [in]

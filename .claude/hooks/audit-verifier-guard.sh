@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Hook: audit-verifier-guard (PreToolUse, matcher Bash)
-# Registered by: .claude/agents/audit-verifier.md, for that subagent only.
+# Registered by: .claude/settings.json (PreToolUse/Bash, --only-agent
+#                audit-verifier) and .claude/agents/audit-verifier.md, for
+#                that subagent only.
 # Purpose: allow the audit's verifier only the commands a reproduction needs —
 #          the repository's own tests and tools, git reads, and text inspection —
 #          as a second layer under the worktree isolation the runtime already
@@ -16,23 +18,26 @@
 #          line, a redirect to a file, a heredoc, a backtick — is refused, so
 #          the guard fails closed by construction.
 #
-# Registered twice, on purpose. The frontmatter block in audit-verifier.md is
-# the product's documented path and the one the headless launcher retargets to a
-# trusted copy; there the guard decides every call it sees. settings.json also
-# registers it on PreToolUse/Bash, with `--only-agent audit-verifier`, because
-# a 2026-09-17 run and a 2026-09-18 run both measured the frontmatter path from
-# inside a live interactive verifier and the hook did not fire: the commands
-# below were refused here, with exit 2, and ran as Bash tool calls (findings
-# R-008, H-001, S-003). A settings.json hook demonstrably fires in this
-# repository, and the product documents PreToolUse as firing for subagent calls
-# with the subagent's name in the input's `agent_type`. With `--only-agent`,
-# any other agent's Bash — the main session's included — passes through with
-# no opinion, before python3 is even looked for.
+# Registered twice, on purpose, and the two serve different dispatch paths.
+# Interactive verifiers are guarded by the settings.json registration
+# (PreToolUse/Bash, `--only-agent audit-verifier`): a 2026-09-17 run and a
+# 2026-09-18 run with only the frontmatter block in place measured that block
+# from inside a live verifier and the hook did not fire — the commands below
+# were refused here, with exit 2, and ran as Bash tool calls (findings R-008,
+# H-001, S-003) — and the 2026-09-18 run on 4818aeb, the first with the
+# settings.json registration, came back refused in every verifier, each
+# refusal naming this command with `--only-agent` and never the frontmatter
+# one. With `--only-agent`, any other agent's Bash — the main session's
+# included — passes through with no opinion, before python3 is even looked
+# for. The frontmatter block in audit-verifier.md stays for the headless
+# path: with the briefs passed inline it measurably fires, and it is the one
+# the headless launcher retargets to a trusted copy.
 #
 # The table of allowed forms is tested by tools/test_verifier_guard.py. What
 # that table proves is this program's verdicts, not that anything consults
 # them: every audit run still starts its verifiers with a canary and records
-# the answer, and until a run comes back refused the boundary is unproven.
+# the answer in guard.json, because a registration proven on one head is a
+# claim on the next.
 set -uo pipefail
 
 ONLY_AGENT=""
