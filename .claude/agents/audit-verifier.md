@@ -34,6 +34,11 @@ while the same command issued as a Bash tool call ran (finding R-008). The
 product documents frontmatter hooks as firing for the subagent that declares
 them; in that dispatch path they did not.
 
+A headless run on 2026-09-17 measured the other path and found the opposite: with
+the briefs passed inline as `--agents` JSON, the hook fired — a redirect was
+refused, naming the trusted guard's own path. Which dispatch path you are in is
+not something you can see from here, so the canary settles it every run.
+
 So your first action in every run is the canary below, and what bounds you until
 it comes back refused is the worktree, the write tools this file removes, and
 the constraints in your task message — not the allow-list.

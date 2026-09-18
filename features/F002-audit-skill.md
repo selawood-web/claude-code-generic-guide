@@ -238,7 +238,10 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   measured it from inside an interactive verifier: the guard script refuses `uname -a`
   with exit 2 when piped the hook input directly, and the same command issued as a Bash
   tool call ran, as did `python3 -c` — the form the guard refuses by name. So the gap is
-  not specific to the inline `--agents` path; it was observed on the ordinary one. The
+  not specific to the inline `--agents` path; it was observed on the ordinary one. On the
+  inline path a headless probe the same day measured the hook firing — a redirect refused,
+  naming the trusted guard's own path — so the two runs disagree by dispatch path, not
+  about the guard's rules. The
   product documents a frontmatter `hooks` block as firing for the subagent that declares
   it, so this is a wiring gap in the dispatch path, not a wrong design. Consequence: the
   guard is no longer claimed anywhere as a boundary that holds. Every run records the
@@ -261,6 +264,49 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   full tool set, so the run drops `--bare`, adds `--strict-mcp-config`, and names its
   built-in set with `--tools` derived from the skill's own grants (`Agent` → `Task`).
   Validator check 22 refuses both halves of the mistake — [in]
+- 2026-09-16 — First run with the fix: **6 subagents, 6 completed, 0 failed**, 19 turns,
+  9.62 USD of a 10 USD cap. The specialists ran; the audit still wrote nothing. Three tool
+  calls were refused by the grant set — `Bash` twice and one `Write` — and the run's own
+  closing message named a launcher defect as the blocker. Hypothesis, not yet proven: with
+  `--permission-prompts none`, the only grants that exist are the skill's four
+  `Bash(python3 tools/audit_*.py *)` patterns, so the verifier's own reproduction commands
+  (`git`, `grep`, `sed`, a worktree) have nothing to approve them, and an interactive run
+  never noticed because a human answers the prompt there. Widening the Bash grant is only
+  safe if the inline agent's guard hook actually fires — the open question above — so the
+  next step is a cent-scale probe of both, not another 10 USD run — [open]
+- 2026-09-17 — `--probe-verifier`: a few turns and about a dollar, asking the orchestrator
+  to spawn the verifier once and run two commands — one the guard allows, one it must
+  refuse. Bash is deliberately wide in this probe so a refusal can only be the guard, and
+  the refused command writes a marker nothing reads: if the marker exists afterwards, the
+  hook never fired. Denials now print what they asked for, not just the tool's name — the
+  ten-dollar run's "Bash x2, Write" had the command and the path in the result all along — [in]
+- 2026-09-17 — The probe answered both: the verifier ran `git status --porcelain` and the
+  guard refused the redirect, naming the trusted copy's path — so **inline agent hooks do
+  fire**, and the clean status is indirect evidence that `isolation: worktree` holds. The
+  fix follows from it: the guard returns a PreToolUse `allow` for what its allow-list
+  accepts, so the verifier's Bash is approved by the thing that has read the command rather
+  than by a grant that cannot. The orchestrator stays narrow — [in]
+- 2026-09-17 — Probe on the audit's own grants: the verifier's `git status --porcelain`
+  **ran** with no bare `Bash` granted, so the guard's `allow` is what approves it, and the
+  guard still refused the redirect. The orchestrator's one `Write` was refused — "this
+  session has no approval surface", which is what a grant that does not match looks like
+  when nobody can be asked. The Write tool takes an **absolute** `file_path` and the grant
+  was relative, so the run now carries both forms, each naming this run's directory and
+  nothing else — [in]
+- 2026-09-17 — The absolute form did not help either, so the guessing stopped and the CLI's
+  own permission code answered it: `Write`'s check calls the rule lookup with the kind
+  `"edit"`, and that kind resolves to the tool name **`Edit`** — a `Write(...)` rule is
+  never consulted for the Write tool, nothing matches, and the call falls through to "ask",
+  which headless is a refusal. The run now emits an `Edit(...)` rule for this run's report directory in both path forms, and
+  the tool set is derived from the skill's own grants rather than from the rules, so naming
+  `Edit` in a rule cannot hand the audit the Edit tool — [in]
+- 2026-09-17 — A probe's answer is repeated by the gate step, because reading it meant
+  paging back through the install step every time — [in]
+- 2026-09-17 — **The first headless audit that completed.** Run 35205933966, scope `all`:
+  `complete=true`, 3 findings, 0 blockers, report rendered, gate green. The launcher itself
+  exited non-zero on that run and the report still landed, which is the gate behaving as
+  designed — it judges what the model stage left behind, not the launcher's exit status.
+  The remaining acceptance evidence for F002 is a run that is green end to end — [open]
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands

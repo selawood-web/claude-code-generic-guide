@@ -197,7 +197,7 @@ class GrantPinningTests(unittest.TestCase):
 class RetargetWriteGrantTests(unittest.TestCase):
     def test_pins_write_to_this_runs_directory(self):
         out = retarget_write_grant(["Read", "Write(CCGG-AUDIT-*/**)"], "CCGG-AUDIT-X/")
-        self.assertEqual(out, ["Read", "Write(CCGG-AUDIT-X/**)"])
+        self.assertEqual(out, ["Read", "Edit(CCGG-AUDIT-X/**)"])
 
     def test_no_write_grant_is_an_error(self):
         with self.assertRaises(HeadlessError):
@@ -224,6 +224,42 @@ class ToolNamesTests(unittest.TestCase):
     def test_no_grants_is_an_error_not_a_toolless_run(self):
         with self.assertRaises(HeadlessError):
             tool_names([])
+
+
+class WriteGrantPathFormTests(unittest.TestCase):
+    """The Write tool asks for `Edit` rules, and takes an absolute path.
+
+    Read from the CLI's own permission code after two probe runs watched the
+    orchestrator's only write refused with nothing in the grant set to match it.
+    """
+
+    GRANTS = ["Read", "Write(CCGG-AUDIT-*/**)"]
+
+    def test_the_rule_is_an_edit_rule_because_that_is_what_write_consults(self):
+        out = retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X", "/home/runner/work/r/r")
+        self.assertIn("Edit(CCGG-AUDIT-X/**)", out)
+        self.assertIn("Edit(//home/runner/work/r/r/CCGG-AUDIT-X/**)", out)
+        self.assertFalse([g for g in out if g.startswith("Write(")],
+                         "a Write rule is never consulted for the Write tool")
+
+    def test_neither_form_reaches_outside_this_run_s_directory(self):
+        for grant in retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X", "/repo"):
+            if grant.startswith("Edit("):
+                self.assertTrue(grant.endswith("CCGG-AUDIT-X/**)"), grant)
+
+    def test_without_a_root_the_relative_form_stands_alone(self):
+        out = retarget_write_grant(self.GRANTS, "CCGG-AUDIT-X")
+        self.assertEqual([g for g in out if g.startswith("Edit")], ["Edit(CCGG-AUDIT-X/**)"])
+
+    def test_the_rule_does_not_hand_back_the_edit_tool(self):
+        # The run denies Edit outright. A rule that names it must not put it in
+        # the tool set, or the audit could rewrite the tree it is auditing.
+        names = tool_names(retarget_write_grant(self.GRANTS, "d", "/x"))
+        self.assertNotIn("Edit", names)
+
+    def test_the_tool_set_comes_from_the_skill_not_from_the_rules(self):
+        # Two different questions: what the run has, and what it may do with it.
+        self.assertIn("Write", tool_names(self.GRANTS))
 
 
 class OrchestratorPromptTests(unittest.TestCase):
@@ -365,7 +401,11 @@ class RunSummaryTests(unittest.TestCase):
     EMPTY_RUN = {
         "num_turns": 12, "total_cost_usd": 0.42, "stop_reason": "end_turn",
         "subagent_stats": {"spawned": 0, "completed": 0, "failed": 0},
-        "permission_denials": [{"tool_name": "Write"}, {"tool_name": "Write"}, {"tool_name": "Bash"}],
+        "permission_denials": [
+            {"tool_name": "Write", "tool_input": {"file_path": "CCGG-AUDIT-X/findings.jsonl", "content": "..."}},
+            {"tool_name": "Write"},
+            {"tool_name": "Bash", "tool_input": {"command": "git worktree add /tmp/w HEAD"}},
+        ],
         "result": "I summarised my findings here rather than writing files.",
     }
 
@@ -376,13 +416,24 @@ class RunSummaryTests(unittest.TestCase):
         self.assertIn("0 subagent(s)", line)
         self.assertIn("end_turn", line)
 
-    def test_refused_tool_calls_are_named_and_counted(self):
+    def test_refused_tool_calls_are_named_with_what_they_asked_for(self):
+        # "Bash x2, Write" cost a diagnosis once: the command and the path were in
+        # the result all along. Each denial now carries the part that explains it.
         lines = run_summary(self.EMPTY_RUN)
         joined = "\n".join(lines)
         self.assertIn("3 tool call(s) refused", joined)
-        self.assertIn("Write x2", joined)
-        self.assertIn("Bash", joined)
+        self.assertIn("Write: CCGG-AUDIT-X/findings.jsonl", joined)
+        self.assertIn("Bash: git worktree add /tmp/w HEAD", joined)
         self.assertIn("refused write", joined, "the reader should be told what a denial explains")
+
+    def test_a_denial_without_detail_still_names_its_tool(self):
+        self.assertIn("Write", "\n".join(run_summary(dict(self.EMPTY_RUN,
+                                                          permission_denials=[{"tool_name": "Write"}]))))
+
+    def test_secrets_in_a_denial_are_bounded_like_the_last_words(self):
+        entry = {"tool_name": "Bash", "tool_input": {"command": "x" * 900}}
+        line = [l for l in run_summary(dict(self.EMPTY_RUN, permission_denials=[entry])) if "Bash" in l][0]
+        self.assertLess(len(line), 220)
 
     def test_the_runs_own_words_are_quoted_and_bounded(self):
         long_tail = dict(self.EMPTY_RUN, result="x" * 5000)
@@ -404,6 +455,63 @@ class RunSummaryTests(unittest.TestCase):
     def test_malformed_denial_entries_do_not_crash(self):
         lines = run_summary(dict(self.EMPTY_RUN, permission_denials=["oops", {}, None]))
         self.assertIn("unknown", "\n".join(lines))
+
+
+class GuardProbeTests(unittest.TestCase):
+    """The cent-scale experiment that stands in for a ten-dollar audit run."""
+
+    def setUp(self):
+        self.argv = audit_headless.probe_verifier_command('{"a":{}}', "/tmp/g.md", ["Read", "Agent"])
+
+    def test_it_runs_on_the_audit_s_own_grants_so_an_allowed_command_proves_the_hook(self):
+        # The guard is known to refuse. What is under test now is its `allow`: with
+        # no bare Bash granted, a command that runs can only have been approved by
+        # the hook that read it.
+        grants = self.argv[self.argv.index("--allowedTools") + 1:self.argv.index("--disallowed-tools")]
+        self.assertNotIn("Bash", grants)
+        self.assertEqual(grants, ["Read", "Agent"])
+
+    def test_the_write_question_comes_before_the_subagent_and_stop_is_said_once(self):
+        # The first version put "stop" inside the subagent's task and the Write
+        # after it; the run stopped, and the Write question came back unanswered.
+        prompt = audit_headless.probe_verifier_command('{}', "p", ["Read"], report_dir="CCGG-AUDIT-X")[2]
+        self.assertLess(prompt.index("probe-write.txt"), prompt.index("audit-verifier"))
+        self.assertEqual(prompt.count("stop"), 1)
+        self.assertTrue(prompt.rstrip().endswith("say only that."))
+
+    def test_it_asks_for_one_allowed_and_one_refused_command(self):
+        prompt = self.argv[2]
+        self.assertIn(audit_headless.ALLOWED_PROBE_COMMAND, prompt)
+        self.assertIn(audit_headless.guard_probe_marker(), prompt)
+        self.assertIn("audit-verifier", prompt)
+        self.assertIn("must not work around a refusal", prompt)
+
+    def test_it_is_capped_at_a_few_turns_and_a_dollar_or_so(self):
+        self.assertEqual(self.argv[self.argv.index("--max-turns") + 1], "12")
+        self.assertLessEqual(float(self.argv[self.argv.index("--max-budget-usd") + 1]), 2.0)
+
+    def test_it_also_asks_whether_the_report_directory_is_writable(self):
+        # The same ten-dollar run that starved the verifier also had one Write
+        # refused, and a report directory nothing can write to is an audit that
+        # cannot record a finding.
+        prompt = audit_headless.probe_verifier_command('{}', "p", ["Read"], report_dir="CCGG-AUDIT-X")[2]
+        self.assertIn("CCGG-AUDIT-X/probe-write.txt", prompt)
+        self.assertNotIn("probe-write.txt", self.argv[2], "without a report directory it asks only about Bash")
+
+    def test_the_marker_must_be_absolute_because_the_verifier_runs_in_a_worktree(self):
+        with self.assertRaises(HeadlessError):
+            audit_headless.verifier_probe_prompt("relative/marker")
+
+    def test_verdicts_name_what_was_observed(self):
+        self.assertIn("did NOT fire", audit_headless.guard_verdict(True, 1, "refused"))
+        self.assertIn("no subagent", audit_headless.guard_verdict(False, 0, "refused"))
+        self.assertIn("guard fired", audit_headless.guard_verdict(False, 1, "audit-verifier-guard: refusing"))
+        self.assertIn("inconclusive", audit_headless.guard_verdict(False, 2, "both commands ran"))
+
+    def test_an_escape_outranks_a_reported_refusal(self):
+        # A run that says it was refused while the marker exists is the dangerous
+        # case: believe the filesystem, not the transcript.
+        self.assertIn("did NOT fire", audit_headless.guard_verdict(True, 1, "audit-verifier-guard: refusing"))
 
 
 class ProbeCommandTests(unittest.TestCase):
@@ -478,6 +586,23 @@ class MainTests(unittest.TestCase):
         with redirect_stdout(out), redirect_stderr(err):
             code = audit_headless.main(["--repo", ROOT, "--report-dir", self.repo_report, *extra])
         return code, out.getvalue(), err.getvalue()
+
+    def test_each_probe_mode_assembles_end_to_end(self):
+        # The unit tests covered every pure function this path uses and still let a
+        # deleted constant reach CI: nothing had run main() for these flags.
+        for flag, extra in (("--probe-tools", "orchestrator.md"), ("--probe-verifier", "guard-probe.md")):
+            with self.subTest(flag=flag):
+                code, out, err = self.run_main("--guard", self.guard, "--trusted-source",
+                                               self.source, flag, "--dry-run")
+                self.assertEqual(code, 0, err)
+                self.assertIn("nothing executed", out)
+                self.assertTrue(os.path.exists(os.path.join(ROOT, self.repo_report, "headless", extra)), extra)
+
+    def test_the_two_probes_are_mutually_exclusive(self):
+        code, _, err = self.run_main("--guard", self.guard, "--trusted-source", self.source,
+                                     "--probe-tools", "--probe-verifier", "--dry-run")
+        self.assertEqual(code, 2)
+        self.assertIn("one probe", err)
 
     def test_dry_run_writes_the_artifacts_and_executes_nothing(self):
         code, out, _ = self.run_main("--scope", "harness", "--guard", self.guard,

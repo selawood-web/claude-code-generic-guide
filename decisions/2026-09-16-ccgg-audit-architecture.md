@@ -414,6 +414,24 @@ starting a run against a planted tree and reading its `system/init` event and tr
 - **`--add-dir <tree>` re-enables discovery of that tree's agents.** The audited tree is
   read from the working directory, never added.
 
+Measured again on 2026-09-17, by a probe that spawned the verifier for about a dollar:
+
+- **A `hooks` block inside an inline `--agents` definition does fire.** The verifier's
+  guard refused a redirect with the trusted copy's own path in the message, and the file
+  the refused command would have written does not exist.
+- **`isolation: worktree` appears to be honoured too.** `git status --porcelain` came back
+  empty, which the main checkout could not have produced — the report directory is
+  untracked there. Indirect, but it is evidence rather than an assumption.
+- **A `Write(...)` permission rule does nothing.** The Write tool's check asks the rule
+  lookup for the kind `"edit"`, and that kind resolves to the tool name `Edit`, so the run
+  grants an `Edit(...)` rule for the report directory — in both the relative and the `//` absolute form, because
+  the tool takes an absolute `file_path`. The tool set is derived from the skill's grants
+  and not from the rules, so the `Edit` tool stays out of the run.
+- **The guard now approves, not merely permits.** Headless there is no prompt to answer and
+  the skill grants only its four report scripts, so every reproduction command the verifier
+  needs was refused before it ran. The hook returns a PreToolUse `allow` for what its
+  allow-list accepts, which puts the decision where the command has actually been read.
+
 Recorded after the first full audit run, which verified two statements above against
 what was built:
 
