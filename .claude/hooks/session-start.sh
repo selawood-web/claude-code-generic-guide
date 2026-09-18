@@ -24,6 +24,11 @@ set -uo pipefail
 #     passed: without them there is no origin to verify the clone against and
 #     no revision to hold it at, and update.sh would sync whatever the clone
 #     happens to contain (finding R-001/S-004),
+#   - CCGG_REPO is listed in the user-level record ~/.claude/ccgg-origins (or
+#     $CLAUDE_CONFIG_DIR/ccgg-origins). The in-tree .claude/ccgg-origins is the
+#     validator's reviewer aid, never this hook's boundary: it arrives on the
+#     same branch as the env block that names the repository, so a checkout
+#     could vouch for itself (findings R-002/S-001). No record allows nothing,
 #   - CCGG_HOME and its update.sh are owned by this user (a pre-planted
 #     directory at a shared path such as /tmp fails this),
 #   - the clone's origin is CCGG_REPO,
@@ -47,6 +52,22 @@ ccgg_ref_ok() {
   [[ "$1" =~ ^[A-Za-z0-9._/-]+$ ]]
 }
 ccgg_owned() { [ -O "$1" ] && [ -O "$1/update.sh" ]; }
+# One URL per line, `#` comments and blanks ignored, whole-line match — the same
+# format tools/validate.py reads in the tree. The file must be this user's: a
+# record anyone else could write is a record anyone else could extend.
+ccgg_origin_trusted() { # $1 = CCGG_REPO
+  [ -n "$1" ] || return 1
+  record="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/ccgg-origins"
+  [ -f "$record" ] && [ -O "$record" ] || return 1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    case "$line" in ""|\#*) continue ;; esac
+    [ "$line" = "$1" ] && return 0
+  done < "$record"
+  return 1
+}
 ccgg_origin_ok() { # $1 = clone, $2 = expected URL
   [ -n "$2" ] || return 1 # nothing to compare against is a failed check, not a passed one
   [ "$(git -C "$1" remote get-url origin 2>/dev/null)" = "$2" ]
@@ -89,16 +110,20 @@ ccgg_clone() { # $1 = repo URL, $2 = ref name or commit, $3 = destination
 if [ -n "${CCGG_HOME:-}" ]; then
   CCGG_HOME="${CCGG_HOME/#\~/$HOME}" # settings.json env values are not shell-expanded
   if [ ! -e "$CCGG_HOME" ] && [ -n "${CCGG_REPO:-}" ] && command -v git >/dev/null 2>&1; then
-    if [ -n "${CCGG_REF:-}" ]; then
+    if [ -z "${CCGG_REF:-}" ]; then
+      echo "-- ccgg: CCGG_REPO is set without CCGG_REF; refusing an unpinned clone — set CCGG_REF to a tag, branch, or commit --"
+    elif ! ccgg_origin_trusted "$CCGG_REPO"; then
+      echo "-- ccgg: CCGG_REPO is not listed in the user-level ccgg-origins record; refusing to clone — add its URL to ~/.claude/ccgg-origins to trust it on this machine --"
+    else
       ccgg_clone "$CCGG_REPO" "$CCGG_REF" "$CCGG_HOME" >/dev/null 2>&1 \
         || echo "-- ccgg: clone of CCGG_REPO at CCGG_REF failed; live sync skipped --"
-    else
-      echo "-- ccgg: CCGG_REPO is set without CCGG_REF; refusing an unpinned clone — set CCGG_REF to a tag, branch, or commit --"
     fi
   fi
   if [ -x "${CCGG_HOME}/update.sh" ]; then
     if [ -z "${CCGG_REPO:-}" ] || [ -z "${CCGG_REF:-}" ]; then
       echo "-- ccgg: CCGG_HOME needs CCGG_REPO and CCGG_REF; refusing to run an unverified, unpinned update.sh --"
+    elif ! ccgg_origin_trusted "$CCGG_REPO"; then
+      echo "-- ccgg: CCGG_REPO is not listed in the user-level ccgg-origins record; live sync skipped — add its URL to ~/.claude/ccgg-origins to trust it on this machine --"
     elif ! ccgg_owned "$CCGG_HOME"; then
       echo "-- ccgg: CCGG_HOME is not owned by this user; live sync skipped --"
     elif ! ccgg_origin_ok "$CCGG_HOME" "$CCGG_REPO"; then

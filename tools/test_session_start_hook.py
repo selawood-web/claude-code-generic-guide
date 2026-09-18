@@ -56,12 +56,30 @@ class PinFollowingTests(unittest.TestCase):
         self.project = os.path.join(self.tmp.name, "project")
         os.makedirs(self.project)
         self.clone = os.path.join(self.tmp.name, "clone")
+        # The user-level trust record the hook requires (R-002/S-001). Every test
+        # that expects a sync starts from a record that lists the origin.
+        self.trust(self.origin)
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def git(self, cwd, *args):
         return subprocess.check_output(["git", *args], cwd=cwd, env=self.env, text=True, encoding="utf-8")
+
+    def record_path(self, config_dir=None):
+        return os.path.join(config_dir or os.path.join(self.env["HOME"], ".claude"), "ccgg-origins")
+
+    def trust(self, *urls, config_dir=None, raw=None):
+        """Write the user-level ccgg-origins record: the given URLs, or `raw` verbatim."""
+        path = self.record_path(config_dir)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(raw if raw is not None else "".join(u + "\n" for u in urls))
+
+    def untrust(self):
+        path = self.record_path()
+        if os.path.exists(path):
+            os.remove(path)
 
     def run_hook(self, ref):
         return self.run_hook_with(CCGG_REPO=self.origin, CCGG_REF=ref)
@@ -138,6 +156,78 @@ class PinFollowingTests(unittest.TestCase):
         self.assertIn("origin is not CCGG_REPO; live sync skipped", proc.stdout)
         self.assertEqual(self.head(), self.commits[0])
         self.assertIsNone(self.ran())
+
+    # --- R-002/S-001: the origin must be trusted from outside the checkout ----
+    def test_no_user_record_refuses_the_first_clone_and_nothing_runs(self):
+        """A committed env block was the whole check: any CCGG_REPO with a 40-hex
+        CCGG_REF was cloned and its update.sh run before the validator's one-line
+        verdict — which is the only reader of the in-tree record — was printed."""
+        self.untrust()
+        proc = self.run_hook(self.commits[0])
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        self.assertIn("not listed in the user-level ccgg-origins record; refusing to clone", proc.stdout)
+        self.assertFalse(os.path.exists(self.clone), "the clone was made anyway")
+        self.assertIsNone(self.ran())
+
+    def test_no_user_record_refuses_update_of_an_existing_clone(self):
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        self.untrust()
+        proc = self.run_hook(self.commits[1])
+        self.assertIn("not listed in the user-level ccgg-origins record; live sync skipped", proc.stdout)
+        self.assertEqual(self.head(), self.commits[0], "the clone was moved anyway")
+        self.assertIsNone(self.ran())
+
+    def test_an_origin_the_user_record_does_not_list_is_refused(self):
+        self.run_hook(self.commits[0])
+        os.remove(os.path.join(self.project, "ran.txt"))
+        self.trust("https://github.com/someone-else/claude-code-generic-guide.git")
+        proc = self.run_hook(self.commits[1])
+        self.assertIn("live sync skipped", proc.stdout)
+        self.assertIsNone(self.ran())
+
+    def test_an_in_tree_record_does_not_vouch_for_its_own_branch(self):
+        """The branch that adds the env block can add .claude/ccgg-origins next to
+        it; only a record outside every repository is the owner's word."""
+        self.untrust()
+        os.makedirs(os.path.join(self.project, ".claude"))
+        with open(os.path.join(self.project, ".claude", "ccgg-origins"), "w", encoding="utf-8") as fh:
+            fh.write(self.origin + "\n")
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("refusing to clone", proc.stdout)
+        self.assertFalse(os.path.exists(self.clone))
+        self.assertIsNone(self.ran())
+
+    def test_the_record_tolerates_comments_blanks_whitespace_and_crlf(self):
+        self.trust(raw=f"# guides this machine trusts\r\n\r\n   {self.origin}  \r\n")
+        proc = self.run_hook(self.commits[0])
+        self.assertNotIn("live sync skipped", proc.stdout)
+        self.assertNotIn("refusing to clone", proc.stdout)
+        self.assertIn("update.sh one ran", self.ran())
+
+    def test_the_record_matches_whole_lines_only(self):
+        """A prefix, a suffix, or a commented-out copy of the URL is not the URL."""
+        self.trust(self.origin + ".git", self.origin[:-1], "# " + self.origin)
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("refusing to clone", proc.stdout)
+        self.assertFalse(os.path.exists(self.clone))
+
+    def test_claude_config_dir_relocates_the_record(self):
+        self.untrust()
+        alt = os.path.join(self.tmp.name, "alt-config")
+        self.trust(self.origin, config_dir=alt)
+        env = dict(self.env, CCGG_HOME=self.clone, CLAUDE_PROJECT_DIR=self.project,
+                   CCGG_REPO=self.origin, CCGG_REF=self.commits[0], CLAUDE_CONFIG_DIR=alt)
+        proc = subprocess.run([bash(), HOOK], cwd=self.project, env=env,
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+        self.assertNotIn("refusing to clone", proc.stdout)
+        self.assertIn("update.sh one ran", self.ran())
+
+    def test_an_empty_record_allows_nothing(self):
+        self.trust(raw="# nothing yet\n")
+        proc = self.run_hook(self.commits[0])
+        self.assertIn("refusing to clone", proc.stdout)
+        self.assertFalse(os.path.exists(self.clone))
 
 
     # --- R-004: the configured name decides, not the clone's own pin ---------

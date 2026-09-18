@@ -50,9 +50,11 @@ one — add the keys):
 ```
 All three are required: the hook runs nothing when any is missing, and
 `tools/validate.py` fails the target. Record the same URL in the target's
-`.claude/ccgg-origins` (one per line) so the origin is checked from outside the
-env block. Every future session start then auto-clones the guide if absent and
-syncs the CCGG-owned files.
+`.claude/ccgg-origins` (one per line) so the validator checks the origin from
+outside the env block — and, once per machine, in `~/.claude/ccgg-origins`,
+which is what the hook checks before it clones or syncs: the in-tree record
+travels with the branch, the user-level one does not. Every future session start
+then auto-clones the guide if absent and syncs the CCGG-owned files.
 
 ### Step 5 — Verify
 - `python3 tools/validate.py` in the target → OK.
