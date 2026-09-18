@@ -139,3 +139,8 @@ facts stage stops inventorying the global memory seed | caught:facts | sed -i '/
 hook on a debug-log-only event claims to remind the model | caught | sed -i 's/^# This hook prints nothing for the model, and could not:/# This hook reminds the AI to flush memory at session end. It/' .claude/hooks/session-end.sh
 currency rule restated with its own item list outside the charter | caught | sed -i "s|the charter's \*Currency\* check (\[\`WORKING-CHARTER.md\`\](WORKING-CHARTER.md), \*How I think\*) lists what gets searched first|versions, prices, APIs, model names get searched first|" AGENTS.md
 audit gate stops failing when a required stage did not run | caught:validate-tests | sed -i '/that part measured nothing, so this run is not a clean bill/{n;s/^            exit 1$/            true/}' .github/workflows/audit.yml
+
+# Review of #75 (the adversarial review workflow's confirmed findings).
+hook answers a branch pin from the clone's own stale ref again | caught:hooks | sed -i 's|want="$(git -C "$1" rev-parse --verify -q "refs/ccgg/pin^{commit}" 2>/dev/null)" \|\| return 1|want="$(git -C "$1" rev-parse --verify -q "$2^{commit}" 2>/dev/null \|\| git -C "$1" rev-parse --verify -q refs/ccgg/pin)" \|\| return 1|' .claude/hooks/session-start.sh
+hook prints a decision record's slug instead of its date | caught:hooks | sed -i 's|OPEN="${OPEN}decisions/${BASH_REMATCH\[1\]}-\*.md"|OPEN="${OPEN}decisions/${name}"|' .claude/hooks/session-start.sh
+audit workflow ORs the base-ref pin in instead of requiring it | caught | python3 -c "p='.github/workflows/audit.yml';t=open(p).read();n=t.replace('github.repository &&\n       github.base_ref','github.repository ||\n       github.base_ref',1);assert n!=t;open(p,'w').write(n)"

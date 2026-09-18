@@ -900,16 +900,22 @@ def import_targets(text: str) -> list[str]:
     return IMPORT_RE.findall(body)
 
 
-def imported_closure() -> set[str]:
-    """Every file reachable by @import from the two roots, the roots included."""
+def imported_closure(root: str | None = None,
+                     roots: tuple[str, ...] = ("CLAUDE.md", "AGENTS.md")) -> set[str]:
+    """Every file reachable by @import from the roots, the roots included.
+
+    `root` defaults to the repository; a test hands it a fixture with a two-hop
+    chain and a cycle, which the shipped tree does not have.
+    """
+    base = root or ROOT
     seen: set[str] = set()
-    queue = [p for p in ("CLAUDE.md", "AGENTS.md") if os.path.exists(os.path.join(ROOT, p))]
+    queue = [p for p in roots if os.path.exists(os.path.join(base, p))]
     while queue:
         path = queue.pop(0)
         if path in seen:
             continue
         seen.add(path)
-        full = os.path.join(ROOT, path)
+        full = os.path.join(base, path)
         if not os.path.isfile(full):
             continue
         text = open(full, encoding="utf-8", errors="replace").read()
@@ -917,7 +923,7 @@ def imported_closure() -> set[str]:
             if target.startswith("~"):
                 continue
             dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
-            if os.path.exists(os.path.join(ROOT, dest)):
+            if os.path.exists(os.path.join(base, dest)):
                 queue.append(dest)
     return seen
 
@@ -1817,42 +1823,66 @@ HEAD_REPO_PIN = "github.event.pull_request.head.repo.full_name == github.reposit
 
 
 def job_condition(text: str, job: str) -> str:
-    """The `if:` block of a named job, flattened to one line."""
+    """The job-level `if:` of a named job, flattened to one line.
+
+    Job-level means the four-space property indent, before `steps:`. The first
+    version took the first `if:` at any depth, so a step's condition stood in
+    for a job that had none (review of #75).
+    """
     lines = text.splitlines()
     try:
         start = next(i for i, ln in enumerate(lines) if ln.rstrip() == f"  {job}:")
     except StopIteration:
         return ""
     collecting = False
+    block = False
     parts = []
     for ln in lines[start + 1:]:
         if ln.startswith("  ") and not ln.startswith("   ") and ln.rstrip().endswith(":"):
             break                       # the next job
-        stripped = ln.strip()
-        if stripped.startswith("if:"):
+        if ln.startswith("    steps:"):
+            break                       # anything below is a step's, not the job's
+        if ln.startswith("    if:"):
             collecting = True
-            parts.append(stripped[3:].strip().lstrip(">-|").strip())
-            continue
-        if collecting:
-            if not stripped or stripped.startswith("#") or re.match(r"^[a-z-]+:", stripped):
+            value = ln[len("    if:"):].strip()
+            block = value in (">", ">-", "|", "|-")
+            if not block:
+                # A plain scalar's ` #` starts a YAML comment GitHub never evaluates.
+                parts.append(re.split(r"\s#", value, 1)[0].strip())
                 break
-            parts.append(stripped)
+            continue
+        if collecting and block:
+            if not ln.strip() or re.match(r"^    [a-z-]+:", ln):
+                break
+            parts.append(ln.strip())
     return " ".join(p for p in parts if p)
+
+
+def normalized_condition(condition: str) -> str:
+    return re.sub(r"\s+", " ", condition).strip()
+
+
+# The one condition the deterministic job may carry, whitespace-normalized. An
+# equality test, not a substring test: `pin in condition` was satisfied by a
+# pin inside a comment, OR-ed in, or negated (review of #75). Any rewrite fails
+# and is reviewed, the way AUDIT_SKILL_GRANTS pins the skill's grants.
+AUDIT_JOB_CONDITION = normalized_condition(
+    "github.event_name == 'workflow_dispatch' || "
+    "(contains(github.event.pull_request.labels.*.name, 'audit') && "
+    f"{HEAD_REPO_PIN} && {BASE_REF_PIN})")
 
 
 def audit_workflow_problems(text: str) -> list[str]:
     condition = job_condition(text, "deterministic")
     if not condition:
-        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job has no `if:` — every push would start "
-                f"a run that reads a pull request's chosen base as its trusted source"]
-    problems = []
-    for pin, what in ((BASE_REF_PIN, "a pull request can target a branch it wrote, and the base-ref "
-                                     "rescue would read the attacker's files"),
-                      (HEAD_REPO_PIN, "a fork pull request would reach the job that holds the API key")):
-        if pin not in condition:
-            problems.append(f"{AUDIT_WORKFLOW_PATH}: the deterministic job's condition does not pin "
-                            f"`{pin}` — {what}")
-    return problems
+        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job has no job-level `if:` — every push "
+                f"would start a run that reads a pull request's chosen base as its trusted source"]
+    if normalized_condition(condition) != AUDIT_JOB_CONDITION:
+        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job's condition is not the pinned one — "
+                f"got `{normalized_condition(condition)[:120]}`; it must be exactly "
+                f"`{AUDIT_JOB_CONDITION}` (a fork pull request, or one choosing its own base, "
+                f"would otherwise reach the job that reads the trusted set)"]
+    return []
 
 
 def check_audit_workflow_trust_anchor() -> None:

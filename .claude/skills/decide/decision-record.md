@@ -5,7 +5,7 @@ Records live in the project root at `decisions/`, versioned in git. The skill
 creates the folder and its index on first use.
 
 ## Naming
-`decisions/YYYY-MM-DD-<slug>.md` — date decided (or proposed), short kebab-case slug.
+`decisions/YYYY-MM-DD-<slug>.md` — date decided (or proposed), then a slug of at most seven lowercase words (letters and digits) joined by hyphens. `tools/validate.py` fails any other name, and the session-start hook lists a record by its date only, so the slug is for people.
 
 ## Status lifecycle
 ```

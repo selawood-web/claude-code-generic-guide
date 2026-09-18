@@ -3,8 +3,8 @@ name: audit
 # The headless half of /ccgg-audit (F002 slice 3). An audit is invoked, never
 # automatic: the skill carries `disable-model-invocation: true` for the same
 # reason this workflow does not run on every push. Start it by hand, or put the
-# `audit` label on a pull request. A labelled pull request re-audits on each
-# push to it, each run capped by its own budget.
+# `audit` label on a pull request that targets the default branch. A labelled
+# pull request re-audits on each push to it, each run capped by its own budget.
 on:
   workflow_dispatch:
     inputs:

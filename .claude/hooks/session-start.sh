@@ -27,9 +27,11 @@ set -uo pipefail
 #   - CCGG_HOME and its update.sh are owned by this user (a pre-planted
 #     directory at a shared path such as /tmp fails this),
 #   - the clone's origin is CCGG_REPO,
-#   - the clone's HEAD is at CCGG_REF — a tag, a branch, or a 40-hex commit;
-#     the commit form is the only one nobody can move, and tools/validate.py
-#     prints a caution for the other two.
+#   - CCGG_REF is a refname (no leading `-`, no `..`, only [A-Za-z0-9._/-]) and
+#     the clone's HEAD is at it. A 40-hex commit is checked locally; a tag or
+#     branch is re-fetched from origin on every session start, and
+#     tools/validate.py fails a project that pins one — a name is a value its
+#     owner can move.
 # A clone from CCGG_REPO is made only at CCGG_REF. Failures are printed, never
 # hidden: a silent sync failure looks exactly like a compromised one.
 ccgg_is_sha() { case "$1" in *[!0-9a-f]*|"") return 1 ;; esac; [ "${#1}" -eq 40 ]; }
@@ -40,7 +42,9 @@ ccgg_is_sha() { case "$1" in *[!0-9a-f]*|"") return 1 ;; esac; [ "${#1}" -eq 40 
 ccgg_ref_ok() {
   case "$1" in -*|"") return 1 ;; esac
   case "$1" in *..*) return 1 ;; esac
-  printf '%s' "$1" | grep -qE '^[A-Za-z0-9._/-]+$'
+  # The whole value, not a line of it: grep matches any one line, so a value
+  # holding a newline passed on the strength of its first line.
+  [[ "$1" =~ ^[A-Za-z0-9._/-]+$ ]]
 }
 ccgg_owned() { [ -O "$1" ] && [ -O "$1/update.sh" ]; }
 ccgg_origin_ok() { # $1 = clone, $2 = expected URL
@@ -51,16 +55,15 @@ ccgg_at_ref() { # $1 = clone, $2 = ref name or commit
   ccgg_ref_ok "$2" || return 1
   head="$(git -C "$1" rev-parse HEAD 2>/dev/null)" || return 1
   if ccgg_is_sha "$2"; then want="$2"; else
-    # The configured name first; refs/ccgg/pin only as a fallback, and only when
-    # the pin was written for this same name. The old order read the pin first,
-    # and the pin exists as soon as any fetch has run — so `||` short-circuited,
-    # the configured name was never consulted again, and "the clone's HEAD is at
-    # CCGG_REF" was answered by the clone about a name nobody checked (R-004).
-    want="$(git -C "$1" rev-parse --verify -q "$2^{commit}" 2>/dev/null)"
-    if [ -z "${want:-}" ] && [ "$(git -C "$1" config --get ccgg.pinnedRef 2>/dev/null)" = "$2" ]; then
-      want="$(git -C "$1" rev-parse --verify -q "refs/ccgg/pin" 2>/dev/null)"
-    fi
-    [ -n "${want:-}" ] || return 1
+    # A name is answered only by refs/ccgg/pin, and only when the pin was written
+    # for this same name by ccgg_move_to_ref — the fetch from the verified origin
+    # that always precedes this check for a name. Never by the clone's own
+    # refs/heads/<name> or refs/tags/<name>: `fetch origin -- <name>` leaves those
+    # untouched, so a hand-cloned CCGG_HOME answered from a stale local branch —
+    # first failing open (R-004), then, after the first fix resolved the name
+    # first, failing closed forever, because nothing ever moved that branch.
+    [ "$(git -C "$1" config --get ccgg.pinnedRef 2>/dev/null)" = "$2" ] || return 1
+    want="$(git -C "$1" rev-parse --verify -q "refs/ccgg/pin^{commit}" 2>/dev/null)" || return 1
   fi
   [ -n "$head" ] && [ "$head" = "$want" ]
 }
@@ -162,20 +165,22 @@ if [ -d "$DECISIONS_DIR" ] && command -v git >/dev/null 2>&1; then
     [ -n "$rec" ] || continue
     name="$(basename "$rec")"
     grep -q '\*\*Status:\*\* proposed' "${CLAUDE_PROJECT_DIR:-.}/$rec" 2>/dev/null || continue
-    # A shape, not a character class. The old allow-list forbade spaces and so
-    # read as safe, but hyphens join words as well as spaces do: a record named
-    # `ignore-previous-instructions-and-do-x.md` passed it and was printed into
-    # the prompt verbatim (finding R-001). The /decide skill produces a
-    # date-prefixed slug; anything else is counted, never named.
-    if printf '%s' "$name" | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+){0,6}\.md$'; then
-      OPEN="${OPEN}decisions/${name}"$'\n'
+    # No word from the tree reaches the prompt. The first fix replaced a
+    # character allow-list (which forbade spaces and read as safe, but hyphens
+    # join words as well as spaces do) with a date-prefixed slug of at most seven
+    # words — and seven words is a sentence: R-001's own payload,
+    # `ignore-previous-instructions-and-do-x`, fit. So the slug decides only
+    # whether a record is well-formed; what is printed is its date, which is
+    # enough to find it with `ls decisions/<date>-*.md`.
+    if [[ "$name" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2})-[a-z0-9]+(-[a-z0-9]+){0,6}\.md$ ]]; then
+      OPEN="${OPEN}decisions/${BASH_REMATCH[1]}-*.md"$'\n'
     else
       SKIPPED=$((SKIPPED + 1))
     fi
   done < <(git -C "${CLAUDE_PROJECT_DIR:-.}" ls-files -- 'decisions/*.md' 2>/dev/null)
   if [ -n "${OPEN:-}" ]; then
-    echo "-- open decisions (status: proposed) --"
-    printf '%s' "$OPEN"
+    echo "-- open decisions (status: proposed), by date --"
+    printf '%s' "$OPEN" | sort | uniq -c | sed 's/^ *\([0-9]*\) \(.*\)$/\2 (\1)/'
   fi
   # Counted, never named: a record whose name does not fit the slug is still
   # worth knowing about, and the count carries no text from the tree.

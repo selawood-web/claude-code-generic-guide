@@ -35,7 +35,7 @@ being able to change anything.
   being missed, measured by the probe harness the audit ships and runs in CI. Each
   probe names the gate that must catch it — the validator by default, the verifier
   guard's unit table for a defect the validator cannot see. The list
-  is 97 probes today and grows with every check that lands; the target is the rule the
+  is 100 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`
@@ -224,8 +224,9 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `anthropics/claude-code-action`: `--agents` takes only literal JSON, which an argv
   element carries cleanly and a YAML argument string does not — [in]
 - 2026-09-16 — The audit workflow is invoked, never automatic: manual dispatch, or the
-  `audit` label on a pull request, and never on a fork, where GitHub withholds the
-  secret the run needs — [in]
+  `audit` label on a pull request against the default branch, and never on a fork
+  or against any other base, where a pull request could choose its own trust anchor
+  and GitHub withholds the secret the run needs — [in]
 - 2026-09-16 — Whether the headless run honours `isolation: worktree` on an inline agent
   is undocumented; the first authenticated CI run that spawns a specialist is the check,
   and the fallback the architecture record names (one `claude -p` per specialist) still

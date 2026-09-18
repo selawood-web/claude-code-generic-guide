@@ -70,7 +70,7 @@ Produce a recommendation that:
 
 ### Step 8 — Record
 1. If `decisions/` does not exist in the project root, create it with a `README.md` index (structure in [`decision-record.md`](decision-record.md)).
-2. Write `decisions/YYYY-MM-DD-<slug>.md` from the template with **Status: proposed**.
+2. Write `decisions/YYYY-MM-DD-<slug>.md` from the template with **Status: proposed** — the slug at most seven lowercase words joined by hyphens; shorten it before writing.
 3. Present the recommendation. When the user confirms, set **Status: decided** and add the index row. If they pick differently, record *their* choice and rationale — the record captures the real decision, not the recommendation.
 
 ### Step 9 — Promote to memory

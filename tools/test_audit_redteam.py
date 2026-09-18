@@ -363,5 +363,46 @@ class PlantReachesItsOwnChannelTests(unittest.TestCase):
         self.assertTrue(reaching, "no exec probe stages its plant, so none can reach a tracked-file channel")
 
 
+class ShippedProbesRunTests(unittest.TestCase):
+    """Review of #75: a positive control has to execute. The static staging
+    check cannot see a probe that stages the wrong file, and a hook that stops
+    carrying the marker leaves 'contained' looking like a closed channel."""
+
+    @classmethod
+    def setUpClass(cls):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        cls.tmp = tempfile.TemporaryDirectory(prefix="ccgg-redteam-run-")
+        cls.repo, cls.env = make_scratch_copy(root, cls.tmp.name)
+        with open(os.path.join(root, "tools", "redteam_probes.txt"), encoding="utf-8") as fh:
+            cls.probes = {p.channel: p for p in parse_redteam_probes(fh.read())}
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_the_harness_reports_a_marker_that_does_reach(self):
+        """The control for the controls: a probe whose channel is open reads reached."""
+        probe = parse_redteam_probes('open | exec | : | printf "%s" "$MARKER"\n')[0]
+        self.assertEqual(run_probe(probe, self.repo, self.env).result, "reached")
+
+    def test_the_decision_record_plant_lands_and_only_its_date_comes_out(self):
+        """The plant is tracked and proposed, so the hook sees it — and prints the
+        date, never the slug the marker sits in. Both halves are asserted: a
+        contained verdict alone would also describe a plant that never landed."""
+        probe = self.probes["session-start stdout via a decision record filename"]
+        self.assertEqual(run_probe(probe, self.repo, self.env).result, "contained")
+        marker = audit_redteam.marker_for(probe)
+        penv = dict(self.env, MARKER=marker)
+        subprocess.run(["bash", "-c", probe.plant], cwd=self.repo, env=penv, check=True, capture_output=True)
+        out = subprocess.run(["bash", "-c", probe.observe], cwd=self.repo, env=penv,
+                             capture_output=True, text=True).stdout
+        self.assertIn("decisions/2026-01-01-*.md (1)", out)
+        self.assertNotIn(marker, out)
+
+    def test_the_sentence_named_record_is_counted_not_named(self):
+        probe = self.probes["session-start stdout via a decision record named as a sentence"]
+        self.assertEqual(run_probe(probe, self.repo, self.env).result, "contained")
+
+
 if __name__ == "__main__":
     unittest.main()

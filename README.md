@@ -93,13 +93,14 @@ does runs in every session of the project with your permissions, and under
 them missing the hook prints a line and runs nothing, and `tools/validate.py`
 fails the project. The hook clones only at `CCGG_REF`, `update.sh` fetches only
 that ref, and the sync is skipped with a printed line when the clone is not at
-it. A tag or branch works and the validator prints a caution for it: whoever
-owns the guide can move it, and a 40-hex commit is the one form nobody can.
+it. A tag or branch is refused by the validator: whoever owns the guide can move
+it, and a 40-hex commit is the one form nobody can.
 
 `.claude/ccgg-origins` is the other half. It lives outside the env block, so
 re-pointing the sync at a different repository is a named change in a diff
 rather than one line inside a settings file. The validator fails any
-`CCGG_REPO` the record does not list, and cautions when there is no record.
+`CCGG_REPO` the record does not list, fails a `CCGG_REPO` with no record at all,
+and cautions only when the record exists but lists nothing.
 The session-start hook then runs `update.sh` on every session start, resume, and
 compact: it pulls the guide's latest master and overwrites the **CCGG-owned**
 files (skills, hooks, validator) in the project. Rules files you customized
