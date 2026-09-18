@@ -1716,6 +1716,76 @@ class PinnedGrantRescueTests(unittest.TestCase):
 
 
 
+class DeterministicProducerRescueTests(unittest.TestCase):
+    """R-002 (2026-09-18): the artifact the specialists read was authored by the head's
+    own producers; the deterministic job now runs base-ref copies of them."""
+
+    GOOD = ('    steps:\n'
+            '      - run: |\n'
+            '          fetch "tools/audit_facts.py"\n'
+            '          fetch "tools/audit_probes.py"\n'
+            '          fetch "tools/audit_redteam.py"\n'
+            '          fetch "tools/audit_env.py"\n'
+            '          fetch "tools/audit_vocab.json"\n'
+            '      - run: |\n'
+            '          python "$PRODUCERS/tools/audit_facts.py" --out "$STAMP"\n'
+            '          python "$PRODUCERS/tools/audit_probes.py" --out "$STAMP" || true\n'
+            '          python "$PRODUCERS/tools/audit_redteam.py" --out "$STAMP" || true\n')
+
+    def test_the_shipped_workflow_passes(self):
+        del validate.findings[:]
+        try:
+            validate.check_deterministic_producers_are_rescued()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_complete_job_passes(self):
+        self.assertEqual(validate.producer_rescue_problems(self.GOOD), [])
+
+    def test_the_facts_producer_reads_its_vocabulary_from_beside_itself(self):
+        self.assertIn("tools/audit_vocab.json", validate.local_data_files("tools/audit_facts.py"))
+        self.assertEqual(validate.local_data_files("tools/no_such_file.py"), set())
+
+    def test_a_producer_run_from_the_checkout_is_reported(self):
+        body = self.GOOD.replace('python "$PRODUCERS/tools/audit_facts.py"', 'python tools/audit_facts.py')
+        problems = validate.producer_rescue_problems(body)
+        self.assertTrue(any("runs tools/audit_facts.py from the checkout" in p for p in problems), problems)
+        self.assertTrue(any("never runs the trusted copy of tools/audit_facts.py" in p for p in problems), problems)
+
+    def test_a_missing_import_or_data_file_is_reported(self):
+        body = self.GOOD.replace('          fetch "tools/audit_env.py"\n', '')
+        self.assertTrue(any("tools/audit_env.py" in p and "loads it from beside itself" in p
+                            for p in validate.producer_rescue_problems(body)))
+        body = self.GOOD.replace('          fetch "tools/audit_vocab.json"\n', '')
+        self.assertTrue(any("tools/audit_vocab.json" in p for p in validate.producer_rescue_problems(body)))
+
+    def test_a_producer_missing_from_the_rescue_is_reported(self):
+        body = self.GOOD.replace('          fetch "tools/audit_redteam.py"\n', '')
+        self.assertTrue(any("tools/audit_redteam.py is not in the deterministic job's rescue list" in p
+                            for p in validate.producer_rescue_problems(body)))
+
+    def test_the_model_jobs_rescue_no_longer_counts_the_deterministic_ones(self):
+        text = ("jobs:\n  deterministic:\n    steps:\n      - run: |\n          fetch \"tools/audit_facts.py\"\n"
+                "  model:\n    steps:\n      - run: |\n          fetch \"tools/audit_report.py\"\n")
+        self.assertEqual(validate.rescued_paths(text, job="model"), {"tools/audit_report.py"})
+        self.assertEqual(validate.rescued_paths(text, job="deterministic"), {"tools/audit_facts.py"})
+        self.assertEqual(validate.rescued_paths(text), {"tools/audit_facts.py", "tools/audit_report.py"})
+
+    def test_a_missing_job_fails_rather_than_passing_quietly(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "workflow_jobs", return_value={"model": ""}):
+                validate.check_deterministic_producers_are_rescued()
+            self.assertTrue(any("no `deterministic` job" in f for f in validate.findings), list(validate.findings))
+        finally:
+            del validate.findings[:]
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.producer_rescue_problems(None)
+
+
 class AuditWorkflowTrustAnchorTests(unittest.TestCase):
     """S-008: the trusted set is read from a base a pull request chooses itself."""
 
