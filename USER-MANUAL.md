@@ -92,15 +92,15 @@ What you get:
 performs steps 1–2 below in one command, never overwrites existing files, and
 prints what remains for you. The manual steps, for understanding each piece:
 
-### Step 1 — Copy `AGENTS.md` and `CLAUDE.md` into your project
+### Step 1 — Copy `AGENTS.md`, `WORKING-CHARTER.md` and `CLAUDE.md` into your project
 
 ```bash
-cp /path/to/this-repo/AGENTS.md /path/to/this-repo/CLAUDE.md /path/to/your-project/
+cp /path/to/this-repo/AGENTS.md /path/to/this-repo/WORKING-CHARTER.md /path/to/this-repo/CLAUDE.md /path/to/your-project/
 ```
 
-Both files are needed: Claude Code reads `CLAUDE.md` (which imports
-`@AGENTS.md`); other assistants read `AGENTS.md` directly. Without the bridge,
-Claude Code never loads the rules at all.
+All three are needed: Claude Code reads `CLAUDE.md` (which imports
+`@AGENTS.md` and `@WORKING-CHARTER.md`); other assistants read `AGENTS.md`
+directly. Without the bridge, Claude Code never loads the rules at all.
 
 This is the single most important file. It immediately gives the AI professional behavior for your project. **Commit it to version control** so your whole team benefits.
 
@@ -510,7 +510,7 @@ is this secure?
 
 Never edits a tracked file. The report directory is ignored by git; keep one deliberately with `git add -f`. The catch rate of the probes runs in CI on every push, so a check the validator loses is a red build. Defined in [`features/F002-audit-skill.md`](features/F002-audit-skill.md).
 
-**Headless, for a checkout you did not write:** `tools/audit_headless.py` runs the same steps with auto-discovery off, so the audited tree's hooks, settings, skills and agents never configure the run that reads it. The briefs are passed inline, built from the same `.claude/agents/` files, and the verifier's guard hook must come from a path you control rather than from the tree under audit. `.github/workflows/audit.yml` runs it on a manual dispatch or an `audit` label, posts the report as one pull-request comment, and pushes nothing. It needs an `ANTHROPIC_API_KEY` secret; without one, the deterministic half still runs.
+**Headless, for a checkout you did not write:** `tools/audit_headless.py` runs the same steps with auto-discovery off, so the audited tree's hooks, settings, skills and agents never configure the run that reads it. The briefs are passed inline, built from the same `.claude/agents/` files, and the verifier's guard hook must come from a path you control rather than from the tree under audit. `.github/workflows/audit.yml` runs it on a manual dispatch or an `audit` label on a pull request against the default branch, posts the report as one pull-request comment, and pushes nothing. It needs an `ANTHROPIC_API_KEY` secret; without one, the deterministic half still runs.
 
 **Examples:**
 ```
@@ -1143,7 +1143,7 @@ off. If a file is missing from `/context`, Claude cannot see it.
 ### AI not following AGENTS.md rules
 
 Claude Code reads `CLAUDE.md`, not `AGENTS.md`. Check that the project root has
-a `CLAUDE.md` importing `@AGENTS.md` (this repo ships one), then run `/context`
+a `CLAUDE.md` importing `@AGENTS.md` and `@WORKING-CHARTER.md` (this repo ships one), then run `/context`
 in a session and confirm the files appear under **Memory files**. If they are
 listed and still ignored, make the instructions more specific — vague rules get
 vague compliance.

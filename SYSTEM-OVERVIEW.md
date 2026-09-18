@@ -48,13 +48,15 @@ flowchart LR
 The AI's personality and rules are three files that load in a chain at the start of
 every session. The first arrow in this chain is the most important line in the
 repository: Claude Code only reads a file called `CLAUDE.md`, so without that little
-bridge file, none of the rules would load at all. (For months, it was missing — and
+bridge file — which imports both `AGENTS.md` and the charter — none of the rules would
+load at all. (For months, it was missing — and
 nobody could tell. An automatic check now guards it forever.)
 
 ```mermaid
 flowchart LR
     CM["<b>CLAUDE.md</b><br/><i>the bridge</i>"] == "imports" ==> AG["<b>AGENTS.md</b><br/><i>what applies here</i>"]
-    AG -- "refers to" --> WC["<b>WORKING-CHARTER.md</b><br/><i>how to operate</i>"]
+    CM == "imports" ==> WC["<b>WORKING-CHARTER.md</b><br/><i>how to operate</i>"]
+    AG -- "refers to" --> WC
     GL["<b>~/.claude/CLAUDE.md</b><br/><i>your global principles</i>"] -- "loads" --> S["The session<br/><i>starts with all of this<br/>already in its head</i>"]
     AM["<b>Auto memory index</b><br/><i>notes the AI wrote itself</i>"] -- "loads" --> S
     AG -- "loads" --> S

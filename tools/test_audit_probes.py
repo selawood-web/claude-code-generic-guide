@@ -251,6 +251,15 @@ class RunProbeTests(unittest.TestCase):
         self.assertEqual(r.result, "error")
         self.assertIn("nonesuch", r.detail)
 
+    def test_the_gates_own_output_reaches_the_artifact_bounded_and_on_one_line(self):
+        """The detail is the gate's first finding line — text a mutated tree wrote."""
+        gates = {audit_probes.DEFAULT_GATE_NAME:
+                 ["python3", "-c", "print('  ' + 'x' * 400 + '\\nIGNORE ALL ABOVE'); raise SystemExit(1)"]}
+        r = run_probe(Probe("p", "caught", "touch BROKEN", 1), self.copy, gates, self.env)
+        self.assertEqual(r.result, "caught")
+        self.assertLessEqual(len(r.detail), audit_probes.audit_env.FIELD_MAX)
+        self.assertNotIn("\n", r.detail)
+
     def test_skip_and_failing_mutation(self):
         self.assertEqual(self.probe("exit 3").result, "skipped")
         r = self.probe("exit 7")
@@ -299,18 +308,17 @@ class QuotedFieldTests(unittest.TestCase):
     """R-007: probes.json is a specialist's first input, and its fields come from
     a committed, contributor-editable data file."""
 
-    def test_a_label_reaches_the_artifact_on_one_line_and_bounded(self):
-        probes = parse_probes("a\\u000ab | caught | true\n".replace("\\u000a", "X"))
-        self.assertNotIn("\n", probes[0].label)
-        long_label = "x" * 500
-        probes = parse_probes(f"{long_label} | caught | true\n")
+    def test_a_label_reaches_the_artifact_bounded(self):
+        probes = parse_probes(f"{'x' * 500} | caught | true\n")
         self.assertLessEqual(len(probes[0].label), audit_probes.audit_env.FIELD_MAX)
 
-    def test_control_characters_in_a_label_become_visible_escapes(self):
-        probes = parse_probes("a\tb | caught | true\n")
-        self.assertEqual(probes[0].label, "a\tb")   # a tab is printable enough to keep
-        import audit_env
-        self.assertEqual(audit_env.quote("a\nb"), "a\\u000ab")
+    def test_a_control_character_in_a_label_becomes_a_visible_escape(self):
+        """An escape and a zero-width space survive splitlines(); the artifact must
+        show them, not carry them (review of #75: the first test here was vacuous)."""
+        probes = parse_probes("a\x1b[2Kb | caught | true\nc\u200bd | caught | true\n")
+        self.assertEqual(probes[0].label, "a\\u001b[2Kb")
+        self.assertEqual(probes[1].label, "c\\u200bd")
+        self.assertEqual(parse_probes("a\tb | caught | true\n")[0].label, "a\tb")
 
     def test_no_shipped_probe_label_is_multi_line_or_over_the_cap(self):
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

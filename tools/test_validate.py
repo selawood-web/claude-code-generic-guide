@@ -465,7 +465,7 @@ class CcggEnvTests(unittest.TestCase):
                 self.assertTrue(validate.REF_NAME_RE.match(ref), ref)
 
     def test_refnames_the_hook_refuses_are_refused_here_too(self):
-        for ref in ("-x", "--upload-pack=id", "a..b", "a b", "a;id", "", "a$(id)"):
+        for ref in ("-x", "--upload-pack=id", "a..b", "a b", "a;id", "", "a$(id)", "main\n--upload-pack=x", "x\n"):
             with self.subTest(ref=ref):
                 self.assertFalse(validate.REF_NAME_RE.match(ref), ref)
 
@@ -1734,16 +1734,42 @@ class AuditWorkflowTrustAnchorTests(unittest.TestCase):
 
     def test_dropping_the_base_ref_pin_is_reported(self):
         problems = validate.audit_workflow_problems(self.text.replace(validate.BASE_REF_PIN, "true"))
-        self.assertTrue(any("base_ref" in p for p in problems), problems)
+        self.assertTrue(any("not the pinned one" in p for p in problems), problems)
 
     def test_dropping_the_fork_pin_is_reported(self):
         problems = validate.audit_workflow_problems(self.text.replace(validate.HEAD_REPO_PIN, "true"))
-        self.assertTrue(any("fork" in p for p in problems), problems)
+        self.assertTrue(any("not the pinned one" in p for p in problems), problems)
+
+    # Review of #75: `pin in condition` was a substring test.
+    def test_or_ing_the_pin_in_is_reported(self):
+        mutated = self.text.replace("github.repository &&\n       github.base_ref",
+                                    "github.repository ||\n       github.base_ref")
+        self.assertNotEqual(mutated, self.text)
+        self.assertTrue(validate.audit_workflow_problems(mutated))
+
+    def test_negating_the_pin_is_reported(self):
+        mutated = self.text.replace(validate.BASE_REF_PIN, "!(" + validate.BASE_REF_PIN + ")")
+        self.assertTrue(validate.audit_workflow_problems(mutated))
+
+    def test_a_pin_inside_a_yaml_comment_is_not_a_pin(self):
+        text = f"jobs:\n  deterministic:\n    if: true # {validate.BASE_REF_PIN} {validate.HEAD_REPO_PIN}\n    runs-on: x\n"
+        self.assertEqual(validate.job_condition(text, "deterministic"), "true")
+        self.assertTrue(validate.audit_workflow_problems(text))
+
+    def test_a_step_level_if_is_not_the_jobs(self):
+        text = ("jobs:\n  deterministic:\n    runs-on: x\n    steps:\n      - name: a\n"
+                f"        if: {validate.AUDIT_JOB_CONDITION}\n        run: true\n")
+        self.assertEqual(validate.job_condition(text, "deterministic"), "")
+        self.assertTrue(any("no job-level" in p for p in validate.audit_workflow_problems(text)))
+
+    def test_a_single_line_pinned_condition_passes(self):
+        text = f"jobs:\n  deterministic:\n    if: {validate.AUDIT_JOB_CONDITION}\n    runs-on: x\n"
+        self.assertEqual(validate.audit_workflow_problems(text), [])
 
     def test_a_job_with_no_condition_at_all_is_reported(self):
         text = "jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n    steps: []\n"
         problems = validate.audit_workflow_problems(text)
-        self.assertTrue(any("no `if:`" in p for p in problems), problems)
+        self.assertTrue(any("no job-level" in p for p in problems), problems)
 
     def test_a_following_job_does_not_supply_the_condition(self):
         """The reader must stop at the next job, or every job lends its `if:` to the
@@ -1751,7 +1777,7 @@ class AuditWorkflowTrustAnchorTests(unittest.TestCase):
         text = ("jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n"
                 f"  model:\n    if: {validate.BASE_REF_PIN} && {validate.HEAD_REPO_PIN}\n")
         self.assertEqual(validate.job_condition(text, "deterministic"), "")
-        self.assertTrue(any("no `if:`" in p for p in validate.audit_workflow_problems(text)))
+        self.assertTrue(any("no job-level" in p for p in validate.audit_workflow_problems(text)))
 
     def test_an_unknown_job_has_no_condition(self):
         self.assertEqual(validate.job_condition(self.text, "nonesuch"), "")
@@ -1772,7 +1798,18 @@ class AlwaysLoadedAreImportedTests(unittest.TestCase):
         self.assertIn("WORKING-CHARTER.md", validate.imported_closure())
 
     def test_the_closure_follows_imports_transitively_and_survives_a_cycle(self):
-        self.assertIn("AGENTS.md", validate.imported_closure())
+        """Review of #75: the shipped tree has no two-hop chain and no cycle, so
+        this runs on a fixture that has both."""
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "rules"))
+            files = {"CLAUDE.md": "@AGENTS.md\n", "AGENTS.md": "@rules/mid.md\n",
+                     "rules/mid.md": "@deep.md\n@../CLAUDE.md\n", "rules/deep.md": "leaf\n",
+                     "orphan.md": "@AGENTS.md\n"}
+            for name, text in files.items():
+                with open(os.path.join(tmp, name), "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            closure = validate.imported_closure(tmp)
+        self.assertEqual(closure, {"CLAUDE.md", "AGENTS.md", "rules/mid.md", "rules/deep.md"})
 
     def test_dropping_the_import_is_reported(self):
         del validate.findings[:]
