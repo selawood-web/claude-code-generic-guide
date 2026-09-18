@@ -1863,6 +1863,128 @@ def check_audit_workflow_trust_anchor() -> None:
             fail(problem)
 
 
+# --- 33. hook headers promise only what their event delivers --------------------
+# session-end.sh's header said it "reminds the AI to flush memory". SessionEnd
+# stdout goes to the debug log and the script printed nothing anyway, so the
+# reminder existed only in the comment (finding H-001). A header is what the
+# next reader believes; on an event whose stdout never reaches the model it may
+# not claim to tell the model anything.
+HOOK_CLAIM_RE = re.compile(
+    r"\b(remind(?:s|ed|ing)?|tell(?:s|ing)?|instruct(?:s|ed|ing)?|prompt(?:s|ed|ing)?|"
+    r"inform(?:s|ed|ing)?|nudg(?:es|ed|ing))\s+(?:the\s+)?(AI|model|agent|assistant|Claude)\b", re.I)
+
+
+def hook_header(text: str) -> str:
+    """The leading comment block of a shell script, shebang excluded."""
+    lines = []
+    for line in text.splitlines():
+        if line.startswith("#!"):
+            continue
+        if line.startswith("#"):
+            lines.append(line.lstrip("#").strip())
+        elif line.strip():
+            break
+    return " ".join(lines)
+
+
+def registered_hook_events(settings: dict) -> dict[str, list[str]]:
+    """{script name: [events]} for every .claude/hooks/*.sh settings.json registers."""
+    out: dict[str, list[str]] = {}
+    hooks = settings.get("hooks") if isinstance(settings, dict) else None
+    if not isinstance(hooks, dict):
+        return out
+    for event, matchers in hooks.items():
+        for matcher in matchers if isinstance(matchers, list) else []:
+            for hook in (matcher.get("hooks") if isinstance(matcher, dict) else []) or []:
+                command = hook.get("command", "") if isinstance(hook, dict) else ""
+                for name in re.findall(r"\.claude/hooks/([A-Za-z0-9_.-]+\.sh)", str(command)):
+                    out.setdefault(name, []).append(event)
+    return out
+
+
+def hook_header_problems(name: str, events: list[str], text: str, reaching: list[str]) -> list[str]:
+    if any(e in reaching for e in events):
+        return []
+    claim = HOOK_CLAIM_RE.search(hook_header(text))
+    if not claim:
+        return []
+    return [f".claude/hooks/{name}: its header says it {claim.group(0)!r}, but it runs on "
+            f"{', '.join(events)}, whose stdout never reaches the model — say what the script "
+            f"does, or move the message to a SessionStart hook"]
+
+
+def check_hook_headers() -> None:
+    path = os.path.join(ROOT, ".claude", "settings.json")
+    if not os.path.exists(path):
+        return
+    try:
+        settings = json.load(open(path, encoding="utf-8"))
+    except json.JSONDecodeError:
+        return                      # check 6 reports it
+    reaching = hook_stdout_reaches_model()
+    for name, events in registered_hook_events(settings).items():
+        script = os.path.join(ROOT, ".claude", "hooks", name)
+        if not os.path.isfile(script):
+            continue                # check 11 reports it
+        with open(script, encoding="utf-8", errors="replace") as fh:
+            for problem in hook_header_problems(name, events, fh.read(), reaching):
+                fail(problem)
+
+
+# --- 34. the currency rule has one home -----------------------------------------
+# "Never answer 'what exists now' from memory" was restated in three files with
+# three item lists, and they had drifted (finding C-001). The rule's home is the
+# charter's Currency check; everywhere else names the rule and points there.
+CURRENCY_MARKER = "what exists now"
+CURRENCY_LIST_RE = re.compile(r"\b(versions?|prices?|APIs?|API shapes|model names|part numbers)\b"
+                              r"[^.\n]*\b(versions?|prices?|APIs?|API shapes|model names|part numbers)\b", re.I)
+CURRENCY_HOME = "WORKING-CHARTER.md"
+
+
+def currency_restatements(path: str, text: str) -> list[str]:
+    """A file other than the charter that carries the rule with its own item list."""
+    if path == CURRENCY_HOME:
+        return []
+    body = "\n".join(strip_code_blocks(text.splitlines()))
+    if CURRENCY_MARKER not in body.lower() and "searched, never recalled" not in body:
+        return []
+    if not CURRENCY_LIST_RE.search(body):
+        return []
+    return [f"{path}: restates the currency rule with its own list of what to search — the list "
+            f"has one home, {CURRENCY_HOME}'s Currency check; name the rule and point there"]
+
+
+def check_currency_rule_home() -> None:
+    paths = ["AGENTS.md"] + list(tracked(".claude/references/*.md")) + list(tracked(".claude/skills/*/SKILL.md"))
+    for path in paths:
+        full = os.path.join(ROOT, path)
+        if not os.path.isfile(full):
+            continue
+        with open(full, encoding="utf-8", errors="replace") as fh:
+            for problem in currency_restatements(path, fh.read()):
+                fail(problem)
+
+
+# --- the audit workflow's step scripts, for tests that run them ------------------
+def step_script(text: str, step_name: str) -> str:
+    """The `run:` block of a named workflow step, dedented, or '' when absent."""
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.strip() == f"- name: {step_name}"), None)
+    if start is None:
+        return ""
+    run_at = next((i for i in range(start + 1, len(lines))
+                   if lines[i].strip().startswith("run:") or lines[i].strip().startswith("- name:")), None)
+    if run_at is None or not lines[run_at].strip().startswith("run:"):
+        return ""
+    indent = len(lines[run_at + 1]) - len(lines[run_at + 1].lstrip()) if run_at + 1 < len(lines) else 0
+    body = []
+    for ln in lines[run_at + 1:]:
+        if ln.strip() and (len(ln) - len(ln.lstrip())) < indent:
+            break
+        body.append(ln[indent:] if len(ln) >= indent else ln)
+    return "\n".join(body).rstrip() + "\n"
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1906,6 +2028,8 @@ def main() -> int:
     check_pinned_grants_are_rescued()
     check_decision_names()
     check_audit_workflow_trust_anchor()
+    check_hook_headers()
+    check_currency_rule_home()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:

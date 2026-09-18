@@ -573,12 +573,15 @@ jobs:
           MODEL_RESULT: ${{ needs.model.result }}
         run: |
           set -euo pipefail
-          # A deterministic stage that did not run measured nothing. It does not
-          # by itself mean nothing was audited, so it warns rather than fails —
-          # but it must never pass in silence (finding S-011).
-          if [ -n "${STAGES_MISSING:-}" ]; then
+          # A deterministic stage the scope required did not run: that part of the
+          # audit measured nothing. It used to warn and fall through (finding
+          # S-011 made it visible; S-009 makes it count), so a crashed catch-rate
+          # measurement ended green. A dry run or tool probe asked for no audit
+          # and is judged below on its own terms.
+          if [ -n "${STAGES_MISSING:-}" ] && [ "$DRY_RUN" != "true" ] && [ "$PROBE" != "true" ]; then
             echo "Deterministic stage incomplete: $STAGES_MISSING did not run. That part of the audit measured nothing."
-            echo "⚠ Deterministic stage incomplete: $STAGES_MISSING did not run — that part measured nothing." >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠ Deterministic stage incomplete: $STAGES_MISSING did not run — that part measured nothing, so this run is not a clean bill." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
           fi
           if [ "$COMPLETE" != "true" ]; then
             if [ "$DRY_RUN" = "true" ]; then
