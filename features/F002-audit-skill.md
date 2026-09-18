@@ -35,7 +35,7 @@ being able to change anything.
   being missed, measured by the probe harness the audit ships and runs in CI. Each
   probe names the gate that must catch it — the validator by default, the verifier
   guard's unit table for a defect the validator cannot see. The list
-  is 101 probes today and grows with every check that lands; the target is the rule the
+  is 105 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`
@@ -328,3 +328,16 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   literal prefix, whitespace or non-printable bytes) and one minimal live call that
   reports the API's own error text. Shape facts only — no part of the value is ever
   printed — [in]
+- 2026-09-18 — The harness audit of `235e15b` reproduced R-008 a second time from inside
+  a live interactive verifier (H-001, S-003), and one verifier observed that
+  `CLAUDE_PROJECT_DIR` is unset in the subagent's shell — consistent with, but not proof
+  of, the frontmatter command resolving to a path that does not exist. The product
+  documents settings.json PreToolUse hooks as firing for subagent calls with the agent's
+  name in the input's `agent_type`, and this repository's settings.json hooks are the
+  ones that demonstrably fire. So the guard is now registered there too, with
+  `--only-agent audit-verifier`: it passes every other agent's Bash through before
+  looking for python3, and decides the verifier's exactly as before. The frontmatter
+  block stays (the documented path, and the one headless retargets). Nothing in a
+  session can measure a hook edit — definitions and hooks are read at startup — so the
+  next audit run's canary is the measurement; until it reports refused the boundary is
+  still unproven — [in]

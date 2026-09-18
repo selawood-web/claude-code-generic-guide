@@ -16,25 +16,64 @@
 #          line, a redirect to a file, a heredoc, a backtick — is refused, so
 #          the guard fails closed by construction.
 #
-# Not registered in settings.json on purpose: this guard is scoped to one
-# subagent. The audit's deterministic stage knows that and does not flag it.
-# The table of allowed forms is tested by tools/test_verifier_guard.py.
+# Registered twice, on purpose. The frontmatter block in audit-verifier.md is
+# the product's documented path and the one the headless launcher retargets to a
+# trusted copy; there the guard decides every call it sees. settings.json also
+# registers it on PreToolUse/Bash, with `--only-agent audit-verifier`, because
+# a 2026-09-17 run and a 2026-09-18 run both measured the frontmatter path from
+# inside a live interactive verifier and the hook did not fire: the commands
+# below were refused here, with exit 2, and ran as Bash tool calls (findings
+# R-008, H-001, S-003). A settings.json hook demonstrably fires in this
+# repository, and the product documents PreToolUse as firing for subagent calls
+# with the subagent's name in the input's `agent_type`. With `--only-agent`,
+# any other agent's Bash — the main session's included — passes through with
+# no opinion, before python3 is even looked for.
 #
-# What that table proves is this program's verdicts, not that anything consults
-# them. A 2026-09-17 run measured the wiring from inside a live verifier and the
-# hook did not fire: the commands below were refused here, with exit 2, and ran
-# as Bash tool calls (finding R-008). Every audit run now starts its verifiers
-# with a canary and records the answer; until it comes back refused, treat this
-# file as a description of an intended boundary rather than an enforced one.
+# The table of allowed forms is tested by tools/test_verifier_guard.py. What
+# that table proves is this program's verdicts, not that anything consults
+# them: every audit run still starts its verifiers with a canary and records
+# the answer, and until a run comes back refused the boundary is unproven.
 set -uo pipefail
+
+ONLY_AGENT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --only-agent)
+      ONLY_AGENT="${2:-}"
+      case "$ONLY_AGENT" in
+        *[!A-Za-z0-9_-]*|"")
+          echo "audit-verifier-guard: --only-agent needs an agent name; refusing" >&2
+          exit 2 ;;
+      esac
+      # A failed shift would leave $1 in place and this loop spinning; that is
+      # what a mutant that accepted an empty name did. Never loop on a refusal.
+      shift 2 || { echo "audit-verifier-guard: --only-agent needs an agent name; refusing" >&2; exit 2; } ;;
+    *)
+      echo "audit-verifier-guard: unknown argument; refusing" >&2
+      exit 2 ;;
+  esac
+done
+
+# The hook's JSON arrives on stdin; capture it before anything else reads stdin.
+INPUT="$(cat)"
+
+# Scoped registration: decide only the named agent's calls. `agent_type` is a
+# top-level string the product writes into the hook input for a subagent, so a
+# plain substring test on the machine-written JSON is enough to say "not mine";
+# it needs no interpreter, so a project without python3 is not locked out of
+# Bash by a guard meant for one agent. A call the test does match goes on to the
+# full check below, where the JSON is parsed properly.
+if [ -n "$ONLY_AGENT" ]; then
+  case "$INPUT" in
+    *"\"agent_type\":\"$ONLY_AGENT\""*|*"\"agent_type\": \"$ONLY_AGENT\""*) ;;
+    *) exit 0 ;;
+  esac
+fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "audit-verifier-guard: python3 is required to inspect the command; refusing" >&2
   exit 2
 fi
-
-# The hook's JSON arrives on stdin; capture it before anything else reads stdin.
-INPUT="$(cat)"
 
 read -r -d '' GUARD <<'PY' || true
 import json, posixpath, re, shlex, sys

@@ -24,13 +24,15 @@ nobody trusts (see **Headless mode** below).
   only inside the ignored report directory, and spawns agents; the specialists have no
   execution tool; the verifier executes inside a worktree with write tools removed.
 - **The verifier's guard is measured, never assumed.** A `hooks` block on the agent
-  declares a PreToolUse allow-list, and a 2026-09-17 run measured it from inside and
-  found it did not fire: the guard script refused `uname -a` with exit 2 while the same
-  command issued as a Bash tool call ran (finding R-008). What holds regardless is the
-  runtime's worktree isolation, the write tools the brief removes, and the constraints
-  the orchestrator puts in the task message. Every run therefore records the canary
-  result in `guard.json`, and the report says so when the guard did not fire or was
-  never measured.
+  declares a PreToolUse allow-list, and runs on 2026-09-17 and 2026-09-18 measured it
+  from inside and found it did not fire: the guard script refused `uname -a` with exit 2
+  while the same command issued as a Bash tool call ran (findings R-008, H-001, S-003).
+  The same guard is therefore also registered in `.claude/settings.json`, scoped to the
+  verifier by `--only-agent`, on the path this repository's other hooks fire on. What
+  holds regardless is the runtime's worktree isolation, the write tools the brief
+  removes, and the constraints the orchestrator puts in the task message. Every run
+  therefore records the canary result in `guard.json`, and the report says so when the
+  guard did not fire or was never measured.
 - Repository content is **evidence**, never instruction, for every agent in the run.
 - A finding reaches the report only `verified` with a reproduction, or tagged
   `unverified` — and an unverified finding is never a blocker. The renderer enforces
