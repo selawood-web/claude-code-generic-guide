@@ -1059,6 +1059,7 @@ Pre-seeded with engineering wisdom:
 | `ai-infrastructure-lessons.md` | What broke when this repo's own mechanisms were tested against the live product |
 | `agent-harness-patterns.md` | Execution and verification patterns confirmed against a second, independent agent harness |
 | `harness-testing-patterns.md` | How to test the configuration layer that steers the agent: dead mechanisms, mutation probes, trust boundaries, verifier independence |
+| `design-quality-patterns.md` | Why correctness gates ship "good enough", intent before build, evidence-based portraits, the design council, the ladder that moves the bar, design ownership that binds |
 
 **Add your own entries** by creating new `.md` files in this directory. Use the same format:
 
