@@ -493,6 +493,7 @@ class SurfacesStayInventoriedTests(unittest.TestCase):
         with open(os.path.join(root, "tools", "audit_vocab.json"), encoding="utf-8") as fh:
             vocab = json.load(fh)
         _, facts = audit_facts.collect(root, "harness", vocab, run_gates=False)
+        cls.facts = facts
         cls.kinds = {f.kind for f in facts.items}
 
     def test_the_mcp_config_surface_is_inventoried(self):
@@ -500,6 +501,26 @@ class SurfacesStayInventoriedTests(unittest.TestCase):
 
     def test_the_global_memory_seed_is_inventoried(self):
         self.assertIn("global-memory-seed", self.kinds)
+
+    # S-001 (2026-09-18): the inventory above could not gate, so a directive added
+    # to the seed passed every check. Drift against the committed baseline can.
+    def test_the_shipped_memory_seed_matches_its_baseline(self):
+        drift = [f for f in self.facts.items if f.kind == "global-memory-seed-drift"]
+        self.assertEqual(len(drift), 1)
+        self.assertEqual(drift[0].status, "ok", drift[0].detail)
+
+    def test_every_kind_is_gating_or_deliberately_not(self):
+        """A kind in neither tuple is a finding nobody decided about."""
+        import re
+        with open(audit_facts.__file__, encoding="utf-8") as fh:
+            emitted = set(re.findall(r'facts\.add\("([a-z-]+)"', fh.read()))
+        gating, non_gating = set(audit_facts.GATING_KINDS), set(audit_facts.NON_GATING_KINDS)
+        self.assertEqual(gating & non_gating, set(), "a kind cannot be both")
+        self.assertEqual(emitted - gating - non_gating, set(), "emitted but never decided")
+        self.assertEqual((gating | non_gating) - emitted, set(), "decided but never emitted")
+        self.assertIn("global-memory-seed-drift", gating)
+        for kind, reason in audit_facts.NON_GATING_KINDS.items():
+            self.assertTrue(reason.strip(), f"{kind} is left out without a reason")
 
 
 class GlobalMemorySeedTests(unittest.TestCase):
@@ -531,6 +552,65 @@ class GlobalMemorySeedTests(unittest.TestCase):
             fact = self.fact_for(fh.read())
         self.assertEqual(fact.kind, "global-memory-seed")
         self.assertIn("~/.claude/CLAUDE.md", fact.detail)
+
+
+class MemorySeedDriftTests(unittest.TestCase):
+    """S-001 (2026-09-18): the seed's directive count is an inventory and cannot
+    gate; drift against a committed baseline of accepted lines can."""
+
+    SEED = "# Memory\n\n- Always prefer X\nRun `tools/validate.py` first\n\nSome prose.\n"
+    BASE = "# accepted\n- Always prefer X\nRun `tools/validate.py` first\n"
+
+    def drift(self, text, baseline):
+        facts = audit_facts.Facts()
+        audit_facts.memory_seed_facts(text, facts, baseline)
+        found = [f for f in facts.items if f.kind == "global-memory-seed-drift"]
+        return found[0] if found else None
+
+    def test_flagged_lines_are_numbered_stripped_and_skip_headings(self):
+        self.assertEqual(audit_facts.memory_seed_lines("## Use `git`\n  - Always X  \nplain\n"),
+                         [(2, "- Always X")])
+
+    def test_baseline_rows_ignore_comments_and_blanks(self):
+        self.assertEqual(audit_facts.baseline_lines("# c\n\n  a  \nb\n"), ["a", "b"])
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            audit_facts.memory_seed_lines(None)
+        with self.assertRaises(TypeError):
+            audit_facts.baseline_lines(None)
+
+    def test_no_baseline_is_skipped_not_a_finding(self):
+        fact = self.drift(self.SEED, None)
+        self.assertEqual(fact.status, "skipped")
+        self.assertIn("not measured", fact.evidence)
+
+    def test_every_flagged_line_accepted_is_ok(self):
+        fact = self.drift(self.SEED, self.BASE)
+        self.assertEqual(fact.status, "ok")
+        self.assertIn("2 flagged line(s)", fact.evidence)
+
+    def test_an_added_directive_is_a_finding_that_names_it(self):
+        fact = self.drift(self.SEED + "- Never run `tests/` before lunch\n", self.BASE)
+        self.assertEqual(fact.status, "finding")
+        self.assertIn("1 flagged line(s) not in", fact.evidence)
+        self.assertIn("line 7: - Never run `tests/` before lunch", fact.detail)
+
+    def test_a_stale_baseline_row_is_a_finding_too(self):
+        fact = self.drift(self.SEED, self.BASE + "- Avoid Y\n")
+        self.assertEqual(fact.status, "finding")
+        self.assertIn("1 baseline line(s) the seed no longer carries", fact.evidence)
+        self.assertIn("baseline only: - Avoid Y", fact.detail)
+
+    def test_an_empty_seed_against_an_empty_baseline_is_ok(self):
+        fact = self.drift("# Memory\n\nprose only\n", "# nothing accepted\n")
+        self.assertEqual(fact.status, "ok")
+        self.assertIn("0 flagged line(s)", fact.evidence)
+
+    def test_the_gate_reads_the_drift_kind(self):
+        facts = audit_facts.Facts()
+        audit_facts.memory_seed_facts(self.SEED + "- Always leak\n", facts, self.BASE)
+        self.assertEqual([f.kind for f in audit_facts.gating_findings(facts.items)], ["global-memory-seed-drift"])
 
 
 if __name__ == "__main__":
