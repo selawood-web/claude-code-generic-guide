@@ -12,6 +12,7 @@ classes below run them for real against a throwaway git repository.
 
 import io
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -58,7 +59,14 @@ class ParseRedteamProbesTests(unittest.TestCase):
     def test_marker_is_per_line(self):
         probes = parse_redteam_probes("a | exec | x | y\nb | exec | x | y\n")
         self.assertNotEqual(marker_for(probes[0]), marker_for(probes[1]))
-        self.assertTrue(marker_for(probes[0]).startswith("CCGG-REDTEAM-"))
+        self.assertTrue(marker_for(probes[0]).startswith("ccgg-redteam-"))
+
+    def test_the_marker_is_spellable_by_the_channels_that_constrain_names(self):
+        """R-002: session-start.sh prints a decision name only in slug form, and a
+        slug has no capitals — an uppercase marker measured the marker, not the
+        channel, and the probe reported the channel closed."""
+        probes = parse_redteam_probes("a | exec | x | y\n")
+        self.assertRegex(marker_for(probes[0]), r"\A[a-z0-9]+(-[a-z0-9]+)*\Z")
 
 
 def _r(channel, kind, result):
@@ -318,6 +326,41 @@ def write(root, rel, text):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
+
+
+class PlantReachesItsOwnChannelTests(unittest.TestCase):
+    """R-002: a probe that cannot plant into the channel it names reports it closed.
+
+    The decision-record probe wrote an untracked file while the hook enumerates
+    `git ls-files`, so its `contained` verdict measured the probe's own mistake.
+    The tell was in the artifact: three unrelated probes reporting the identical
+    byte count, which is the hook's unchanged baseline output.
+    """
+
+    def setUp(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "tools", "redteam_probes.txt"), encoding="utf-8") as fh:
+            self.probes = parse_redteam_probes(fh.read())
+
+    def test_a_plant_that_writes_into_the_repository_stages_what_it_wrote(self):
+        for probe in self.probes:
+            if probe.kind != "exec":
+                continue
+            # Writes under $HOME are outside the work tree and need no staging.
+            writes_repo = [t for t in re.findall(r'>>?\s*"?([^"\s|&>]+)', probe.plant)
+                           if not t.startswith("$HOME") and not t.startswith("/")]
+            if not writes_repo:
+                continue
+            with self.subTest(channel=probe.channel):
+                self.assertIn("git add", probe.plant,
+                              f"line {probe.line} writes {writes_repo} into the work tree but never "
+                              f"stages it; the hook it observes enumerates tracked files only")
+
+    def test_at_least_one_exec_probe_does_reach(self):
+        """A positive control for the harness itself: if no plant can ever land,
+        every `contained` in the report means nothing."""
+        reaching = [p for p in self.probes if p.kind == "exec" and "git add" in p.plant]
+        self.assertTrue(reaching, "no exec probe stages its plant, so none can reach a tracked-file channel")
 
 
 if __name__ == "__main__":

@@ -162,7 +162,10 @@ class PinFollowingTests(unittest.TestCase):
         for ref in ("--upload-pack=touch /tmp/ccgg-pwned", "-x", "a..b", "a b", "a;id", "a$(id)"):
             with self.subTest(ref=ref):
                 proc = self.run_hook(ref)
-                self.assertIn("live sync skipped", proc.stdout)
+                # The specific refusal, not just any: `--` in the fetch would also
+                # turn this away, and then the probe for ccgg_ref_ok would pass on
+                # the strength of the layer behind it.
+                self.assertIn("CCGG_REF is not a refname", proc.stdout)
                 self.assertEqual(self.head(), self.commits[0])
                 self.assertIsNone(self.ran())
 

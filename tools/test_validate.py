@@ -1716,5 +1716,75 @@ class PinnedGrantRescueTests(unittest.TestCase):
 
 
 
+class AuditWorkflowTrustAnchorTests(unittest.TestCase):
+    """S-008: the trusted set is read from a base a pull request chooses itself."""
+
+    def setUp(self):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            self.text = fh.read()
+
+    def test_the_shipped_workflow_pins_both_anchors(self):
+        self.assertEqual(validate.audit_workflow_problems(self.text), [])
+
+    def test_the_condition_is_read_whole_across_its_folded_lines(self):
+        condition = validate.job_condition(self.text, "deterministic")
+        self.assertIn("workflow_dispatch", condition)
+        self.assertIn(validate.BASE_REF_PIN, condition)
+        self.assertIn(validate.HEAD_REPO_PIN, condition)
+
+    def test_dropping_the_base_ref_pin_is_reported(self):
+        problems = validate.audit_workflow_problems(self.text.replace(validate.BASE_REF_PIN, "true"))
+        self.assertTrue(any("base_ref" in p for p in problems), problems)
+
+    def test_dropping_the_fork_pin_is_reported(self):
+        problems = validate.audit_workflow_problems(self.text.replace(validate.HEAD_REPO_PIN, "true"))
+        self.assertTrue(any("fork" in p for p in problems), problems)
+
+    def test_a_job_with_no_condition_at_all_is_reported(self):
+        text = "jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n    steps: []\n"
+        problems = validate.audit_workflow_problems(text)
+        self.assertTrue(any("no `if:`" in p for p in problems), problems)
+
+    def test_a_following_job_does_not_supply_the_condition(self):
+        """The reader must stop at the next job, or every job lends its `if:` to the
+        one before it and a job with none would read as pinned."""
+        text = ("jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n"
+                f"  model:\n    if: {validate.BASE_REF_PIN} && {validate.HEAD_REPO_PIN}\n")
+        self.assertEqual(validate.job_condition(text, "deterministic"), "")
+        self.assertTrue(any("no `if:`" in p for p in validate.audit_workflow_problems(text)))
+
+    def test_an_unknown_job_has_no_condition(self):
+        self.assertEqual(validate.job_condition(self.text, "nonesuch"), "")
+
+
+class AlwaysLoadedAreImportedTests(unittest.TestCase):
+    """R-006: the budget check assumed these load; the import graph decided it."""
+
+    def test_every_always_loaded_file_is_reachable_today(self):
+        del validate.findings[:]
+        try:
+            validate.check_always_loaded_are_imported()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_charter_is_in_the_closure(self):
+        self.assertIn("WORKING-CHARTER.md", validate.imported_closure())
+
+    def test_the_closure_follows_imports_transitively_and_survives_a_cycle(self):
+        self.assertIn("AGENTS.md", validate.imported_closure())
+
+    def test_dropping_the_import_is_reported(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "imported_closure",
+                                   return_value={"CLAUDE.md", "AGENTS.md"}):
+                validate.check_always_loaded_are_imported()
+            self.assertTrue(any("WORKING-CHARTER.md" in f for f in validate.findings),
+                            list(validate.findings))
+        finally:
+            del validate.findings[:]
+
+
 if __name__ == "__main__":
     unittest.main()

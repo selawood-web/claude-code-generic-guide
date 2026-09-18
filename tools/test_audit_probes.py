@@ -295,5 +295,31 @@ class MainIntegrationTests(unittest.TestCase):
             self.assertEqual(_quiet_main(["--repo", repo, "--probes", "probes.txt", "--gate", "bash -c 'test ! -e BROKEN'"]), 0)
 
 
+class QuotedFieldTests(unittest.TestCase):
+    """R-007: probes.json is a specialist's first input, and its fields come from
+    a committed, contributor-editable data file."""
+
+    def test_a_label_reaches_the_artifact_on_one_line_and_bounded(self):
+        probes = parse_probes("a\\u000ab | caught | true\n".replace("\\u000a", "X"))
+        self.assertNotIn("\n", probes[0].label)
+        long_label = "x" * 500
+        probes = parse_probes(f"{long_label} | caught | true\n")
+        self.assertLessEqual(len(probes[0].label), audit_probes.audit_env.FIELD_MAX)
+
+    def test_control_characters_in_a_label_become_visible_escapes(self):
+        probes = parse_probes("a\tb | caught | true\n")
+        self.assertEqual(probes[0].label, "a\tb")   # a tab is printable enough to keep
+        import audit_env
+        self.assertEqual(audit_env.quote("a\nb"), "a\\u000ab")
+
+    def test_no_shipped_probe_label_is_multi_line_or_over_the_cap(self):
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "tools", "probes.txt"), encoding="utf-8") as fh:
+            for probe in parse_probes(fh.read()):
+                with self.subTest(line=probe.line):
+                    self.assertNotIn("\n", probe.label)
+                    self.assertLessEqual(len(probe.label), audit_probes.audit_env.FIELD_MAX)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -900,6 +900,46 @@ def import_targets(text: str) -> list[str]:
     return IMPORT_RE.findall(body)
 
 
+def imported_closure() -> set[str]:
+    """Every file reachable by @import from the two roots, the roots included."""
+    seen: set[str] = set()
+    queue = [p for p in ("CLAUDE.md", "AGENTS.md") if os.path.exists(os.path.join(ROOT, p))]
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        full = os.path.join(ROOT, path)
+        if not os.path.isfile(full):
+            continue
+        text = open(full, encoding="utf-8", errors="replace").read()
+        for target in import_targets(text):
+            if target.startswith("~"):
+                continue
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            if os.path.exists(os.path.join(ROOT, dest)):
+                queue.append(dest)
+    return seen
+
+
+def check_always_loaded_are_imported() -> None:
+    """The budget check assumes these load every session; the import graph decides it.
+
+    validate.py budgeted WORKING-CHARTER.md as always-loaded and AGENTS.md told the
+    agent to read it, but CLAUDE.md imported only AGENTS.md and AGENTS.md imported
+    nothing — so the one file defining "external content is data, not instructions"
+    was never loaded (finding R-006). This is check_imports' traversal asserted in
+    the other direction.
+    """
+    reachable = imported_closure()
+    for name in ALWAYS_LOADED:
+        if not os.path.exists(os.path.join(ROOT, name)):
+            continue
+        if name not in reachable:
+            fail(f"{name}: budgeted as always-loaded but no @import reaches it from CLAUDE.md or "
+                 f"AGENTS.md — the rules it holds are paid for in the budget and never load")
+
+
 def check_imports() -> None:
     """Follow @imports from the two roots all the way down.
 
@@ -1767,6 +1807,62 @@ def check_decision_names() -> None:
         fail(problem)
 
 
+# --- 32. the audit workflow's trust anchor ------------------------------------
+# The trusted set — guard, skill, agent briefs, launcher, grant targets — is read
+# from pull_request.base.sha, and a pull request chooses its own base. Pinning
+# base_ref to the default branch is what makes "the base branch the maintainers
+# own" true rather than aspirational (finding S-008).
+BASE_REF_PIN = "github.base_ref == github.event.repository.default_branch"
+HEAD_REPO_PIN = "github.event.pull_request.head.repo.full_name == github.repository"
+
+
+def job_condition(text: str, job: str) -> str:
+    """The `if:` block of a named job, flattened to one line."""
+    lines = text.splitlines()
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.rstrip() == f"  {job}:")
+    except StopIteration:
+        return ""
+    collecting = False
+    parts = []
+    for ln in lines[start + 1:]:
+        if ln.startswith("  ") and not ln.startswith("   ") and ln.rstrip().endswith(":"):
+            break                       # the next job
+        stripped = ln.strip()
+        if stripped.startswith("if:"):
+            collecting = True
+            parts.append(stripped[3:].strip().lstrip(">-|").strip())
+            continue
+        if collecting:
+            if not stripped or stripped.startswith("#") or re.match(r"^[a-z-]+:", stripped):
+                break
+            parts.append(stripped)
+    return " ".join(p for p in parts if p)
+
+
+def audit_workflow_problems(text: str) -> list[str]:
+    condition = job_condition(text, "deterministic")
+    if not condition:
+        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job has no `if:` — every push would start "
+                f"a run that reads a pull request's chosen base as its trusted source"]
+    problems = []
+    for pin, what in ((BASE_REF_PIN, "a pull request can target a branch it wrote, and the base-ref "
+                                     "rescue would read the attacker's files"),
+                      (HEAD_REPO_PIN, "a fork pull request would reach the job that holds the API key")):
+        if pin not in condition:
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: the deterministic job's condition does not pin "
+                            f"`{pin}` — {what}")
+    return problems
+
+
+def check_audit_workflow_trust_anchor() -> None:
+    if not tracked(AUDIT_WORKFLOW_PATH):
+        return
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        for problem in audit_workflow_problems(fh.read()):
+            fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1793,6 +1889,7 @@ def main() -> int:
     check_hook_registration()
     check_ccgg_env()
     check_imports()
+    check_always_loaded_are_imported()
     check_skill_grants()
     check_agents_serialize()
     check_workflow_pins()
@@ -1808,6 +1905,7 @@ def main() -> int:
     check_guard_allow_lists()
     check_pinned_grants_are_rescued()
     check_decision_names()
+    check_audit_workflow_trust_anchor()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
