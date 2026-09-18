@@ -51,19 +51,26 @@ concurrency:
   cancel-in-progress: true
 
 # Three jobs, because two different kinds of code run here and they must not share
-# a runner. Code from the audited head (audit_facts.py, audit_probes.py,
-# audit_redteam.py, their probe data files, and the renderer) is what the audit is
-# about — it cannot be taken from the base ref without auditing the wrong tree. The
-# ANTHROPIC_API_KEY is what an attacker would want. Previously both lived in one
-# job, so a pull request could run its own Python on a runner that later held the
-# secret, with the whole workspace to rewrite in between.
+# a runner. The audited head's own code has to run somewhere — its validator, its
+# tests, the probe mutations its probes.txt describes — and the ANTHROPIC_API_KEY is
+# what an attacker would want. Previously both lived in one job, so a pull request
+# could run its own Python on a runner that later held the secret, with the whole
+# workspace to rewrite in between.
 #
-#   deterministic  head code, no secret of any kind
+#   deterministic  the head's gate runs here, no secret of any kind; the three
+#                  producers whose output the specialists read come from the base
 #   model          the key, and only base-ref tooling
 #   report         head code again, and the comment token — never the key
 #
 # The report directory travels between them as an artifact, which is also the only
-# thing that crosses.
+# thing that crosses — and it used to be authored by the head: audit_facts.py,
+# audit_probes.py and audit_redteam.py ran from the checkout, so every evidence,
+# detail and channel string the base-ref specialists took as measurement was the
+# pull request's to write (finding R-002, 2026-09-18). The head is data to those
+# producers, not code: a base-ref copy analyses the same tree and audits the right
+# one. What stays the head's is what must — --run-gates executes the head's
+# validator and tests, and the probe harness executes the head's probes.txt — and
+# every string the producers record is bounded to one line by audit_env.quote.
 
 jobs:
   # 1. The audited tree's own code runs here, where there is nothing to steal.
@@ -121,22 +128,67 @@ jobs:
             echo "stamp=CCGG-AUDIT-$(date -u +%Y%m%dT%H%M%SZ)"
           } >> "$GITHUB_OUTPUT"
 
+      # The three producers whose output the specialists read come from the base
+      # branch the maintainers own, with the module they import and the vocabulary
+      # audit_facts.py reads from beside itself. Same shape as the model job's
+      # rescue: one switch, all from the base or none and say so. tools/validate.py
+      # keeps this list and the invocations below in step (finding R-002).
+      - name: Trusted copies of the producers
+        id: producers
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          src_dir="$RUNNER_TEMP/trusted-producers"
+          rm -rf "$src_dir"
+          mkdir -p "$src_dir/tools"
+
+          trusted_from_base=0
+          if [ -n "${BASE_SHA:-}" ] && git cat-file -e "$BASE_SHA:tools/audit_facts.py" 2>/dev/null; then
+            trusted_from_base=1
+          fi
+
+          fetch() {   # fetch <path in repo>
+            if [ "$trusted_from_base" -eq 1 ] && git cat-file -e "$BASE_SHA:$1" 2>/dev/null; then
+              git show "$BASE_SHA:$1" > "$src_dir/$1"
+            else
+              cp "$1" "$src_dir/$1"
+            fi
+          }
+
+          fetch "tools/audit_facts.py"
+          fetch "tools/audit_probes.py"
+          fetch "tools/audit_redteam.py"
+          fetch "tools/audit_env.py"
+          fetch "tools/audit_vocab.json"
+
+          if [ "$trusted_from_base" -eq 1 ]; then
+            echo "producers taken from the base branch, not from the audited head"
+          else
+            echo "no base ref (manual run on a branch the maintainers own); producers taken from the checkout"
+          fi
+          echo "Trusted producers:"; (cd "$src_dir" && find . -type f | sort | sed 's/^/  /')
+          echo "dir=$src_dir" >> "$GITHUB_OUTPUT"
+
       # No model, no spend: the facts, the gate's catch rate, and the channel
-      # inventory. These artifacts are what the specialists read.
+      # inventory. These artifacts are what the specialists read. The producers run
+      # from the trusted copies with the head checkout as their working directory,
+      # which is the repository they analyse.
       - name: Deterministic stage
         env:
           STAMP: ${{ steps.settings.outputs.stamp }}
           SCOPE: ${{ steps.settings.outputs.scope }}
+          PRODUCERS: ${{ steps.producers.outputs.dir }}
         run: |
           set -euo pipefail
           # --run-gates executes the audited head's own validator and tests. Safe
           # here and nowhere else in this workflow: this job holds no secret (the
           # split is the point), the runner is ephemeral, and the commands get a
           # minimal environment with a throwaway HOME rather than the job's.
-          python tools/audit_facts.py --out "$STAMP" --scope "$SCOPE" --run-gates
-          python tools/audit_probes.py --out "$STAMP" || true
+          python "$PRODUCERS/tools/audit_facts.py" --out "$STAMP" --scope "$SCOPE" --run-gates
+          python "$PRODUCERS/tools/audit_probes.py" --out "$STAMP" || true
           case "$SCOPE" in
-            all|harness) python tools/audit_redteam.py --out "$STAMP" || true ;;
+            all|harness) python "$PRODUCERS/tools/audit_redteam.py" --out "$STAMP" || true ;;
           esac
 
       # F002's metric: an audit run changes no file in the audited tree. The report

@@ -1801,8 +1801,15 @@ def local_imports(path: str) -> set[str]:
     return {f"tools/{n}.py" for n in names if os.path.isfile(os.path.join(ROOT, "tools", n + ".py"))}
 
 
-def rescued_paths(text: str) -> set[str]:
-    """The paths the workflow's trusted-copies step takes from the base ref."""
+def rescued_paths(text: str, job: str | None = None) -> set[str]:
+    """The paths a trusted-copies step takes from the base ref.
+
+    With `job`, only that job's own fetch lines count: the deterministic job now
+    rescues its producers too, and a path rescued there is still the head's copy
+    in the job that holds the key (finding R-002).
+    """
+    if job is not None:
+        text = workflow_jobs(text).get(job, "")
     return set(RESCUE_FETCH_RE.findall(text))
 
 
@@ -1836,8 +1843,71 @@ def check_pinned_grants_are_rescued() -> None:
              f"stopped being readable, and this check silently stopped checking")
         return
     with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
-        rescued = rescued_paths(fh.read())
+        rescued = rescued_paths(fh.read(), job="model")
     for problem in pinned_grant_rescue_problems(scripts, rescued):
+        fail(problem)
+
+
+# The deterministic job is where the audited head's code is allowed to run — its
+# gate, its probe mutations — but the three producers whose JSON the specialists
+# read as measurement are not the head's to author. They ran from the checkout,
+# so a pull request chose every fact, detail and channel string the model stage
+# started from (finding R-002, 2026-09-18). The job now rescues them, what they
+# import, and the data they read from beside themselves, and invokes only those.
+DETERMINISTIC_JOB = "deterministic"
+DETERMINISTIC_PRODUCERS = ("tools/audit_facts.py", "tools/audit_probes.py", "tools/audit_redteam.py")
+# A data file a script opens next to itself: os.path.join(os.path.dirname(os.path.abspath(__file__)), "name")
+LOCAL_DATA_RE = re.compile(r'os\.path\.join\(os\.path\.dirname\(os\.path\.abspath\(__file__\)\),\s*"([^"/]+)"\)')
+HEAD_PRODUCER_RUN_RE = re.compile(r"python3?\s+(tools/audit_(?:facts|probes|redteam)\.py)\b")
+TRUSTED_PRODUCER_RUN_RE = re.compile(r'python3?\s+"\$[A-Z_]+/(tools/audit_(?:facts|probes|redteam)\.py)"')
+
+
+def local_data_files(path: str) -> set[str]:
+    """Sibling files under tools/ that `path` opens by its own location."""
+    full = os.path.join(ROOT, path)
+    if not os.path.isfile(full):
+        return set()
+    with open(full, encoding="utf-8", errors="replace") as fh:
+        names = set(LOCAL_DATA_RE.findall(fh.read()))
+    return {f"tools/{n}" for n in names if os.path.isfile(os.path.join(ROOT, "tools", n))}
+
+
+def producer_rescue_problems(job_body: str) -> list[str]:
+    """What the deterministic job still takes from the head that the specialists then read."""
+    if not isinstance(job_body, str):
+        raise TypeError("job_body must be a string")
+    problems = []
+    rescued = set(RESCUE_FETCH_RE.findall(job_body))
+    for producer in DETERMINISTIC_PRODUCERS:
+        needed = [producer] + sorted(local_imports(producer)) + sorted(local_data_files(producer))
+        for path in needed:
+            if path in rescued:
+                continue
+            why = ("the specialists read its output as measurement" if path == producer
+                   else f"{producer} loads it from beside itself")
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: {path} is not in the {DETERMINISTIC_JOB} job's rescue list, "
+                            f"and {why} — the audited head would supply it")
+    for head_run in sorted(set(HEAD_PRODUCER_RUN_RE.findall(job_body))):
+        problems.append(f"{AUDIT_WORKFLOW_PATH}: the {DETERMINISTIC_JOB} job runs {head_run} from the checkout — "
+                        f"run the trusted copy, the head's version authors what the specialists read")
+    trusted_runs = set(TRUSTED_PRODUCER_RUN_RE.findall(job_body))
+    for producer in DETERMINISTIC_PRODUCERS:
+        if producer not in trusted_runs:
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: the {DETERMINISTIC_JOB} job never runs the trusted copy of "
+                            f"{producer} — its output is what the specialists start from")
+    return problems
+
+
+def check_deterministic_producers_are_rescued() -> None:
+    if not (tracked(HEADLESS_PATH) and tracked(AUDIT_WORKFLOW_PATH)):
+        return                      # a project without the headless audit or its workflow
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        jobs = workflow_jobs(fh.read())
+    if DETERMINISTIC_JOB not in jobs:
+        fail(f"{AUDIT_WORKFLOW_PATH}: no `{DETERMINISTIC_JOB}` job — it moved, and this check silently "
+             f"stopped checking whose producers author the artifact")
+        return
+    for problem in producer_rescue_problems(jobs[DETERMINISTIC_JOB]):
         fail(problem)
 
 
@@ -2111,6 +2181,7 @@ def main() -> int:
     check_guard_settings_registration()
     check_guard_allow_lists()
     check_pinned_grants_are_rescued()
+    check_deterministic_producers_are_rescued()
     check_decision_names()
     check_audit_workflow_trust_anchor()
     check_hook_headers()
