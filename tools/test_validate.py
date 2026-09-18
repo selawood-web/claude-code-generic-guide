@@ -1931,5 +1931,55 @@ class GateScriptTests(unittest.TestCase):
         self.assertEqual(rc, 1)
 
 
+class GuardSettingsRegistrationTests(unittest.TestCase):
+    """H-001/S-003: the verifier guard is registered where hooks fire, scoped to the verifier."""
+
+    COMMAND = "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/audit-verifier-guard.sh --only-agent audit-verifier"
+
+    @staticmethod
+    def settings(event="PreToolUse", matcher="Bash", command=COMMAND):
+        return {"hooks": {event: [{"matcher": matcher, "hooks": [{"type": "command", "command": command}]}]}}
+
+    def test_the_shipped_settings_pass(self):
+        del validate.findings[:]
+        try:
+            validate.check_guard_settings_registration()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_a_correct_registration_has_no_problems(self):
+        self.assertEqual(validate.guard_registration_problems(self.settings()), [])
+
+    def test_no_registration_is_reported(self):
+        problems = validate.guard_registration_problems({"hooks": {"SessionStart": []}})
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not registered under hooks.PreToolUse", problems[0])
+
+    def test_a_registration_on_another_event_is_reported(self):
+        problems = validate.guard_registration_problems(self.settings(event="PostToolUse"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("not registered under hooks.PreToolUse", problems[0])
+
+    def test_an_unscoped_registration_is_reported(self):
+        unscoped = self.COMMAND.replace(" --only-agent audit-verifier", "")
+        problems = validate.guard_registration_problems(self.settings(command=unscoped))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("without '--only-agent audit-verifier'", problems[0])
+
+    def test_a_wrong_matcher_is_reported(self):
+        problems = validate.guard_registration_problems(self.settings(matcher="Edit"))
+        self.assertEqual(len(problems), 1)
+        self.assertIn("matcher is 'Edit', not 'Bash'", problems[0])
+
+    def test_malformed_settings_do_not_crash(self):
+        for broken in ({}, {"hooks": "x"}, {"hooks": {"PreToolUse": "x"}},
+                       {"hooks": {"PreToolUse": [None, {"hooks": [None, "x"]}]}}):
+            with self.subTest(settings=broken):
+                problems = validate.guard_registration_problems(broken)
+                self.assertEqual(len(problems), 1)
+                self.assertIn("not registered", problems[0])
+
+
 if __name__ == "__main__":
     unittest.main()

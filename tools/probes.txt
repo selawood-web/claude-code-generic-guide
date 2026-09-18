@@ -133,6 +133,7 @@ audit workflow stops refusing fork pull requests | caught | sed -i 's|github.eve
 charter dropped from the import graph while still budgeted | caught | sed -i '/^@WORKING-CHARTER.md$/d' CLAUDE.md
 facts stage stops inventorying the project-scoped MCP config surface | caught:facts | sed -i '/^        mcp_config_facts(/d' tools/audit_facts.py
 facts stage stops inventorying the global memory seed | caught:facts | sed -i '/^        memory_seed_facts(/d' tools/audit_facts.py
+facts stage counts a piped print as hook stdout again | caught:facts | sed -i 's/^                      and not piped(ln)\]$/                      ]/' tools/audit_facts.py
 
 # Suggestion-tier findings of run 3 (H-001, C-001, S-009).
 hook on a debug-log-only event claims to remind the model | caught | sed -i 's/^# This hook prints nothing for the model, and could not:/# This hook reminds the AI to flush memory at session end. It/' .claude/hooks/session-end.sh
@@ -144,4 +145,8 @@ hook answers a branch pin from the clone's own stale ref again | caught:hooks | 
 hook prints a decision record's slug instead of its date | caught:hooks | sed -i 's|OPEN="${OPEN}decisions/${BASH_REMATCH\[1\]}-\*.md"|OPEN="${OPEN}decisions/${name}"|' .claude/hooks/session-start.sh
 hook trusts any CCGG_REPO without the user-level origin record | caught:hooks | sed -i 's/^ccgg_origin_trusted() { # $1 = CCGG_REPO$/ccgg_origin_trusted() { return 0; # $1 = CCGG_REPO/' .claude/hooks/session-start.sh
 hook reads the origin record from the checkout instead of the user config | caught:hooks | sed -i 's|record="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/ccgg-origins"|record="${CLAUDE_PROJECT_DIR:-.}/.claude/ccgg-origins"|' .claude/hooks/session-start.sh
+verifier guard's settings.json registration loses its agent scope | caught | sed -i 's/ --only-agent audit-verifier//' .claude/settings.json
+verifier guard's settings.json registration moves to an event that never sees Bash | caught | sed -i 's/"PreToolUse"/"PostToolUse"/' .claude/settings.json
+guard decides every agent's Bash although scoped to one | caught:guard | sed -i 's/^    \*) exit 0 ;;$/    *) ;;/' .claude/hooks/audit-verifier-guard.sh
+guard accepts an empty --only-agent and so decides unscoped | caught:guard | sed -i 's/        \*\[!A-Za-z0-9_-\]\*|"")$/        *[!A-Za-z0-9_-]*)/' .claude/hooks/audit-verifier-guard.sh
 audit workflow ORs the base-ref pin in instead of requiring it | caught | python3 -c "p='.github/workflows/audit.yml';t=open(p).read();n=t.replace('github.repository &&\n       github.base_ref','github.repository ||\n       github.base_ref',1);assert n!=t;open(p,'w').write(n)"

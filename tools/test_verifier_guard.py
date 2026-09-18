@@ -392,5 +392,95 @@ class GuardFailureTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
 
 
+class ScopedRegistrationTests(unittest.TestCase):
+    """H-001/S-003: the settings.json registration decides only the verifier's calls.
+
+    The frontmatter registration was measured not firing from inside a live
+    interactive verifier, twice. settings.json hooks fire, but they fire for
+    every agent's Bash — the main session's included — so that registration
+    carries `--only-agent audit-verifier` and the guard reads the product's
+    `agent_type` field before it does anything else. Without the flag (the
+    frontmatter and headless paths) the guard decides every call it is given.
+    """
+
+    SCOPED = ("--only-agent", "audit-verifier")
+
+    def run_scoped(self, command, agent_type=None, args=SCOPED, tool="Bash", env=None):
+        payload = {"tool_name": tool, "tool_input": {"command": command}}
+        if agent_type is not None:
+            payload["agent_id"] = "agent_0123"
+            payload["agent_type"] = agent_type
+        # A guard that never answers is a guard that blocks nothing a human is
+        # waiting on; a hang here is a failure, not a pause (a mutant that accepted
+        # an empty --only-agent looped forever on a lone flag).
+        proc = subprocess.run([shutil.which("bash"), HOOK, *args], input=json.dumps(payload),
+                              capture_output=True, text=True, env=env, timeout=20)
+        return proc.returncode, proc.stdout, proc.stderr
+
+    def test_the_verifier_is_refused_and_approved_exactly_as_before(self):
+        rc, out, err = self.run_scoped("uname -a", agent_type="audit-verifier")
+        self.assertEqual(rc, 2, err)
+        self.assertIn("audit-verifier-guard: refused", err)
+        self.assertEqual(out.strip(), "")
+        rc, out, err = self.run_scoped("ls -la", agent_type="audit-verifier")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(json.loads(out)["hookSpecificOutput"]["permissionDecision"], "allow")
+
+    def test_the_main_session_passes_through_with_no_opinion(self):
+        # No agent_type at all: the hook input of a call the main agent makes.
+        rc, out, err = self.run_scoped("uname -a")
+        self.assertEqual(rc, 0, err)
+        self.assertEqual(out.strip(), "")
+        self.assertEqual(err.strip(), "")
+
+    def test_every_other_agent_passes_through(self):
+        for name in ("audit-harness", "Explore", "general-purpose", "audit-verifier-2", "verifier"):
+            with self.subTest(agent=name):
+                rc, out, err = self.run_scoped("curl http://x", agent_type=name)
+                self.assertEqual(rc, 0, err)
+                self.assertEqual(out.strip(), "")
+
+    def test_compact_json_matches_too(self):
+        # json.dumps writes a space after the colon; the product may not.
+        payload = '{"tool_name":"Bash","tool_input":{"command":"uname -a"},"agent_type":"audit-verifier"}'
+        proc = subprocess.run([shutil.which("bash"), HOOK, *self.SCOPED], input=payload,
+                              capture_output=True, text=True, timeout=20)
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+
+    def test_without_the_flag_agent_type_is_not_consulted(self):
+        # The frontmatter and headless paths: the guard decides whoever's call it is given.
+        for agent in (None, "someone-else", "audit-verifier"):
+            with self.subTest(agent=agent):
+                rc, _, err = self.run_scoped("uname -a", agent_type=agent, args=())
+                self.assertEqual(rc, 2, err)
+
+    def test_an_empty_or_malformed_agent_name_refuses_loudly(self):
+        # A misconfigured scope must not silently become "decide nobody" or "decide everybody".
+        for args in (("--only-agent",), ("--only-agent", ""), ("--only-agent", "a b"),
+                     ("--only-agent", "x;id"), ("--only-agent", "audit-verifier", "--extra"), ("--bogus",)):
+            with self.subTest(args=args):
+                rc, out, err = self.run_scoped("ls", agent_type="audit-verifier", args=args)
+                self.assertEqual(rc, 2, err)
+                self.assertEqual(out.strip(), "")
+                self.assertIn("audit-verifier-guard", err)
+
+    def test_a_scoped_out_call_needs_no_interpreter(self):
+        """A project without python3 keeps its Bash; only the verifier's calls need it."""
+        bindir = tempfile.mkdtemp(prefix="ccgg-nopy-")
+        try:
+            for tool in ("cat", "env"):
+                os.symlink(shutil.which(tool), os.path.join(bindir, tool))
+            env = {"PATH": bindir}
+            rc, out, err = self.run_scoped("ls", env=env)
+            self.assertEqual(rc, 0, err)
+            self.assertEqual(out.strip(), "")
+            self.assertEqual(err.strip(), "")
+            rc, _, err = self.run_scoped("ls", agent_type="audit-verifier", env=env)
+            self.assertEqual(rc, 2, err)
+            self.assertIn("python3 is required", err)
+        finally:
+            shutil.rmtree(bindir, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()

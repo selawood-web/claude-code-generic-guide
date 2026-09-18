@@ -1619,6 +1619,59 @@ def check_guard_canary() -> None:
         fail(problem)
 
 
+# --- 28b. the verifier guard is registered where hooks fire -------------------
+# The frontmatter registration was measured not firing from inside a live
+# interactive verifier on two separate days (findings R-008, H-001, S-003).
+# settings.json hooks are the ones that demonstrably fire here, so the guard is
+# registered there too, scoped to the verifier by name: a registration without
+# `--only-agent audit-verifier` would put every agent's Bash behind the
+# verifier's allow-list, and one on the wrong event or matcher never runs.
+GUARD_AGENT = "audit-verifier"
+GUARD_SCOPE_FLAG = f"--only-agent {GUARD_AGENT}"
+
+
+def guard_registration_problems(settings: dict) -> list[str]:
+    """Why settings.json's registration of the verifier guard would not hold."""
+    hooks = settings.get("hooks") if isinstance(settings, dict) else None
+    groups = hooks.get("PreToolUse") if isinstance(hooks, dict) else None
+    found = []
+    for group in groups if isinstance(groups, list) else []:
+        if not isinstance(group, dict):
+            continue
+        for hook in group.get("hooks") or []:
+            command = str(hook.get("command", "")) if isinstance(hook, dict) else ""
+            if GUARD_PATH in command:
+                found.append((str(group.get("matcher", "")), command))
+    if not found:
+        return [f".claude/settings.json: {GUARD_PATH} is not registered under hooks.PreToolUse — "
+                f"the frontmatter registration alone was measured not firing for the verifier (H-001)"]
+    problems = []
+    for matcher, command in found:
+        if matcher != "Bash":
+            problems.append(f".claude/settings.json: the verifier guard's PreToolUse matcher is "
+                            f"{matcher!r}, not 'Bash' — it never sees the verifier's commands")
+        if GUARD_SCOPE_FLAG not in command:
+            problems.append(f".claude/settings.json: the verifier guard is registered without "
+                            f"'{GUARD_SCOPE_FLAG}' — every agent's Bash, the main session's included, "
+                            f"would be held to the verifier's allow-list")
+    return problems
+
+
+def check_guard_settings_registration() -> None:
+    if VERIFIER_BRIEF not in tracked(VERIFIER_BRIEF) or not tracked(GUARD_PATH):
+        return                      # a project without the audit verifier
+    path = os.path.join(ROOT, ".claude", "settings.json")
+    if not os.path.exists(path):
+        fail(f".claude/settings.json: missing, so {GUARD_PATH} has no registration that fires")
+        return
+    try:
+        settings = json.load(open(path, encoding="utf-8"))
+    except json.JSONDecodeError:
+        return                      # check 6 reports it
+    for problem in guard_registration_problems(settings):
+        fail(problem)
+
+
 # --- 29. the verifier guard's allow-lists match the tree ----------------------
 # The guard names the scripts it will run. Before finding S-004 it matched a
 # prefix, so a branch adding tools/test_anything.py was allowed by construction;
@@ -2054,6 +2107,7 @@ def main() -> int:
     check_reference_thresholds()
     check_hook_stdout_docs()
     check_guard_canary()
+    check_guard_settings_registration()
     check_guard_allow_lists()
     check_pinned_grants_are_rescued()
     check_decision_names()

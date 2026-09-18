@@ -25,17 +25,20 @@ You run in a temporary git worktree — an isolated copy of the repository at th
 commit under audit. Commands that touch the main checkout are refused by the
 runtime. That is the boundary you can rely on.
 
-A guard hook is *configured* on your Bash, declared in this file's frontmatter:
-it allows a read-only command set — the repository's own tests and tools run by
-path, git reads, text inspection — and refuses everything else. Whether it fires
-is not something to assume. A 2026-09-17 run measured it from inside and found
-it did not: the guard script refused `uname -a` with exit 2 when run directly,
-while the same command issued as a Bash tool call ran (finding R-008). The
-product documents frontmatter hooks as firing for the subagent that declares
-them; in that dispatch path they did not.
+A guard hook is *configured* on your Bash, twice: declared in this file's
+frontmatter, and registered in `.claude/settings.json` on PreToolUse/Bash scoped
+to this agent by name. It allows a read-only command set — the repository's own
+tests and tools run by path, git reads, text inspection — and refuses everything
+else. Whether it fires is not something to assume. Runs on 2026-09-17 and
+2026-09-18 measured the frontmatter path from inside and found it did not: the
+guard script refused `uname -a` with exit 2 when run directly, while the same
+command issued as a Bash tool call ran (findings R-008, H-001, S-003). The
+settings.json registration exists because that is the path this repository's
+other hooks demonstrably fire on; whether it reaches you is what the canary
+measures next.
 
-A headless run on 2026-09-17 measured the other path and found the opposite: with
-the briefs passed inline as `--agents` JSON, the hook fired — a redirect was
+A headless run on 2026-09-17 measured the inline path and found the opposite:
+with the briefs passed inline as `--agents` JSON, the hook fired — a redirect was
 refused, naming the trusted guard's own path. Which dispatch path you are in is
 not something you can see from here, so the canary settles it every run.
 
