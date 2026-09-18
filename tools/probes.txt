@@ -145,6 +145,8 @@ hook answers a branch pin from the clone's own stale ref again | caught:hooks | 
 hook prints a decision record's slug instead of its date | caught:hooks | sed -i 's|OPEN="${OPEN}decisions/${BASH_REMATCH\[1\]}-\*.md"|OPEN="${OPEN}decisions/${name}"|' .claude/hooks/session-start.sh
 hook trusts any CCGG_REPO without the user-level origin record | caught:hooks | sed -i 's/^ccgg_origin_trusted() { # $1 = CCGG_REPO$/ccgg_origin_trusted() { return 0; # $1 = CCGG_REPO/' .claude/hooks/session-start.sh
 hook reads the origin record from the checkout instead of the user config | caught:hooks | sed -i 's|record="${CLAUDE_CONFIG_DIR:-${HOME:-}/.claude}/ccgg-origins"|record="${CLAUDE_PROJECT_DIR:-.}/.claude/ccgg-origins"|' .claude/hooks/session-start.sh
+hook syncs from a clone whose working tree no longer matches the pin | caught:hooks | sed -i 's/^    elif ! ccgg_clean "$CCGG_HOME"; then$/    elif false; then/' .claude/hooks/session-start.sh
+hook's cleanliness check ignores files find would copy | caught:hooks | sed -i 's/--untracked-files=all --ignored=matching -- \\$/--untracked-files=no -- \\/' .claude/hooks/session-start.sh
 verifier guard's settings.json registration loses its agent scope | caught | sed -i 's/ --only-agent audit-verifier//' .claude/settings.json
 verifier guard's settings.json registration moves to an event that never sees Bash | caught | sed -i 's/"PreToolUse"/"PostToolUse"/' .claude/settings.json
 guard decides every agent's Bash although scoped to one | caught:guard | sed -i 's/^    \*) exit 0 ;;$/    *) ;;/' .claude/hooks/audit-verifier-guard.sh

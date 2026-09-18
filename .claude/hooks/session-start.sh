@@ -36,7 +36,10 @@ set -uo pipefail
 #     the clone's HEAD is at it. A 40-hex commit is checked locally; a tag or
 #     branch is re-fetched from origin on every session start, and
 #     tools/validate.py fails a project that pins one — a name is a value its
-#     owner can move.
+#     owner can move,
+#   - the clone's working tree matches that commit: no tracked modification, and
+#     nothing untracked or ignored under the directories update.sh copies
+#     wholesale (finding R-001).
 # A clone from CCGG_REPO is made only at CCGG_REF. Failures are printed, never
 # hidden: a silent sync failure looks exactly like a compromised one.
 ccgg_is_sha() { case "$1" in *[!0-9a-f]*|"") return 1 ;; esac; [ "${#1}" -eq 40 ]; }
@@ -52,6 +55,21 @@ ccgg_ref_ok() {
   [[ "$1" =~ ^[A-Za-z0-9._/-]+$ ]]
 }
 ccgg_owned() { [ -O "$1" ] && [ -O "$1/update.sh" ]; }
+# The pin check reads HEAD; the files update.sh copies come from the working
+# tree. An update.sh edited in place, or a file dropped under the directories
+# update.sh walks with find, passed every check above while HEAD sat at the pin
+# (finding R-001). Tracked modifications anywhere refuse the sync — update.sh
+# and the tools/ scripts are copied by name — and under the four directories
+# copied wholesale, an untracked or ignored file refuses it too. A file outside
+# those, such as a test run's cache, is not something update.sh would copy.
+# A git that cannot answer is a refusal, never a clean bill.
+ccgg_clean() { # $1 = clone
+  dirty="$(git -C "$1" status --porcelain --untracked-files=no 2>/dev/null)" || return 1
+  [ -z "$dirty" ] || return 1
+  dirty="$(git -C "$1" status --porcelain --untracked-files=all --ignored=matching -- \
+             .claude/skills .claude/hooks .claude/references .claude/agents 2>/dev/null)" || return 1
+  [ -z "$dirty" ]
+}
 # One URL per line, `#` comments and blanks ignored, whole-line match — the same
 # format tools/validate.py reads in the tree. The file must be this user's: a
 # record anyone else could write is a record anyone else could extend.
@@ -143,6 +161,8 @@ if [ -n "${CCGG_HOME:-}" ]; then
       # already re-fetches a name unconditionally; this hook now agrees with it.
       # That cost is one more reason tools/validate.py fails a movable CCGG_REF.
       echo "-- ccgg: CCGG_HOME could not be moved to CCGG_REF; live sync skipped --"
+    elif ! ccgg_clean "$CCGG_HOME"; then
+      echo "-- ccgg: CCGG_HOME has local modifications; live sync skipped — run git status there and restore it to the pin --"
     else
       "${CCGG_HOME}/update.sh" --quiet "${CLAUDE_PROJECT_DIR:-.}" || echo "-- ccgg: update.sh failed --"
     fi
