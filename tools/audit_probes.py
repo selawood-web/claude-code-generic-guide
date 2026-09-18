@@ -44,6 +44,13 @@ DEFAULT_GATE_NAME = "validator"
 GATES = {
     DEFAULT_GATE_NAME: DEFAULT_GATE,
     "guard": "python3 -m unittest discover -s tools -t tools -p test_verifier_guard.py -q",
+    "hooks": "python3 -m unittest discover -s tools -t tools -p test_session_start_hook.py -q",
+    # The deterministic fact stage's own tests, which run collect() on the tree
+    # and assert each surface still produces its fact: a surface nobody
+    # inventories is one the audit reports nothing about, which reads exactly
+    # like a clean one. --fail-on-findings is not this gate: it fails on the
+    # gating kinds only, and an inventory fact is for review, not a verdict.
+    "facts": "python3 -m unittest discover -s tools -t tools -p test_audit_facts.py -q",
 }
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
@@ -110,7 +117,9 @@ def parse_probes(text: str) -> list[Probe]:
             raise ProbeFileError(f"line {no}: unknown gate '{gate}'; known gates are {sorted(GATES)}")
         if not mutation:
             raise ProbeFileError(f"line {no}: empty mutation")
-        probes.append(Probe(label, verdict, mutation, no, gate))
+        # The label is committed, contributor-editable text that lands in
+        # probes.json and from there in a specialist's input (finding R-007).
+        probes.append(Probe(audit_env.quote(label), verdict, mutation, no, gate))
     return probes
 
 
@@ -181,7 +190,9 @@ def run_probe(probe: Probe, scratch_repo: str, gates: dict[str, list[str]],
               env: dict[str, str]) -> ProbeResult:
     """Reset, mutate, stage, run the probe's gate. Never raises on a bad mutation — it records `error`."""
     def result(verdict: str, detail: str) -> ProbeResult:
-        return ProbeResult(probe.label, probe.expect, verdict, detail, probe.line, probe.gate)
+        # detail is the gate's own output, which quotes file content back.
+        return ProbeResult(probe.label, probe.expect, verdict, audit_env.quote(detail),
+                           probe.line, probe.gate)
 
     for cmd in (["git", "reset", "-q", "--hard", "HEAD"], ["git", "clean", "-fdq"]):
         proc = _run(cmd, scratch_repo, env)

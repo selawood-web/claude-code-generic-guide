@@ -374,12 +374,18 @@ class HookReferenceTests(unittest.TestCase):
 
 
 class CcggEnvTests(unittest.TestCase):
+    # A complete block: a listed origin and a commit pin. Anything less is a
+    # finding of its own now (R-003, S-005) and would mask the row under test.
+    GOOD_ORIGINS = ["https://example.org/g.git"]
+
     def test_clean_block(self):
-        env = {"CCGG_HOME": "~/.claude/ccgg-guide", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
-        self.assertEqual(validate.ccgg_env_problems(env), [])
+        env = {"CCGG_HOME": "~/.claude/ccgg-guide", "CCGG_REPO": "https://example.org/g.git",
+               "CCGG_REF": "0" * 40}
+        self.assertEqual(validate.ccgg_env_problems(env, origins=self.GOOD_ORIGINS), [])
 
     def test_repo_without_ref(self):
-        problems = validate.ccgg_env_problems({"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git"})
+        problems = validate.ccgg_env_problems({"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git"},
+                                              origins=self.GOOD_ORIGINS)
         self.assertEqual(len(problems), 1)
         self.assertIn("without CCGG_REF", problems[0])
 
@@ -394,8 +400,9 @@ class CcggEnvTests(unittest.TestCase):
         The block is otherwise complete, because CCGG_HOME on its own is now a
         finding of its own and would mask what this row is here to measure.
         """
-        env = {"CCGG_HOME": "/tmpfs/x", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
-        self.assertEqual(validate.ccgg_env_problems(env), [])
+        env = {"CCGG_HOME": "/tmpfs/x", "CCGG_REPO": "https://example.org/g.git",
+               "CCGG_REF": "0" * 40}
+        self.assertEqual(validate.ccgg_env_problems(env, origins=self.GOOD_ORIGINS), [])
 
     def test_plain_http(self):
         problems = validate.ccgg_env_problems({"CCGG_REPO": "http://example.org/g.git", "CCGG_REF": "v1"})
@@ -421,7 +428,7 @@ class CcggEnvTests(unittest.TestCase):
         self.assertTrue(any("ccgg-origins" in p for p in problems), problems)
 
     def test_repo_inside_the_trusted_record(self):
-        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
         self.assertEqual(validate.ccgg_env_problems(env, origins=["https://example.org/g.git"]), [])
 
     def test_empty_record_allows_nothing(self):
@@ -429,9 +436,38 @@ class CcggEnvTests(unittest.TestCase):
         env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
         self.assertTrue(any("ccgg-origins" in p for p in validate.ccgg_env_problems(env, origins=[])))
 
-    def test_no_record_is_not_a_hard_failure(self):
-        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "v1"}
-        self.assertEqual(validate.ccgg_env_problems(env, origins=None), [])
+    def test_no_record_is_a_hard_failure(self):
+        """S-005: this used to be a caution, and a caution never changed the verdict,
+        so a settings.json pointing the sync at any repository at all passed the gate."""
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
+        problems = validate.ccgg_env_problems(env, origins=None)
+        self.assertTrue(any("ccgg-origins" in p for p in problems), problems)
+
+    def test_a_movable_ref_is_a_hard_failure(self):
+        """R-003: update.sh re-fetches a movable name into skills, hooks, agents and
+        tools/ on every session start, so whoever can move it chooses the code."""
+        for ref in ("main", "master", "v1", "HEAD", "a" * 39, "a" * 41, "A" * 40, "deadbeef"):
+            with self.subTest(ref=ref):
+                env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": ref}
+                problems = validate.ccgg_env_problems(env, origins=[env["CCGG_REPO"]])
+                self.assertTrue(any("move" in p for p in problems), f"{ref}: {problems}")
+
+    def test_a_ref_that_is_not_a_refname_is_reported_as_its_own_problem(self):
+        """S-006: `-` in the first position reaches git in option position."""
+        env = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git",
+               "CCGG_REF": "--upload-pack=id"}
+        problems = validate.ccgg_env_problems(env, origins=[env["CCGG_REPO"]])
+        self.assertTrue(any("not a refname" in p for p in problems), problems)
+
+    def test_ordinary_refnames_are_not_reported_as_malformed(self):
+        for ref in ("main", "v1.2.3", "release/2026-09", "a_b", "0" * 40):
+            with self.subTest(ref=ref):
+                self.assertTrue(validate.REF_NAME_RE.match(ref), ref)
+
+    def test_refnames_the_hook_refuses_are_refused_here_too(self):
+        for ref in ("-x", "--upload-pack=id", "a..b", "a b", "a;id", "", "a$(id)"):
+            with self.subTest(ref=ref):
+                self.assertFalse(validate.REF_NAME_RE.match(ref), ref)
 
 
 class CcggOriginRecordTests(unittest.TestCase):
@@ -460,19 +496,20 @@ class CcggEnvWarningTests(unittest.TestCase):
 
     GOOD = {"CCGG_HOME": "~/g", "CCGG_REPO": "https://example.org/g.git", "CCGG_REF": "0" * 40}
 
-    def test_movable_ref_warns(self):
-        for ref in ("main", "master", "v1", "HEAD", "a" * 39, "a" * 41, "A" * 40, "deadbeef"):
-            with self.subTest(ref=ref):
-                env = dict(self.GOOD, CCGG_REF=ref)
-                warnings = validate.ccgg_env_warnings(env, origins=[env["CCGG_REPO"]])
-                self.assertTrue(any("CCGG_REF" in w for w in warnings), f"{ref}: {warnings}")
-
     def test_commit_ref_with_a_record_is_silent(self):
         self.assertEqual(validate.ccgg_env_warnings(self.GOOD, origins=[self.GOOD["CCGG_REPO"]]), [])
 
-    def test_missing_origin_record_warns(self):
-        warnings = validate.ccgg_env_warnings(self.GOOD, origins=None)
+    def test_an_empty_record_still_only_cautions(self):
+        """It refuses every sync rather than allowing the wrong one, so it is safe
+        by itself — the failure comes from ccgg_env_problems, which lists it."""
+        warnings = validate.ccgg_env_warnings(self.GOOD, origins=[])
         self.assertTrue(any("ccgg-origins" in w for w in warnings), warnings)
+
+    def test_the_two_promoted_cautions_no_longer_only_caution(self):
+        """R-003 and S-005: both decide whose code runs at every session start."""
+        self.assertEqual(validate.ccgg_env_warnings(self.GOOD, origins=None), [])
+        movable = dict(self.GOOD, CCGG_REF="main")
+        self.assertEqual(validate.ccgg_env_warnings(movable, origins=[self.GOOD["CCGG_REPO"]]), [])
 
     def test_no_repo_configured_warns_about_nothing(self):
         self.assertEqual(validate.ccgg_env_warnings({}, origins=None), [])
@@ -1677,6 +1714,76 @@ class PinnedGrantRescueTests(unittest.TestCase):
         finally:
             del validate.findings[:]
 
+
+
+class AuditWorkflowTrustAnchorTests(unittest.TestCase):
+    """S-008: the trusted set is read from a base a pull request chooses itself."""
+
+    def setUp(self):
+        with open(os.path.join(validate.ROOT, validate.AUDIT_WORKFLOW_PATH), encoding="utf-8") as fh:
+            self.text = fh.read()
+
+    def test_the_shipped_workflow_pins_both_anchors(self):
+        self.assertEqual(validate.audit_workflow_problems(self.text), [])
+
+    def test_the_condition_is_read_whole_across_its_folded_lines(self):
+        condition = validate.job_condition(self.text, "deterministic")
+        self.assertIn("workflow_dispatch", condition)
+        self.assertIn(validate.BASE_REF_PIN, condition)
+        self.assertIn(validate.HEAD_REPO_PIN, condition)
+
+    def test_dropping_the_base_ref_pin_is_reported(self):
+        problems = validate.audit_workflow_problems(self.text.replace(validate.BASE_REF_PIN, "true"))
+        self.assertTrue(any("base_ref" in p for p in problems), problems)
+
+    def test_dropping_the_fork_pin_is_reported(self):
+        problems = validate.audit_workflow_problems(self.text.replace(validate.HEAD_REPO_PIN, "true"))
+        self.assertTrue(any("fork" in p for p in problems), problems)
+
+    def test_a_job_with_no_condition_at_all_is_reported(self):
+        text = "jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n    steps: []\n"
+        problems = validate.audit_workflow_problems(text)
+        self.assertTrue(any("no `if:`" in p for p in problems), problems)
+
+    def test_a_following_job_does_not_supply_the_condition(self):
+        """The reader must stop at the next job, or every job lends its `if:` to the
+        one before it and a job with none would read as pinned."""
+        text = ("jobs:\n  deterministic:\n    runs-on: ubuntu-latest\n"
+                f"  model:\n    if: {validate.BASE_REF_PIN} && {validate.HEAD_REPO_PIN}\n")
+        self.assertEqual(validate.job_condition(text, "deterministic"), "")
+        self.assertTrue(any("no `if:`" in p for p in validate.audit_workflow_problems(text)))
+
+    def test_an_unknown_job_has_no_condition(self):
+        self.assertEqual(validate.job_condition(self.text, "nonesuch"), "")
+
+
+class AlwaysLoadedAreImportedTests(unittest.TestCase):
+    """R-006: the budget check assumed these load; the import graph decided it."""
+
+    def test_every_always_loaded_file_is_reachable_today(self):
+        del validate.findings[:]
+        try:
+            validate.check_always_loaded_are_imported()
+            self.assertEqual(list(validate.findings), [])
+        finally:
+            del validate.findings[:]
+
+    def test_the_charter_is_in_the_closure(self):
+        self.assertIn("WORKING-CHARTER.md", validate.imported_closure())
+
+    def test_the_closure_follows_imports_transitively_and_survives_a_cycle(self):
+        self.assertIn("AGENTS.md", validate.imported_closure())
+
+    def test_dropping_the_import_is_reported(self):
+        del validate.findings[:]
+        try:
+            with mock.patch.object(validate, "imported_closure",
+                                   return_value={"CLAUDE.md", "AGENTS.md"}):
+                validate.check_always_loaded_are_imported()
+            self.assertTrue(any("WORKING-CHARTER.md" in f for f in validate.findings),
+                            list(validate.findings))
+        finally:
+            del validate.findings[:]
 
 
 if __name__ == "__main__":

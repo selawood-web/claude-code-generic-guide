@@ -74,12 +74,19 @@ def parse_redteam_probes(text: str) -> list[RedteamProbe]:
             raise RedteamFileError(f"line {no}: kind must be one of {KINDS}, got '{kind}'")
         if not plant or not observe:
             raise RedteamFileError(f"line {no}: plant and observe are both required")
-        probes.append(RedteamProbe(channel, kind, plant, observe, no))
+        # channel and kind are printed and land in redteam.json; a specialist
+        # reads them as its first input (finding R-007).
+        probes.append(RedteamProbe(audit_env.quote(channel), audit_env.quote(kind),
+                                   plant, observe, no))
     return probes
 
 
 def marker_for(probe: RedteamProbe) -> str:
-    return f"CCGG-REDTEAM-{probe.line:03d}"
+    # Lowercase because a channel may constrain the shape of what it carries:
+    # session-start.sh prints a decision record's name only when it is the slug
+    # /decide produces, and a slug has no capitals. A marker the channel cannot
+    # spell measures the marker, not the channel (finding R-002).
+    return f"ccgg-redteam-{probe.line:03d}"
 
 
 def summarize(results: list[RedteamResult]) -> dict:
@@ -88,6 +95,15 @@ def summarize(results: list[RedteamResult]) -> dict:
     counts["reached_channels"] = [r.channel for r in results if r.result == "reached"]
     counts["error_channels"] = [r.channel for r in results if r.result == "error"]
     return counts
+
+
+def _result(probe, verdict: str, detail: str) -> "RedteamResult":
+    """Every verdict goes through here so no detail reaches the artifact unbounded.
+
+    The detail quotes the probe's own `observe` snippet, the planted marker and
+    the gate's stderr — all tree-controlled (finding R-007).
+    """
+    return RedteamResult(probe.channel, probe.kind, verdict, audit_env.quote(detail), probe.line)
 
 
 def _run(cmd: list[str], cwd: str, env: dict) -> subprocess.CompletedProcess:
@@ -120,24 +136,24 @@ def run_probe(probe: RedteamProbe, scratch_repo: str, env: dict) -> RedteamResul
     penv = dict(env, MARKER=marker)
     for cmd in (["git", "reset", "-q", "--hard", "HEAD"], ["git", "clean", "-fdq"]):
         if _run(cmd, scratch_repo, penv).returncode != 0:
-            return RedteamResult(probe.channel, probe.kind, "error", "reset failed", probe.line)
+            return _result(probe, "error", "reset failed")
     home = penv["HOME"]
     for entry in os.listdir(home):  # a private HOME is reset with the tree
         subprocess.run(["rm", "-rf", os.path.join(home, entry)], check=False)
     planted = _run(["bash", "-c", probe.plant], scratch_repo, penv)
     if planted.returncode == SKIP_EXIT:
-        return RedteamResult(probe.channel, probe.kind, "skipped", "plant reported not applicable (exit 3)", probe.line)
+        return _result(probe, "skipped", "plant reported not applicable (exit 3)")
     if planted.returncode != 0:
-        return RedteamResult(probe.channel, probe.kind, "error", f"plant exited {planted.returncode}: {planted.stderr.strip()[:200]}", probe.line)
+        return _result(probe, "error", f"plant exited {planted.returncode}: {planted.stderr.strip()[:200]}")
     if probe.kind == "static":
-        return RedteamResult(probe.channel, probe.kind, "planted", f"marker {marker} planted; loads via: {probe.observe}", probe.line)
+        return _result(probe, "planted", f"marker {marker} planted; loads via: {probe.observe}")
     observed = _run(["bash", "-c", probe.observe], scratch_repo, penv)
     if observed.returncode == SKIP_EXIT:
-        return RedteamResult(probe.channel, probe.kind, "skipped", "observe reported not applicable (exit 3)", probe.line)
+        return _result(probe, "skipped", "observe reported not applicable (exit 3)")
     if marker in observed.stdout:
         hit = next(ln.strip() for ln in observed.stdout.splitlines() if marker in ln)
-        return RedteamResult(probe.channel, probe.kind, "reached", f"marker in stdout: {hit[:160]}", probe.line)
-    return RedteamResult(probe.channel, probe.kind, "contained", f"marker absent from stdout ({len(observed.stdout)} bytes)", probe.line)
+        return _result(probe, "reached", f"marker in stdout: {hit[:160]}")
+    return _result(probe, "contained", f"marker absent from stdout ({len(observed.stdout)} bytes)")
 
 
 def format_table(results: list[RedteamResult], summary: dict) -> str:

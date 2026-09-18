@@ -64,12 +64,21 @@ concurrency:
 jobs:
   # 1. The audited tree's own code runs here, where there is nothing to steal.
   deterministic:
-    # A labeled pull request, or a manual run. Never a fork: GitHub withholds
-    # secrets from fork pull requests, so the run could only fail at auth.
+    # A labeled pull request against the default branch, or a manual run. Never a
+    # fork: GitHub withholds secrets from fork pull requests, so the run could
+    # only fail at auth.
+    #
+    # base_ref is pinned because the whole trusted set below is read from
+    # pull_request.base.sha, and a pull request chooses its own base. Without
+    # this, a labeled same-repo PR could target a branch it authored, and the
+    # guard, skill, agent briefs and launcher "rescued from the base branch the
+    # maintainers own" would be rescued from the attacker's (finding S-008).
+    # Gating this job gates the run: `model` and `report` both need it.
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (contains(github.event.pull_request.labels.*.name, 'audit') &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.base_ref == github.event.repository.default_branch)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:

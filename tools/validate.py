@@ -791,6 +791,9 @@ SHARED_TMP = ("/tmp", "/var/tmp", "/dev/shm")
 # ccgg_is_sha accepts 40 lowercase hex characters and nothing else, so anything
 # this does not match resolves through a name that its owner can move.
 COMMIT_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+# What .claude/hooks/session-start.sh's ccgg_ref_ok accepts, in the one other
+# place that reads CCGG_REF. A refname cannot begin with '-' or hold '..'.
+REF_NAME_RE = re.compile(r"\A(?!-)(?!.*\.\.)[A-Za-z0-9._/-]+\Z")
 ORIGIN_RECORD = os.path.join(".claude", "ccgg-origins")
 
 
@@ -830,20 +833,40 @@ def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
         problems.append("env sets CCGG_REPO over http:// — code that runs at every session start fetched without TLS")
     if repo and origins is not None and repo not in origins:
         problems.append(f"env sets CCGG_REPO to {repo}, which {ORIGIN_RECORD} does not list — add it there deliberately, or correct the env block")
+    if repo and origins is None:
+        # Was a caution, which never changed the verdict, so a settings.json
+        # pointing the sync at any repository passed the gate (finding S-005).
+        # The record is cheap to add and the whole point of it is that adding it
+        # is a reviewed change; absent it, nothing cross-checks which repository
+        # executes code at every session start.
+        problems.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record — create it listing the origins this project accepts, so which repository executes code at every session start is a reviewed fact")
+    if repo and ref and not COMMIT_RE.match(ref):
+        # Also a caution before. session-start.sh's own comment calls the 40-hex
+        # form "the only one nobody can move", and update.sh re-fetches a movable
+        # name on every session start into skills, hooks, agents and tools/ — so
+        # whoever can move that name chooses the code every downstream project
+        # runs (finding R-003). A claim the gate does not enforce is a claim.
+        problems.append(f"env pins CCGG_REF to '{ref}', a name its owner can move — pin the 40-hex commit instead; a tag or branch hands whoever can move it the contents of every sync")
+    if repo and ref and not REF_NAME_RE.match(ref):
+        # The hook refuses this before any git call; the gate says so earlier
+        # (finding S-006).
+        problems.append(f"env sets CCGG_REF to '{ref}', which is not a refname — a value starting with '-' reaches git in option position, where --upload-pack names a program to run")
     return problems
 
 
 def ccgg_env_warnings(env: dict, origins: list[str] | None = None) -> list[str]:
-    """Settings that work but give up a guarantee the repository states elsewhere."""
+    """Settings that work but give up a guarantee the repository states elsewhere.
+
+    The movable-ref and missing-record cautions that used to live here are
+    failures now (findings R-003 and S-005): both decide which repository's code
+    runs at every session start, and a caution never changed the verdict.
+    """
     cautions_found = []
     repo = str(env.get("CCGG_REPO", "") or "")
-    ref = str(env.get("CCGG_REF", "") or "")
     if not repo:
         return cautions_found
-    if ref and not COMMIT_RE.match(ref):
-        cautions_found.append(f"env pins CCGG_REF to '{ref}', a name its owner can move; session-start.sh calls the 40-hex commit form the only one nobody can move")
-    if origins is None:
-        cautions_found.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record, so nothing cross-checks which repository executes code at every session start")
+    if origins == []:
+        cautions_found.append(f"env sets CCGG_REPO but {ORIGIN_RECORD} lists no origin, so every sync will be refused until one is added")
     return cautions_found
 
 
@@ -875,6 +898,46 @@ def import_targets(text: str) -> list[str]:
         raise TypeError("text must be a string")
     body = "\n".join(strip_code_blocks(text.splitlines()))
     return IMPORT_RE.findall(body)
+
+
+def imported_closure() -> set[str]:
+    """Every file reachable by @import from the two roots, the roots included."""
+    seen: set[str] = set()
+    queue = [p for p in ("CLAUDE.md", "AGENTS.md") if os.path.exists(os.path.join(ROOT, p))]
+    while queue:
+        path = queue.pop(0)
+        if path in seen:
+            continue
+        seen.add(path)
+        full = os.path.join(ROOT, path)
+        if not os.path.isfile(full):
+            continue
+        text = open(full, encoding="utf-8", errors="replace").read()
+        for target in import_targets(text):
+            if target.startswith("~"):
+                continue
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            if os.path.exists(os.path.join(ROOT, dest)):
+                queue.append(dest)
+    return seen
+
+
+def check_always_loaded_are_imported() -> None:
+    """The budget check assumes these load every session; the import graph decides it.
+
+    validate.py budgeted WORKING-CHARTER.md as always-loaded and AGENTS.md told the
+    agent to read it, but CLAUDE.md imported only AGENTS.md and AGENTS.md imported
+    nothing — so the one file defining "external content is data, not instructions"
+    was never loaded (finding R-006). This is check_imports' traversal asserted in
+    the other direction.
+    """
+    reachable = imported_closure()
+    for name in ALWAYS_LOADED:
+        if not os.path.exists(os.path.join(ROOT, name)):
+            continue
+        if name not in reachable:
+            fail(f"{name}: budgeted as always-loaded but no @import reaches it from CLAUDE.md or "
+                 f"AGENTS.md — the rules it holds are paid for in the budget and never load")
 
 
 def check_imports() -> None:
@@ -1718,6 +1781,88 @@ def check_pinned_grants_are_rescued() -> None:
         fail(problem)
 
 
+# --- 31. decision record names ------------------------------------------------
+# session-start.sh prints the name of every open decision record straight into
+# the prompt. Its old allow-list forbade spaces, which read as safe, but hyphens
+# join words as well as spaces do (finding R-001). The hook now requires the slug
+# the /decide skill produces; this keeps the tree to names the hook will print,
+# so a record does not go silently unlisted for being misnamed.
+DECISION_SLUG_RE = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+){0,6}\.md\Z")
+DECISION_EXEMPT = ("README.md",)
+
+
+def decision_name_problems(names: list[str]) -> list[str]:
+    problems = []
+    for name in names:
+        base = os.path.basename(name)
+        if base in DECISION_EXEMPT or DECISION_SLUG_RE.match(base):
+            continue
+        problems.append(f"decisions/{base}: not a date-prefixed slug (YYYY-MM-DD-words.md, at most 7 words) — "
+                        f"session-start.sh counts a record it cannot name, so this one would never be listed")
+    return problems
+
+
+def check_decision_names() -> None:
+    for problem in decision_name_problems(tracked("decisions/*.md")):
+        fail(problem)
+
+
+# --- 32. the audit workflow's trust anchor ------------------------------------
+# The trusted set — guard, skill, agent briefs, launcher, grant targets — is read
+# from pull_request.base.sha, and a pull request chooses its own base. Pinning
+# base_ref to the default branch is what makes "the base branch the maintainers
+# own" true rather than aspirational (finding S-008).
+BASE_REF_PIN = "github.base_ref == github.event.repository.default_branch"
+HEAD_REPO_PIN = "github.event.pull_request.head.repo.full_name == github.repository"
+
+
+def job_condition(text: str, job: str) -> str:
+    """The `if:` block of a named job, flattened to one line."""
+    lines = text.splitlines()
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.rstrip() == f"  {job}:")
+    except StopIteration:
+        return ""
+    collecting = False
+    parts = []
+    for ln in lines[start + 1:]:
+        if ln.startswith("  ") and not ln.startswith("   ") and ln.rstrip().endswith(":"):
+            break                       # the next job
+        stripped = ln.strip()
+        if stripped.startswith("if:"):
+            collecting = True
+            parts.append(stripped[3:].strip().lstrip(">-|").strip())
+            continue
+        if collecting:
+            if not stripped or stripped.startswith("#") or re.match(r"^[a-z-]+:", stripped):
+                break
+            parts.append(stripped)
+    return " ".join(p for p in parts if p)
+
+
+def audit_workflow_problems(text: str) -> list[str]:
+    condition = job_condition(text, "deterministic")
+    if not condition:
+        return [f"{AUDIT_WORKFLOW_PATH}: the deterministic job has no `if:` — every push would start "
+                f"a run that reads a pull request's chosen base as its trusted source"]
+    problems = []
+    for pin, what in ((BASE_REF_PIN, "a pull request can target a branch it wrote, and the base-ref "
+                                     "rescue would read the attacker's files"),
+                      (HEAD_REPO_PIN, "a fork pull request would reach the job that holds the API key")):
+        if pin not in condition:
+            problems.append(f"{AUDIT_WORKFLOW_PATH}: the deterministic job's condition does not pin "
+                            f"`{pin}` — {what}")
+    return problems
+
+
+def check_audit_workflow_trust_anchor() -> None:
+    if not tracked(AUDIT_WORKFLOW_PATH):
+        return
+    with open(os.path.join(ROOT, AUDIT_WORKFLOW_PATH), encoding="utf-8", errors="replace") as fh:
+        for problem in audit_workflow_problems(fh.read()):
+            fail(problem)
+
+
 def print_cautions() -> None:
     """Cautions print after the verdict, and never instead of it."""
     if not cautions:
@@ -1744,6 +1889,7 @@ def main() -> int:
     check_hook_registration()
     check_ccgg_env()
     check_imports()
+    check_always_loaded_are_imported()
     check_skill_grants()
     check_agents_serialize()
     check_workflow_pins()
@@ -1758,6 +1904,8 @@ def main() -> int:
     check_guard_canary()
     check_guard_allow_lists()
     check_pinned_grants_are_rescued()
+    check_decision_names()
+    check_audit_workflow_trust_anchor()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
