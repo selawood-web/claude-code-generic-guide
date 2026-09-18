@@ -826,7 +826,7 @@ def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
     if home and not repo:
         problems.append("env sets CCGG_HOME without CCGG_REPO — the hook then runs that clone's update.sh with no origin to check it against, and update.sh syncs skills, hooks, agents and tools/ into this project on every session start; set CCGG_REPO and CCGG_REF, or unset CCGG_HOME")
     elif repo and not ref:
-        problems.append("env sets CCGG_REPO without CCGG_REF — the hook refuses an unpinned clone, so live sync never starts; pin a tag, branch, or commit")
+        problems.append("env sets CCGG_REPO without CCGG_REF — the hook refuses an unpinned clone, so live sync never starts; pin a 40-hex commit")
     if home and (home in SHARED_TMP or home.startswith(tuple(t + "/" for t in SHARED_TMP))):
         problems.append("env sets CCGG_HOME under a shared temporary directory — anyone on the host can pre-create it; use a path under your home such as ~/.claude/ccgg-guide")
     if repo.startswith("http://"):
@@ -841,11 +841,12 @@ def ccgg_env_problems(env: dict, origins: list[str] | None = None) -> list[str]:
         # executes code at every session start.
         problems.append(f"env sets CCGG_REPO but this repository keeps no {ORIGIN_RECORD} record — create it listing the origins this project accepts, so which repository executes code at every session start is a reviewed fact")
     if repo and ref and not COMMIT_RE.match(ref):
-        # Also a caution before. session-start.sh's own comment calls the 40-hex
-        # form "the only one nobody can move", and update.sh re-fetches a movable
-        # name on every session start into skills, hooks, agents and tools/ — so
-        # whoever can move that name chooses the code every downstream project
-        # runs (finding R-003). A claim the gate does not enforce is a claim.
+        # Also a caution before. The hook refuses a name before any git call
+        # (finding R-001 of the 2026-09-18 audit: it used to follow one every
+        # session, with this verdict as the only brake), so a project that
+        # pins one ships settings its own hook will not act on. This check keeps
+        # the pin a reviewed fact in the diff rather than a line in a hook's
+        # output (finding R-003). A claim the gate does not enforce is a claim.
         problems.append(f"env pins CCGG_REF to '{ref}', a name its owner can move — pin the 40-hex commit instead; a tag or branch hands whoever can move it the contents of every sync")
     if repo and ref and not REF_NAME_RE.match(ref):
         # The hook refuses this before any git call; the gate says so earlier

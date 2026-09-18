@@ -32,11 +32,13 @@ set -uo pipefail
 #   - CCGG_HOME and its update.sh are owned by this user (a pre-planted
 #     directory at a shared path such as /tmp fails this),
 #   - the clone's origin is CCGG_REPO,
-#   - CCGG_REF is a refname (no leading `-`, no `..`, only [A-Za-z0-9._/-]) and
-#     the clone's HEAD is at it. A 40-hex commit is checked locally; a tag or
-#     branch is re-fetched from origin on every session start, and
-#     tools/validate.py fails a project that pins one — a name is a value its
-#     owner can move,
+#   - CCGG_REF is a refname (no leading `-`, no `..`, only [A-Za-z0-9._/-]),
+#     is a 40-hex commit, and the clone's HEAD is at it. A tag or branch is a
+#     value its owner can move, so whoever could move it would choose the code
+#     every downstream project runs: the hook refuses a name before any git
+#     call, and tools/validate.py fails a project that pins one (finding R-001
+#     of the 2026-09-18 audit — a name used to be re-fetched every session with
+#     the validator's printed verdict as the only brake),
 #   - the clone's working tree matches that commit: no tracked modification, and
 #     nothing untracked or ignored under the directories update.sh copies
 #     wholesale (finding R-001).
@@ -90,30 +92,22 @@ ccgg_origin_ok() { # $1 = clone, $2 = expected URL
   [ -n "$2" ] || return 1 # nothing to compare against is a failed check, not a passed one
   [ "$(git -C "$1" remote get-url origin 2>/dev/null)" = "$2" ]
 }
-ccgg_at_ref() { # $1 = clone, $2 = ref name or commit
-  ccgg_ref_ok "$2" || return 1
+# Both take a 40-hex commit only. The clone's own refs/heads/<name> and
+# refs/tags/<name> never enter the comparison: a hand-cloned CCGG_HOME once
+# answered a name from a stale local branch (R-004), and the machinery that
+# then resolved a name safely is gone with the names themselves (R-001).
+ccgg_at_ref() { # $1 = clone, $2 = 40-hex commit
+  ccgg_is_sha "$2" || return 1
   head="$(git -C "$1" rev-parse HEAD 2>/dev/null)" || return 1
-  if ccgg_is_sha "$2"; then want="$2"; else
-    # A name is answered only by refs/ccgg/pin, and only when the pin was written
-    # for this same name by ccgg_move_to_ref — the fetch from the verified origin
-    # that always precedes this check for a name. Never by the clone's own
-    # refs/heads/<name> or refs/tags/<name>: `fetch origin -- <name>` leaves those
-    # untouched, so a hand-cloned CCGG_HOME answered from a stale local branch —
-    # first failing open (R-004), then, after the first fix resolved the name
-    # first, failing closed forever, because nothing ever moved that branch.
-    [ "$(git -C "$1" config --get ccgg.pinnedRef 2>/dev/null)" = "$2" ] || return 1
-    want="$(git -C "$1" rev-parse --verify -q "refs/ccgg/pin^{commit}" 2>/dev/null)" || return 1
-  fi
-  [ -n "$head" ] && [ "$head" = "$want" ]
+  [ -n "$head" ] && [ "$head" = "$2" ]
 }
-ccgg_move_to_ref() { # $1 = clone, $2 = ref name or commit: fetch it from origin, detach there
-  ccgg_ref_ok "$2" || return 1
+ccgg_move_to_ref() { # $1 = clone, $2 = 40-hex commit: fetch it from origin, detach there
+  ccgg_is_sha "$2" || return 1
   git -C "$1" fetch -q --depth 1 --force origin -- "$2" \
     && git -C "$1" update-ref refs/ccgg/pin FETCH_HEAD \
-    && git -C "$1" config ccgg.pinnedRef "$2" \
     && git -C "$1" checkout -q --detach refs/ccgg/pin
 }
-ccgg_clone() { # $1 = repo URL, $2 = ref name or commit, $3 = destination
+ccgg_clone() { # $1 = repo URL, $2 = 40-hex commit, $3 = destination
   # core.autocrlf=false: on Windows a CRLF checkout of the guide makes every
   # sync copy every file (cmp sees CR bytes) and ships hooks that fail on
   # Linux with "bad interpreter: /bin/bash^M".
@@ -129,7 +123,9 @@ if [ -n "${CCGG_HOME:-}" ]; then
   CCGG_HOME="${CCGG_HOME/#\~/$HOME}" # settings.json env values are not shell-expanded
   if [ ! -e "$CCGG_HOME" ] && [ -n "${CCGG_REPO:-}" ] && command -v git >/dev/null 2>&1; then
     if [ -z "${CCGG_REF:-}" ]; then
-      echo "-- ccgg: CCGG_REPO is set without CCGG_REF; refusing an unpinned clone — set CCGG_REF to a tag, branch, or commit --"
+      echo "-- ccgg: CCGG_REPO is set without CCGG_REF; refusing an unpinned clone — set CCGG_REF to a 40-hex commit of the guide --"
+    elif ! ccgg_is_sha "$CCGG_REF"; then
+      echo "-- ccgg: CCGG_REF is a name its owner can move; refusing to clone at it — set CCGG_REF to a 40-hex commit of the guide --"
     elif ! ccgg_origin_trusted "$CCGG_REPO"; then
       echo "-- ccgg: CCGG_REPO is not listed in the user-level ccgg-origins record; refusing to clone — add its URL to ~/.claude/ccgg-origins to trust it on this machine --"
     else
@@ -148,18 +144,20 @@ if [ -n "${CCGG_HOME:-}" ]; then
       echo "-- ccgg: CCGG_HOME's origin is not CCGG_REPO; live sync skipped --"
     elif ! ccgg_ref_ok "$CCGG_REF"; then
       echo "-- ccgg: CCGG_REF is not a refname; live sync skipped --"
-    elif ! { ccgg_is_sha "$CCGG_REF" && ccgg_at_ref "$CCGG_HOME" "$CCGG_REF"; } \
+    elif ! ccgg_is_sha "$CCGG_REF"; then
+      # A name used to be re-fetched from origin every session, with the
+      # validator's failing verdict — printed a few lines below and then
+      # ignored — as the only brake. A verdict nothing acts on is advice, and
+      # whoever could move the name chose the code every downstream project
+      # ran (finding R-001 of the 2026-09-18 audit). install.sh and README have
+      # always asked for a commit; the hook now holds them to it.
+      echo "-- ccgg: CCGG_REF is a name its owner can move; live sync skipped — pin a 40-hex commit of the guide --"
+    elif ! ccgg_at_ref "$CCGG_HOME" "$CCGG_REF" \
         && ! { ccgg_move_to_ref "$CCGG_HOME" "$CCGG_REF" >/dev/null 2>&1 \
                && ccgg_at_ref "$CCGG_HOME" "$CCGG_REF"; }; then
       # A project that bumps CCGG_REF is followed, not stranded: the clone is
       # moved to the new pin (from the origin verified just above), and only a
       # clone that still is not there is refused.
-      #
-      # Only a commit pin takes the local fast path. A name is re-fetched every
-      # session, because a name is a question only the origin can answer and the
-      # clone was answering it from its own refs (finding R-004). update.sh
-      # already re-fetches a name unconditionally; this hook now agrees with it.
-      # That cost is one more reason tools/validate.py fails a movable CCGG_REF.
       echo "-- ccgg: CCGG_HOME could not be moved to CCGG_REF; live sync skipped --"
     elif ! ccgg_clean "$CCGG_HOME"; then
       echo "-- ccgg: CCGG_HOME has local modifications; live sync skipped — run git status there and restore it to the pin --"
