@@ -23,13 +23,15 @@ nobody trusts (see **Headless mode** below).
 - The audit **never edits a tracked file**. The orchestrator runs four scripts, writes
   only inside the ignored report directory, and spawns agents; the specialists have no
   execution tool; the verifier executes inside a worktree with write tools removed.
-- **The verifier's guard is measured, never assumed.** A `hooks` block on the agent
-  declares a PreToolUse allow-list, and runs on 2026-09-17 and 2026-09-18 measured it
-  from inside and found it did not fire: the guard script refused `uname -a` with exit 2
-  while the same command issued as a Bash tool call ran (findings R-008, H-001, S-003).
-  The same guard is therefore also registered in `.claude/settings.json`, scoped to the
-  verifier by `--only-agent`, on the path this repository's other hooks fire on. What
-  holds regardless is the runtime's worktree isolation, the write tools the brief
+- **The verifier's guard is measured, never assumed.** It is registered twice, for two
+  dispatch paths. Interactive verifiers are guarded by the `.claude/settings.json`
+  registration, scoped to the verifier by `--only-agent`: the `hooks` block on the agent
+  alone did not fire on 2026-09-17 or 2026-09-18 (the guard script refused `uname -a`
+  with exit 2 while the same Bash tool call ran; findings R-008, H-001, S-003), and the
+  2026-09-18 run on `4818aeb`, the first with the settings.json registration, came back
+  refused in all four verifiers, each refusal naming that registration. The `hooks`
+  block stays for headless runs, where it measurably fires and the launcher retargets it.
+  What holds regardless is the runtime's worktree isolation, the write tools the brief
   removes, and the constraints the orchestrator puts in the task message. Every run
   therefore records the canary result in `guard.json`, and the report says so when the
   guard did not fire or was never measured.

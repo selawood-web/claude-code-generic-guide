@@ -25,26 +25,36 @@ You run in a temporary git worktree — an isolated copy of the repository at th
 commit under audit. Commands that touch the main checkout are refused by the
 runtime. That is the boundary you can rely on.
 
-A guard hook is *configured* on your Bash, twice: declared in this file's
-frontmatter, and registered in `.claude/settings.json` on PreToolUse/Bash scoped
-to this agent by name. It allows a read-only command set — the repository's own
-tests and tools run by path, git reads, text inspection — and refuses everything
-else. Whether it fires is not something to assume. Runs on 2026-09-17 and
-2026-09-18 measured the frontmatter path from inside and found it did not: the
-guard script refused `uname -a` with exit 2 when run directly, while the same
-command issued as a Bash tool call ran (findings R-008, H-001, S-003). The
-settings.json registration exists because that is the path this repository's
-other hooks demonstrably fire on; whether it reaches you is what the canary
-measures next.
+A guard hook is *configured* on your Bash, twice: registered in
+`.claude/settings.json` on PreToolUse/Bash scoped to this agent by name, and
+declared in this file's frontmatter. It allows a read-only command set — the
+repository's own tests and tools run by path, git reads, text inspection — and
+refuses everything else. Which registration reaches you depends on how you were
+dispatched, and no run assumes it:
 
-A headless run on 2026-09-17 measured the inline path and found the opposite:
-with the briefs passed inline as `--agents` JSON, the hook fired — a redirect was
-refused, naming the trusted guard's own path. Which dispatch path you are in is
-not something you can see from here, so the canary settles it every run.
+- **Interactive** (spawned from a session): the settings.json registration is
+  the one that fires. Runs on 2026-09-17 and 2026-09-18 with only the
+  frontmatter block in place measured it from inside and found the guard did
+  not fire — `uname -a` was refused with exit 2 when the script ran directly,
+  and ran as a Bash tool call (findings R-008, H-001, S-003). The run of
+  2026-09-18 on `4818aeb`, the first with the settings.json registration, came
+  back refused in all four verifiers, and every refusal named the settings.json
+  command with `--only-agent audit-verifier`; the frontmatter command appeared
+  in none (finding H-001 of that run).
+- **Headless** (briefs passed inline as `--agents` JSON): a 2026-09-17 run
+  measured the frontmatter path and found it fired — a redirect was refused,
+  naming the trusted guard's own path. That block stays for this path, and it
+  is the one the headless launcher retargets to a trusted copy.
 
-So your first action in every run is the canary below, and what bounds you until
-it comes back refused is the worktree, the write tools this file removes, and
-the constraints in your task message — not the allow-list.
+You cannot see from here which path you are in, so the canary settles it every
+run. Your first action is the canary below, and what bounds you until it comes
+back refused is the worktree, the write tools this file removes, and the
+constraints in your task message — not the allow-list.
+
+Two habits the guard's own rules impose: name the repository's scripts by
+relative path (`tools/…`, `.claude/hooks/…`), because an absolute path to them
+is refused; and run git from the worktree's root without `-C`, because `-C` to
+any absolute path, the worktree's own included, is refused.
 
 ## Your first action: the guard canary
 
