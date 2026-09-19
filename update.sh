@@ -115,6 +115,26 @@ if [ "$USER_MODE" -eq 0 ]; then
   for f in tools/audit_env.py tools/audit_facts.py tools/audit_probes.py tools/audit_redteam.py tools/audit_report.py tools/audit_agents_json.py tools/audit_headless.py tools/audit_pr_comment.py tools/audit_vocab.json; do
     sync_file "$f"
   done
+  # The tests of the tools synced above travel with them. Without this a wired
+  # project ran the validator, the verifier guard and the audit scripts with
+  # no test able to catch a regression in them, and its CI step "Unit tests for
+  # the validator" skipped itself for want of a test file (MemoMe audit
+  # 2026-09-19, T-001/T-006). test_install.py stays behind: install.sh is not
+  # part of a wired project.
+  for f in tools/test_validate.py tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py            tools/test_audit_env.py tools/test_audit_facts.py tools/test_audit_probes.py tools/test_audit_redteam.py            tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
+    [ -f "$SRC/$f" ] && sync_file "$f"
+  done
+  # The probe contracts are the project's own once it has them, so they are
+  # never overwritten — but a project wired before they existed never got
+  # them at all, and its audit's probe stages had "nothing to measure"
+  # (MemoMe audit 2026-09-19, R-003). Installed once, when absent.
+  for f in tools/probes.txt tools/redteam_probes.txt; do
+    if [ -f "$SRC/$f" ] && [ ! -e "$TARGET/$f" ]; then
+      cp "$SRC/$f" "$TARGET/$f"
+      changed=$((changed+1))
+      if [ "$QUIET" -eq 0 ]; then echo "  + $f (installed once; yours from now on)"; fi
+    fi
+  done
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 fi
 

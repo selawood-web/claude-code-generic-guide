@@ -125,6 +125,14 @@ for f in tools/audit_env.py tools/audit_facts.py tools/audit_probes.py tools/aud
   copy_file "$f"
 done
 
+# The tests of the tools above, so the project's CI step "Unit tests for the
+# validator" has something to run — a wired project used to get the gate
+# without its tests (MemoMe audit 2026-09-19, T-001). test_install.py stays
+# behind: install.sh is not part of a wired project.
+for f in tools/test_validate.py tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_facts.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
+  copy_file "$f"
+done
+
 # The audit workflow — opt-in by label or manual dispatch, so copying it starts nothing
 copy_file .github/workflows/audit.yml
 
