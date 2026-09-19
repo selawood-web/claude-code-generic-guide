@@ -30,8 +30,19 @@ class InstallSetTests(unittest.TestCase):
         installed = tool_files("install.sh")
         synced = tool_files("update.sh")
         self.assertTrue(synced <= installed, f"update.sh syncs files install.sh never copies: {sorted(synced - installed)}")
-        self.assertEqual(installed - synced, {"tools/probes.txt", "tools/redteam_probes.txt"},
-                         "the only installed-but-never-synced tools files are the project's own probe contracts")
+        self.assertEqual(installed, synced,
+                         "every tools file install.sh copies is also handled by update.sh "
+                         "(synced, or for the probe contracts installed once when absent)")
+
+    def test_probe_contracts_are_installed_once_never_overwritten(self):
+        # The project's own contracts: update.sh may create them for a project
+        # wired before they existed, but never replaces an existing copy.
+        with open(os.path.join(ROOT, "update.sh"), encoding="utf-8") as fh:
+            body = fh.read()
+        block = body[body.index("tools/probes.txt tools/redteam_probes.txt"):]
+        block = block[: block.index("done")]
+        self.assertIn('[ ! -e "$TARGET/$f" ]', block, "probe contracts are copied only when absent")
+        self.assertNotIn("sync_file", block, "probe contracts are never passed to sync_file")
 
     def test_hook_count_label_matches_hooks_shipped(self):
         hooks = [f for f in os.listdir(os.path.join(ROOT, ".claude", "hooks")) if f.endswith(".sh")]
