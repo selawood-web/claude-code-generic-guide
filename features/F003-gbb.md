@@ -210,6 +210,17 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   companion is shipped unlinked. Its first run found a live defect: `--paper`, added
   when H-001 was fixed, had never reached the argument hint. A `gbb` gate and six probes
   measure it — [in]
+- 2026-09-19 — Wiring a real project, chef-bekis, found two defects that only a real
+  project could show. `install.sh` tested for the `.claude/skills` directory and skipped
+  the whole set when it existed, so a project that had written one skill of its own
+  received none of the twenty eight; it now copies per directory and leaves a name
+  collision to the project, as update.sh always did. And the verifier guard's allow-list
+  check failed a project for owning a shell script, which blocked adoption over a rule
+  about the audit verifier's reach; a project's own script is now a caution while a
+  CCGG-owned hook stays a finding, so nothing is auto-allowed and no gate turns red for
+  it. A third defect rode along: the install.sh count check keyed on a copy command's
+  exact text, so refactoring that command switched the check off silently — the probe
+  said so, and the marker is now the installer's banner — [in]
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]

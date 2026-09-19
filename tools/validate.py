@@ -1790,30 +1790,47 @@ def guard_allow_lists(path: str | None = None) -> dict:
 
 
 def guard_allow_list_problems(lists: dict, py_tree: set, sh_tree: set,
-                              authored_here: bool = True) -> list[str]:
+                              authored_here: bool = True,
+                              ccgg_owned: set | None = None) -> tuple[list[str], list[str]]:
     """Differences between what the guard names and what the repository ships.
 
-    The two directions are not symmetrical. A script in the tree the guard does
-    not name is a finding everywhere: nobody decided to allow it. A name the guard
-    keeps with no file behind it is a finding only where the list is authored —
-    an installed project gets the guard and validate.py but neither tools/test_*.py
-    nor install.sh/update.sh, and a list trimmed to each install would stop being
-    one list.
+    Returns (problems, cautions). Three directions, and they are not symmetrical.
+
+    A CCGG-owned script the guard does not name is a problem everywhere: the
+    installer ships both, so the guard's own territory must stay accounted for.
+
+    A *project's* own script the guard does not name is a problem where the list
+    is authored and a caution where it is not. Wiring a real project found the
+    reason: every project with a shell script of its own failed the validator on
+    its first run, which is adoption blocked by a rule about the audit verifier's
+    reach. Auto-allowing it would be worse — the list is a boundary, and nothing
+    should enter it without someone deciding. So the installed project is told
+    what its verifier will refuse, and the verdict stays green.
+
+    A name the guard keeps with no file behind it is a problem only where the
+    list is authored: an installed project gets the guard and validate.py but
+    neither tools/test_*.py nor install.sh, and a list trimmed to each install
+    would stop being one list.
     """
-    problems = []
+    owned = ccgg_owned if ccgg_owned is not None else set()
+    problems, cautions = [], []
     for name, tree in (("PY_SCRIPTS", py_tree), ("SH_SCRIPTS", sh_tree)):
         listed = set(lists.get(name) or ())
         for missing in sorted(tree - listed):
-            problems.append(f"{GUARD_PATH}: {missing} is in the tree but not in {name} — "
-                            f"the verifier cannot run it, and a script the guard does not "
-                            f"name is a script nobody decided to allow")
+            message = (f"{GUARD_PATH}: {missing} is in the tree but not in {name} — "
+                       f"the verifier cannot run it, and a script the guard does not "
+                       f"name is a script nobody decided to allow")
+            if authored_here or missing in owned:
+                problems.append(message)
+            else:
+                cautions.append(message)
         if not authored_here:
             continue
         for stale in sorted(listed - tree):
             problems.append(f"{GUARD_PATH}: {name} allows {stale}, which the repository does "
                             f"not ship — a name kept after its file went is a name a branch "
                             f"can reintroduce")
-    return problems
+    return problems, cautions
 
 
 def check_guard_allow_lists() -> None:
@@ -1821,10 +1838,15 @@ def check_guard_allow_lists() -> None:
         return                      # a project without the audit verifier
     py_tree = {os.path.basename(p) for p in tracked("tools/*.py")
                if os.path.basename(p) != "__init__.py"}
-    sh_tree = set(tracked(".claude/hooks/*.sh")) | set(tracked("*.sh"))
-    for problem in guard_allow_list_problems(guard_allow_lists(), py_tree, sh_tree,
-                                             authored_here=bool(tracked("install.sh"))):
+    hooks = set(tracked(".claude/hooks/*.sh"))
+    sh_tree = hooks | set(tracked("*.sh"))
+    problems, cautions_found = guard_allow_list_problems(
+        guard_allow_lists(), py_tree, sh_tree,
+        authored_here=bool(tracked("install.sh")), ccgg_owned=hooks)
+    for problem in problems:
         fail(problem)
+    for caution in cautions_found:
+        warn(caution)
 
 
 AUDIT_WORKFLOW_PATH = ".github/workflows/audit.yml"

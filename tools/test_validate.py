@@ -1183,40 +1183,58 @@ class GuardAllowListTests(unittest.TestCase):
             del validate.findings[:]
 
     def test_a_script_the_guard_does_not_name_is_reported(self):
-        problems = validate.guard_allow_list_problems(
+        problems, _ = validate.guard_allow_list_problems(
             {"PY_SCRIPTS": {"validate.py"}, "SH_SCRIPTS": {"install.sh"}},
             py_tree={"validate.py", "test_new.py"}, sh_tree={"install.sh"})
         self.assertTrue(any("test_new.py" in p for p in problems), problems)
 
     def test_a_name_the_guard_allows_that_is_not_in_the_tree_is_reported(self):
-        problems = validate.guard_allow_list_problems(
+        problems, _ = validate.guard_allow_list_problems(
             {"PY_SCRIPTS": {"validate.py", "gone.py"}, "SH_SCRIPTS": {"install.sh"}},
             py_tree={"validate.py"}, sh_tree={"install.sh"})
         self.assertTrue(any("gone.py" in p for p in problems), problems)
 
     def test_shell_scripts_are_held_to_the_same_rule(self):
-        problems = validate.guard_allow_list_problems(
+        problems, _ = validate.guard_allow_list_problems(
             {"PY_SCRIPTS": set(), "SH_SCRIPTS": {"install.sh"}},
             py_tree=set(), sh_tree={"install.sh", "deploy.sh"})
         self.assertTrue(any("deploy.sh" in p for p in problems), problems)
 
     def test_an_installed_project_is_not_asked_to_trim_the_list(self):
         """It gets the guard and validate.py but not tools/test_*.py or install.sh."""
-        problems = validate.guard_allow_list_problems(
+        problems, cautions = validate.guard_allow_list_problems(
             {"PY_SCRIPTS": {"validate.py", "test_validate.py"}, "SH_SCRIPTS": {"install.sh"}},
             py_tree={"validate.py"}, sh_tree=set(), authored_here=False)
-        self.assertEqual(problems, [])
+        self.assertEqual((problems, cautions), ([], []))
 
     def test_an_unnamed_script_is_still_reported_in_an_installed_project(self):
-        problems = validate.guard_allow_list_problems(
+        """Reported, but as a caution: it is the project's file, not ours.
+
+        Wiring a real project found the cost of failing here. Every project with
+        a shell script of its own failed the validator on its first run, which
+        blocks adoption over a rule about the audit verifier's reach. The list
+        is still a boundary, so nothing is auto-allowed; the project is simply
+        told what its verifier will refuse.
+        """
+        problems, cautions = validate.guard_allow_list_problems(
             {"PY_SCRIPTS": {"validate.py"}, "SH_SCRIPTS": set()},
             py_tree={"validate.py", "surprise.py"}, sh_tree=set(), authored_here=False)
-        self.assertTrue(any("surprise.py" in p for p in problems), problems)
+        self.assertEqual(problems, [], "a project's own script never fails its gate")
+        self.assertTrue(any("surprise.py" in c for c in cautions), cautions)
+
+    def test_a_ccgg_hook_is_a_failure_even_in_an_installed_project(self):
+        """The guard's own territory stays accounted for wherever it is installed."""
+        problems, cautions = validate.guard_allow_list_problems(
+            {"PY_SCRIPTS": set(), "SH_SCRIPTS": set()},
+            py_tree=set(), sh_tree={".claude/hooks/new-hook.sh", "their/build.sh"},
+            authored_here=False, ccgg_owned={".claude/hooks/new-hook.sh"})
+        self.assertTrue(any("new-hook.sh" in p for p in problems), problems)
+        self.assertTrue(any("build.sh" in c for c in cautions), cautions)
 
     def test_matching_lists_pass(self):
         self.assertEqual(validate.guard_allow_list_problems(
             {"PY_SCRIPTS": {"a.py"}, "SH_SCRIPTS": {"b.sh"}},
-            py_tree={"a.py"}, sh_tree={"b.sh"}), [])
+            py_tree={"a.py"}, sh_tree={"b.sh"}), ([], []))
 
     def test_the_lists_are_read_from_the_guard_itself(self):
         lists = validate.guard_allow_lists()
