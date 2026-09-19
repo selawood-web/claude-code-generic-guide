@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 27 Skill workflows | Step-by-step procedures for every common dev task |
+| 28 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 27 skill workflows
+- All 28 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 27 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 28 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -674,6 +674,29 @@ evaluate this feature idea
 
 ---
 
+### `/gbb` — Good, Better, Best: the Design Gap
+
+**Use when:** The product works and is well built, but what users get feels far from the vision — layout, usability, knowing where you are. GBB is the gate for how it feels, the way the code gate is the gate for whether it is correct.
+
+**What it does:**
+0. `--intent`, before anything is built: writes the design intent in a designer's order of thought — who the person is, the environment that gives the best feel and the constraints it imposes, the feeling and the anti-feeling, the borrowed mechanisms from spectacular references, then colour roles, type scale, icon set, layout and reach, motion, voice — each with a reason and a measurable test. A surface is done when those tests pass in the running product, not when it renders
+1. Captures the vision in the owner's words: north star, the feeling, the three moments that matter, and the products the owner considers spectacular
+2. Researches live who the app is really for and in what context, the current platform conventions, the two nearest competitors, and how fields outside software — airports, cockpits, game tutorials — solve the product's hardest moment
+3. Runs the product for real and walks it as a stranger with no instructions: every screen and state screenshotted, a spatial map of where you are and how you get back, five timed stranger tests
+4. Convenes a ten-member design council — wayfinder, choreographer, editor, game designer, cognitive scientist, accessibility advocate, the stranger, brand director, craftsperson, usability specialist — each returning three ranked gaps, one Best move, and one kill question
+5. Writes the ladder to `design/GBB-<slug>.md`: per moment, Good (now), Better (one feature), Best (spectacular, traced to a reference), each with the test that proves it; hands the top three to `/feature`
+6. On `--rerun`, re-times every test and promotes what passed — the old Better becomes the new Good, so the ladder never runs out of a top rung
+
+**Examples:**
+```
+/gbb --intent the field-service app
+/gbb the field-service app at http://localhost:3000
+/gbb --screen checkout
+/gbb --rerun
+```
+
+---
+
 ### `/git-steward` — Project Bootstrap & Automatic Git
 
 **Use when:** Starting a new project that needs a name and a GitHub repo, or when you want git handled automatically from here on.
@@ -1036,6 +1059,7 @@ Pre-seeded with engineering wisdom:
 | `ai-infrastructure-lessons.md` | What broke when this repo's own mechanisms were tested against the live product |
 | `agent-harness-patterns.md` | Execution and verification patterns confirmed against a second, independent agent harness |
 | `harness-testing-patterns.md` | How to test the configuration layer that steers the agent: dead mechanisms, mutation probes, trust boundaries, verifier independence |
+| `design-quality-patterns.md` | Why correctness gates ship "good enough", intent before build, evidence-based portraits, the design council, the ladder that moves the bar, design ownership that binds |
 
 **Add your own entries** by creating new `.md` files in this directory. Use the same format:
 

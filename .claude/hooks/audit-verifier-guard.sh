@@ -158,7 +158,8 @@ PY_SCRIPTS = frozenset((
     "catalog.py", "feature_lint.py", "validate.py",
     "test_audit_agents_json.py", "test_audit_env.py", "test_audit_facts.py",
     "test_audit_headless.py", "test_audit_pr_comment.py", "test_audit_probes.py",
-    "test_audit_redteam.py", "test_audit_report.py", "test_feature_lint.py",
+    "test_audit_redteam.py", "test_audit_report.py", "test_catalog.py", "test_feature_lint.py",
+    "test_gbb.py",
     "test_install.py", "test_session_start_hook.py", "test_validate.py",
     "test_verifier_guard.py",
 ))

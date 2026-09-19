@@ -108,6 +108,7 @@ listed below — the three questions and the verdict live there, with the proced
 | `/efficiency` | Audit the project against the charter's token-efficiency rules |
 | `/feature` | Feature idea into a checked, tracked definition |
 | `/flush` | Structured session summary written to the memory log |
+| `/gbb` | "Vision-to-product design gap: research, stranger walk, design council, GBB ladder" |
 | `/git-steward` | Name a new project, create its GitHub repo, own the git lifecycle automatically |
 | `/learn` | Explicit knowledge capture to memory |
 | `/momentum` | Drive a task to done — next step always named, blockers asked precisely |

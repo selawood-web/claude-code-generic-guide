@@ -55,6 +55,18 @@ GATES = {
     # tree to see — the audit workflow's Gate script is run by a test, never by
     # validate.py, because a branch chooses what that script says.
     "validate-tests": "python3 -m unittest discover -s tools -t tools -p test_validate.py -q",
+    # The catalog fixer's own tests. The validator cannot see this contract: it
+    # checks what the docs say, while these check that the tool reports an
+    # unreadable skill instead of dying on it, and writes nothing from a
+    # partial list.
+    "catalog": "python3 -m unittest discover -s tools -t tools -p test_catalog.py -q",
+    # The install and update scripts, driven for real against a scratch project.
+    # Nothing else executes them, and their messages are what an operator acts on.
+    "install-tests": "python3 -m unittest discover -s tools -t tools -p test_install.py -q",
+    # The GBB skill's own internal contract. The validator sees a skill's
+    # frontmatter and its links; it cannot see two lines of one skill
+    # disagreeing, which is what both defects inside GBB were.
+    "gbb": "python3 -m unittest discover -s tools -t tools -p test_gbb.py -q",
 }
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
@@ -265,6 +277,9 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--gate", default=DEFAULT_GATE,
                         help="command for the default gate; probes naming another gate are unaffected")
     parser.add_argument("--out", default=None, help="directory to write probes.json into")
+    parser.add_argument("--fail-on-skip", action="store_true",
+                        help="treat a skipped probe as a failure — on the repository that "
+                             "authors the probe list, 'not applicable' means the probe died")
     args = parser.parse_args(argv)
 
     repo = args.repo or subprocess.check_output(
@@ -306,6 +321,15 @@ def main(argv: list[str]) -> int:
             json.dump({"summary": summary, "probes": [asdict(r) for r in results]}, fh, indent=2)
             fh.write("\n")
     if summary["regressions"] or summary["errors"]:
+        return 1
+    if args.fail_on_skip and summary["skipped"]:
+        # A probe whose guard no longer matches this tree exits 3 and is reported
+        # skipped, which keeps the catch rate at 100% while measuring nothing.
+        # Probe 30 pinned the literal "27 skill" and died the day a 28th skill
+        # landed; the rate never moved (audit finding T-001).
+        dead = [r.label for r in results if r.result == "skipped"]
+        print("audit-probes: probe(s) not applicable on the repository that owns the "
+              "probe list — a dead probe, not an inapplicable one: " + "; ".join(dead))
         return 1
     return 0
 
