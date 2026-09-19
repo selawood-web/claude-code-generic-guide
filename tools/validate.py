@@ -526,7 +526,11 @@ def check_context_budget() -> None:
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             continue
-        size = os.path.getsize(path)
+        # Measure what the model is sent, not what the checkout holds: with
+        # core.autocrlf=true every line gains a byte on Windows, and the charter
+        # read 231 bytes over a budget its blob was under (healthvault-dt wire).
+        with open(path, "rb") as fh:
+            size = len(fh.read().replace(b"\r\n", b"\n"))
         if size > budget:
             fail(
                 f"{name}: {size} bytes exceeds the {budget}-byte always-loaded "
