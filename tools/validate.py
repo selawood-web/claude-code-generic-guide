@@ -923,7 +923,7 @@ def imported_closure(root: str | None = None,
         for target in import_targets(text):
             if target.startswith("~"):
                 continue
-            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target)).replace(os.sep, "/")
             if os.path.exists(os.path.join(base, dest)):
                 queue.append(dest)
     return seen
@@ -968,7 +968,7 @@ def check_imports() -> None:
             if target.startswith("~"):
                 warn(f"{path}: imports @{target}, outside the repository — it loads every session and nothing here can review it")
                 continue
-            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            dest = os.path.normpath(os.path.join(os.path.dirname(path), target)).replace(os.sep, "/")
             if not os.path.exists(os.path.join(ROOT, dest)):
                 fail(f"{path}: imports @{target}, which does not exist — the rules it holds never load")
             elif dest not in tracked_all:
