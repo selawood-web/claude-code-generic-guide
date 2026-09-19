@@ -35,7 +35,7 @@ being able to change anything.
   being missed, measured by the probe harness the audit ships and runs in CI. Each
   probe names the gate that must catch it — the validator by default, the verifier
   guard's unit table for a defect the validator cannot see. The list
-  is 119 probes today and grows with every check that lands; the target is the rule the
+  is 122 probes today and grows with every check that lands; the target is the rule the
   harness enforces — zero regressions — not a fixed denominator, because a percentage
   against a moving list measures nothing. `tools/test_validate.py` fails when a number
   written here stops matching `tools/probes.txt`

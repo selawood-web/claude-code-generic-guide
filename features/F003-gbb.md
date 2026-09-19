@@ -185,6 +185,20 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   file that holds them (T-003); outward acts are detected from a skill's body, not a
   name list (T-004); SYSTEM-OVERVIEW rows are checked, which immediately found
   `efficiency` and `momentum` missing since before this work (T-005) — [in]
+- 2026-09-19 — Checked that GBB actually reaches other projects, by running the real
+  scripts rather than reading them: a fresh install delivers all six files and the
+  validator passes inside the installed project, an update of a project predating GBB
+  delivers the same six and leaves the project's own skills alone, and the new count
+  checks never fire downstream because SYSTEM-OVERVIEW.md and install.sh are not
+  installed files. The installed validator passing is also the drop-in contract proven
+  for GBB's links — [in]
+- 2026-09-19 — That check found a defect older than this branch: the catalog tool exited
+  on the first skill missing `name` or `purpose`, including a skill the project wrote
+  itself, which update.sh promises to leave alone; update.sh read any non-zero exit as
+  stale tables and advised a command that failed the same way. The tool now reports the
+  unreadable files, writes nothing while any remain (a count from a partial list would
+  be wrong), and returns a distinct code; update.sh tells the two apart and names the
+  file. Two gates and three probes cover it — [in]
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]

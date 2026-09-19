@@ -41,18 +41,36 @@ WORDS = {
 }
 
 
-def read_skills() -> list[tuple[str, str]]:
-    skills = []
+# Exit codes are a contract: update.sh reads them to tell an operator what
+# happened. Conflating them is what made a crash read as "tables are stale"
+# and sent the operator to a command that crashed again.
+EXIT_CURRENT, EXIT_STALE, EXIT_UNREADABLE = 0, 1, 2
+
+
+def read_skills() -> tuple[list[tuple[str, str]], list[str]]:
+    """The skills this tool can render, and the paths it cannot.
+
+    A skill missing `name` or `purpose` is not always a defect of this
+    repository's making: update.sh leaves a project's own skills in place by
+    design, and one of those need not carry CCGG's house keys. Exiting on the
+    first such file turned an ordinary sync into a crash, which update.sh then
+    reported as stale tables.
+
+    Returning the unreadable paths instead lets the caller say which file is
+    the problem. It does not make them harmless: a count computed from a
+    partial list is wrong, so main() refuses to write anything while any
+    remain.
+    """
+    skills, unreadable = [], []
     for path in sorted(glob.glob(os.path.join(ROOT, ".claude/skills/*/SKILL.md"))):
         text = open(path, encoding="utf-8").read()
         name = re.search(r"^name:\s*(\S+)", text, re.M)
         purpose = re.search(r"^purpose:\s*(.+?)\s*$", text, re.M)
         if not name or not purpose:
-            sys.exit(f"catalog: {path} missing name or purpose frontmatter")
+            unreadable.append(os.path.relpath(path, ROOT))
+            continue
         skills.append((name.group(1), purpose.group(1)))
-    if not skills:
-        sys.exit("catalog: no skills found under .claude/skills/")
-    return skills
+    return skills, unreadable
 
 
 def render_table(skills: list[tuple[str, str]], with_invoke: bool) -> str:
@@ -79,9 +97,20 @@ def update_counts(text: str, n: int) -> str:
     return text
 
 
-def main() -> None:
+def main() -> int:
     write = "--write" in sys.argv
-    skills = read_skills()
+    skills, unreadable = read_skills()
+    if unreadable:
+        # Never write from a partial list: the counts would be rewritten to a
+        # number that counts only the skills this tool could parse.
+        for path in unreadable:
+            print(f"catalog: {path} missing name or purpose frontmatter")
+        print("catalog: nothing written — every skill needs name and purpose before "
+              "the counts can be trusted")
+        return EXIT_UNREADABLE
+    if not skills:
+        print("catalog: no skills found under .claude/skills/")
+        return EXIT_UNREADABLE
     n = len(skills)
     stale: list[str] = []
 
@@ -117,10 +146,11 @@ def main() -> None:
         verb = "regenerated" if write else "STALE (run: python3 tools/catalog.py --write)"
         print(f"catalog: {n} skills; {verb}: {', '.join(stale)}")
         if not write:
-            sys.exit(1)
+            return EXIT_STALE
     else:
         print(f"catalog: {n} skills; all catalogs current")
+    return EXIT_CURRENT
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

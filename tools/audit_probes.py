@@ -55,6 +55,14 @@ GATES = {
     # tree to see — the audit workflow's Gate script is run by a test, never by
     # validate.py, because a branch chooses what that script says.
     "validate-tests": "python3 -m unittest discover -s tools -t tools -p test_validate.py -q",
+    # The catalog fixer's own tests. The validator cannot see this contract: it
+    # checks what the docs say, while these check that the tool reports an
+    # unreadable skill instead of dying on it, and writes nothing from a
+    # partial list.
+    "catalog": "python3 -m unittest discover -s tools -t tools -p test_catalog.py -q",
+    # The install and update scripts, driven for real against a scratch project.
+    # Nothing else executes them, and their messages are what an operator acts on.
+    "install-tests": "python3 -m unittest discover -s tools -t tools -p test_install.py -q",
 }
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
