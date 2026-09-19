@@ -63,6 +63,10 @@ GATES = {
     # The install and update scripts, driven for real against a scratch project.
     # Nothing else executes them, and their messages are what an operator acts on.
     "install-tests": "python3 -m unittest discover -s tools -t tools -p test_install.py -q",
+    # The GBB skill's own internal contract. The validator sees a skill's
+    # frontmatter and its links; it cannot see two lines of one skill
+    # disagreeing, which is what both defects inside GBB were.
+    "gbb": "python3 -m unittest discover -s tools -t tools -p test_gbb.py -q",
 }
 DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")

@@ -199,6 +199,17 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   unreadable files, writes nothing while any remain (a count from a partial list would
   be wrong), and returns a distinct code; update.sh tells the two apart and names the
   file. Two gates and three probes cover it — [in]
+- 2026-09-19 — GBB had no executable check of its own: six markdown files whose only
+  gates were frontmatter, links and catalog rows. Both defects the audit found inside it
+  were two lines of one file disagreeing, which a person caught at the cost of an audit
+  run. `tools/test_gbb.py` now checks that contract in milliseconds — the hint and the
+  modes table name the same flags, a mode runs only steps the skill defines, every
+  council member carries the five-field output contract and exactly one kill question,
+  the stated council size matches the members across all five files that state it, the
+  light path names only members who exist, every stranger test has a pass bar, and no
+  companion is shipped unlinked. Its first run found a live defect: `--paper`, added
+  when H-001 was fixed, had never reached the argument hint. A `gbb` gate and six probes
+  measure it — [in]
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]

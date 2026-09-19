@@ -2,7 +2,7 @@
 name: gbb
 description: Close the gap between a product's vision and what it actually feels like to use. Researches who the app is for and how they use it, walks the running product as a stranger, convenes a council of design minds from different disciplines, and returns a ranked Good / Better / Best ladder with a re-runnable test per rung. Use when the user says "GBB", "make this spectacular", "the UX is only good enough", "design review", or "why does it feel worse than the vision".
 when_to_use: GBB, good better best, make it spectacular, design gap, UX review, design review, feels worse than the vision, usability, orientation, polish
-argument-hint: "[<app> | --intent <product or surface> | --screen <name> | --rerun]"
+argument-hint: "[<app> | --intent <product or surface> | --screen <name> | --rerun | --paper <app>]"
 purpose: "Vision-to-product design gap: research, stranger walk, design council, GBB ladder"
 ---
 
