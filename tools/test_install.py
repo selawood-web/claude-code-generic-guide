@@ -69,6 +69,59 @@ class FreshInstallTests(unittest.TestCase):
                                 f"{rel} — a skill's companions ship with it or the skill is broken downstream")
 
 
+class SkillDeliveryTests(unittest.TestCase):
+    """Skills arrive one directory at a time, so a project with a skill of its own
+    still gets the rest.
+
+    install.sh used to test for the .claude/skills directory and skip the whole
+    set when it existed. Any project that had written a single skill of its own
+    therefore received no skills at all, which is the drop-in contract failing
+    on exactly the projects most likely to adopt this.
+    """
+
+    def _install_into(self, tmp, existing: str | None):
+        target = os.path.join(tmp, "project")
+        if existing:
+            d = os.path.join(target, ".claude", "skills", existing)
+            os.makedirs(d)
+            open(os.path.join(d, "SKILL.md"), "w", encoding="utf-8").write(
+                f"---\nname: {existing}\ndescription: THEIRS\n---\n\nTheir body.\n")
+        else:
+            os.makedirs(target)
+        env = dict(os.environ, HOME=os.path.join(tmp, "home"))
+        os.makedirs(env["HOME"], exist_ok=True)
+        proc = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), target], env=env,
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return target, proc.stdout
+
+    def _shipped(self) -> set[str]:
+        root = os.path.join(ROOT, ".claude", "skills")
+        return {n for n in os.listdir(root) if os.path.isdir(os.path.join(root, n))}
+
+    def test_a_project_with_its_own_skill_still_gets_every_ccgg_skill(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-skills-") as tmp:
+            target, _ = self._install_into(tmp, "design-critic")
+            delivered = set(os.listdir(os.path.join(target, ".claude", "skills")))
+            self.assertTrue(self._shipped() <= delivered,
+                            f"missing after install: {sorted(self._shipped() - delivered)}")
+            self.assertIn("design-critic", delivered, "the project's own skill is left in place")
+
+    def test_a_name_collision_keeps_the_projects_version(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-skills-") as tmp:
+            target, out = self._install_into(tmp, "debug")
+            body = open(os.path.join(target, ".claude", "skills", "debug", "SKILL.md"),
+                        encoding="utf-8").read()
+            self.assertIn("THEIRS", body, "a skill the project already has under our name is theirs")
+            self.assertIn("the project already has", out, "the installer says what it left alone")
+
+    def test_an_empty_project_gets_everything(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-skills-") as tmp:
+            target, _ = self._install_into(tmp, None)
+            delivered = set(os.listdir(os.path.join(target, ".claude", "skills")))
+            self.assertEqual(delivered, self._shipped())
+
+
 class UpdateReportsTests(unittest.TestCase):
     """update.sh says which of the two happened, because it advises a different fix.
 

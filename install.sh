@@ -54,13 +54,28 @@ echo
 copy_file AGENTS.md
 copy_file WORKING-CHARTER.md
 
-# Skills and hooks (whole directories, only if absent)
-if [ -e "$TARGET/.claude/skills" ]; then
-  note_skipped ".claude/skills/"
-else
-  mkdir -p "$TARGET/.claude"
-  cp -r "$SRC/.claude/skills" "$TARGET/.claude/skills"
-  note_copied ".claude/skills/ (28 skills)"
+# Skills, one directory at a time. A project that already wrote a single skill
+# of its own still has a .claude/skills/ directory, and skipping on the
+# directory delivered nothing at all to exactly the projects most likely to
+# adopt this. update.sh has always synced per file; install now matches it.
+# A skill the target already has under the same name is theirs and is left.
+mkdir -p "$TARGET/.claude/skills"
+skills_copied=0; skills_kept=0
+for dir in "$SRC"/.claude/skills/*/; do
+  name="$(basename "$dir")"
+  if [ -e "$TARGET/.claude/skills/$name" ]; then
+    skills_kept=$((skills_kept+1))
+  else
+    cp -r "$dir" "$TARGET/.claude/skills/$name"
+    skills_copied=$((skills_copied+1))
+  fi
+done
+if [ "$skills_copied" -gt 0 ]; then
+  note_copied ".claude/skills/ ($skills_copied of 28 skills)"
+fi
+if [ "$skills_kept" -gt 0 ]; then
+  echo "  = .claude/skills/ ($skills_kept the project already has, left alone)"
+  skipped=$((skipped+skills_kept))
 fi
 if [ -e "$TARGET/.claude/hooks" ]; then
   note_skipped ".claude/hooks/"
