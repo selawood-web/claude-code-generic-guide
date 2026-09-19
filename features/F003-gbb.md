@@ -235,6 +235,18 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   catch rate against mutations of files that project does not have. A probe list that
   declares which repository it describes would settle it, as would a per-project list —
   [open]
+- 2026-09-19 — Owner set the adoption posture for wiring: when CCGG meets tooling a
+  project already has, assume that process is not good enough and, specifically, that it
+  does not run in the right order; then test the assumption rather than asserting it —
+  the audit for process, GBB for design. Written into the wire skill as Step 6, with the
+  part that keeps it honest: the measurement is allowed to conclude that the existing
+  tool wins and CCGG's equivalent is the duplicate. An assumption that cannot lose to
+  evidence is a prejudice — [in]
+- 2026-09-19 — Same edit fixed a wrong inference in the wire skill that chef-bekis had
+  already disproved: it read an existing `.claude/skills/` as "already wired" and
+  switched to update-only. chef-bekis had that directory, from one skill of its own, and
+  had never seen CCGG. Wiring is now decided on a file the installer delivers. This is
+  the same mistake install.sh made, in a second place nobody had looked — [in]
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]
