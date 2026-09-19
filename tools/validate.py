@@ -527,7 +527,12 @@ def check_catalogs() -> None:
     count_re = re.compile(
         r"\b(\d+)\s+(?:production-ready\s+|reusable\s+|installed\s+)?[Ss]kill(?:s\b| workflows\b)"
     )
-    installer = read_catalog("install.sh", "$SRC/.claude/skills")
+    # Marker: the installer's own banner, not a line of its implementation. The
+    # first version of this check keyed on a copy command, and the next refactor
+    # of that command silently turned the whole install.sh count check off while
+    # the validator still reported OK. A probe caught it; the lesson is that a
+    # marker must identify the file, not one way it happens to be written.
+    installer = read_catalog("install.sh", "Installing into:")
     for doc_name, text in (("README.md", readme), ("USER-MANUAL.md", manual),
                            ("SYSTEM-OVERVIEW.md", overview), ("install.sh", installer)):
         if text is None:
