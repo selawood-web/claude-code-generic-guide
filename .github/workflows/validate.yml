@@ -51,8 +51,22 @@ jobs:
           else
             echo "No deterministic fact checks in this repo — skipping."
           fi
+      # tools/probes.txt is this repository's contract with its own gate: the
+      # mutations name install.sh, update.sh, SYSTEM-OVERVIEW.md, decisions/ and
+      # the CI file's own steps. Wiring a real project ran it there and it was
+      # meaningless — six errors from files that project does not have, and six
+      # "regressions" that were the gate correctly behaving differently in an
+      # installed project. A project's CI should measure its own gate, not this
+      # one's. So the harness runs where the list belongs; install.sh is the
+      # same signal the unit-test step below already uses. --fail-on-skip is
+      # safe here for the same reason: here a skip means a probe died.
       - name: Mutation probes against the validator
-        run: python tools/audit_probes.py --fail-on-skip
+        run: |
+          if [ -f install.sh ]; then
+            python tools/audit_probes.py --fail-on-skip
+          else
+            echo "tools/probes.txt is the guide's contract with its own gate — not measured here."
+          fi
       - name: Unit tests for the validator
         run: |
           if ls tools/test_*.py >/dev/null 2>&1; then

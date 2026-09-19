@@ -221,6 +221,20 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   it. A third defect rode along: the install.sh count check keyed on a copy command's
   exact text, so refactoring that command switched the check off silently — the probe
   said so, and the marker is now the installer's banner — [in]
+- 2026-09-19 — chef-bekis's first CI run found a fourth, and it was mine: the installed
+  validate workflow ran `tools/audit_probes.py --fail-on-skip` unconditionally. That
+  probe list is this repository's contract with its own gate — its mutations name
+  install.sh, update.sh, SYSTEM-OVERVIEW.md, decisions/ and the CI file's own steps — so
+  in a wired project it produced six errors from absent files and six regressions that
+  were the gate correctly behaving differently there. The step now runs only where the
+  list belongs, keyed on install.sh as the unit-test step beside it already was, and the
+  six probes that crashed on an absent target now guard for it and report not
+  applicable. A wired project's CI measures its own gate, not this one's — [in]
+- 2026-09-19 — The audit skill runs the same probe harness in a wired project as part of
+  its deterministic stage, where the guide's list is equally meaningless: it reports a
+  catch rate against mutations of files that project does not have. A probe list that
+  declares which repository it describes would settle it, as would a per-project list —
+  [open]
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]
