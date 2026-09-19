@@ -127,9 +127,11 @@ done
 
 # The tests of the tools above, so the project's CI step "Unit tests for the
 # validator" has something to run — a wired project used to get the gate
-# without its tests (MemoMe audit 2026-09-19, T-001). test_install.py stays
-# behind: install.sh is not part of a wired project.
-for f in tools/test_validate.py tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_facts.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
+# without its tests (MemoMe audit 2026-09-19, T-001). Three stay behind:
+# test_install.py (install.sh is not part of a wired project), and
+# test_validate.py and test_audit_facts.py, which assert against this
+# repository's own tree and fail in any other.
+for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
   copy_file "$f"
 done
 

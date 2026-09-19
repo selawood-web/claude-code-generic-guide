@@ -119,9 +119,12 @@ if [ "$USER_MODE" -eq 0 ]; then
   # project ran the validator, the verifier guard and the audit scripts with
   # no test able to catch a regression in them, and its CI step "Unit tests for
   # the validator" skipped itself for want of a test file (MemoMe audit
-  # 2026-09-19, T-001/T-006). test_install.py stays behind: install.sh is not
-  # part of a wired project.
-  for f in tools/test_validate.py tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py            tools/test_audit_env.py tools/test_audit_facts.py tools/test_audit_probes.py tools/test_audit_redteam.py            tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
+  # 2026-09-19, T-001/T-006). Three stay behind: test_install.py (install.sh is
+  # not part of a wired project), and test_validate.py and test_audit_facts.py,
+  # which assert against THIS repository's tree (its memory-seed baseline,
+  # decisions/, workflow layout) and fail in any other — 33 failures on
+  # MemoMe's CI the first time they were shipped.
+  for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py            tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py            tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
     [ -f "$SRC/$f" ] && sync_file "$f"
   done
   # The probe contracts are the project's own once it has them, so they are
