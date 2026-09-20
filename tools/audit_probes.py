@@ -18,6 +18,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import shlex
@@ -27,6 +28,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import audit_env  # noqa: E402  (same directory, installed together)
+import tarfile
 import tempfile
 import time
 from dataclasses import asdict, dataclass
@@ -158,7 +160,7 @@ def summarize(results: list[ProbeResult]) -> dict:
 
 
 def _run(cmd: list[str], cwd: str, env: dict) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
+    return subprocess.run(audit_env.resolve(cmd), cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
 
 
 def probe_env(scratch: str) -> dict[str, str]:
@@ -179,9 +181,13 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
     dest = os.path.join(scratch, "repo")
     os.makedirs(dest)
     archive = subprocess.run(
-        ["git", "archive", "--format=tar", "HEAD"], cwd=repo, capture_output=True, check=True
+        audit_env.resolve(["git", "archive", "--format=tar", "HEAD"]), cwd=repo, capture_output=True, check=True
     )
-    subprocess.run(["tar", "-xf", "-", "-C", dest], input=archive.stdout, check=True)
+    # Python's tarfile, not an external `tar`: on Windows CreateProcess resolves a bare
+    # "tar" to System32's bsdtar ahead of PATH, and that one skips every non-ASCII
+    # filename with exit 1 (CabiCAD audit 2026-09-20, 27 Hebrew-named files).
+    with tarfile.open(fileobj=io.BytesIO(archive.stdout), mode="r:") as tar:
+        tar.extractall(dest, filter="data")
     env = probe_env(scratch)
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "baseline"]):
         proc = _run(cmd, dest, env)
