@@ -4,7 +4,7 @@
 #
 #     ./install.sh /path/to/your-project
 #
-# Copies the behavior rules, their on-demand companions, the 27 skills, the
+# Copies the behavior rules, their on-demand companions, the 28 skills, the
 # lifecycle hooks, the validator, and the CI workflow. Never overwrites anything that already exists — existing
 # files are reported and left alone. Safe to run twice.
 #
@@ -54,13 +54,28 @@ echo
 copy_file AGENTS.md
 copy_file WORKING-CHARTER.md
 
-# Skills and hooks (whole directories, only if absent)
-if [ -e "$TARGET/.claude/skills" ]; then
-  note_skipped ".claude/skills/"
-else
-  mkdir -p "$TARGET/.claude"
-  cp -r "$SRC/.claude/skills" "$TARGET/.claude/skills"
-  note_copied ".claude/skills/ (27 skills)"
+# Skills, one directory at a time. A project that already wrote a single skill
+# of its own still has a .claude/skills/ directory, and skipping on the
+# directory delivered nothing at all to exactly the projects most likely to
+# adopt this. update.sh has always synced per file; install now matches it.
+# A skill the target already has under the same name is theirs and is left.
+mkdir -p "$TARGET/.claude/skills"
+skills_copied=0; skills_kept=0
+for dir in "$SRC"/.claude/skills/*/; do
+  name="$(basename "$dir")"
+  if [ -e "$TARGET/.claude/skills/$name" ]; then
+    skills_kept=$((skills_kept+1))
+  else
+    cp -r "$dir" "$TARGET/.claude/skills/$name"
+    skills_copied=$((skills_copied+1))
+  fi
+done
+if [ "$skills_copied" -gt 0 ]; then
+  note_copied ".claude/skills/ ($skills_copied of 28 skills)"
+fi
+if [ "$skills_kept" -gt 0 ]; then
+  echo "  = .claude/skills/ ($skills_kept the project already has, left alone)"
+  skipped=$((skipped+skills_kept))
 fi
 if [ -e "$TARGET/.claude/hooks" ]; then
   note_skipped ".claude/hooks/"
@@ -214,7 +229,7 @@ echo "  3. Seed global memory ONCE per machine (skip if done before):"
 echo "       cat $SRC/MEMORY.md >> ~/.claude/CLAUDE.md"
 echo "  4. Verify: open a fresh session in the project, run /context —"
 echo "     CLAUDE.md must appear under Memory files. Then ask:"
-echo "     'what skills are available?' — expect twenty-seven."
+echo "     'what skills are available?' — expect twenty-eight."
 echo "  5. Optional — live updates: in the project's .claude/settings.json env"
 echo "     block set all three of CCGG_HOME=$SRC, CCGG_REPO=<the guide's clone"
 echo "     URL> and CCGG_REF=<a 40-hex commit>, and list that URL in both"

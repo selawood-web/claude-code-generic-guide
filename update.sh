@@ -164,9 +164,19 @@ fi
 # Check the target's marked catalog tables and counts against the synced
 # skills. Never rewritten from here: AGENTS.md is an always-loaded rules file
 # and the owner regenerates it on purpose, in a commit they can read.
+# catalog.py's exit code says which of the two it is: 1 the tables drifted,
+# 2 it could not read a skill and wrote nothing. Treating every non-zero exit
+# as drift told an operator to run --write against a crash, where the advised
+# command crashed the same way.
 if [ "$USER_MODE" -eq 0 ] && [ -f "$TARGET/tools/catalog.py" ] && command -v python3 >/dev/null 2>&1; then
-  if ! (cd "$TARGET" && python3 tools/catalog.py >/dev/null 2>&1); then
+  catalog_out=""; catalog_status=0
+  catalog_out="$( (cd "$TARGET" && python3 tools/catalog.py 2>&1) )" || catalog_status=$?
+  if [ "$catalog_status" -eq 1 ]; then
     echo "ccgg update: catalog tables are STALE after the sync — run: python3 tools/catalog.py --write"
+  elif [ "$catalog_status" -ne 0 ]; then
+    echo "ccgg update: the sync is complete; the catalog tool could not read every skill and changed nothing:"
+    printf '%s\n' "$catalog_out" | sed 's/^/  /'
+    echo "ccgg update: fix the skill named above, then run: python3 tools/catalog.py"
   fi
 fi
 
