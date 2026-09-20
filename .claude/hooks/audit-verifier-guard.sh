@@ -109,6 +109,65 @@ PLAIN = {
     "shift", "let", "shellcheck",
     "git-lfs", "less", "more", "comm", "join", "paste", "fold", "fmt", "yes",
 }
+# Read-only programs with one form that writes or runs something. A program in
+# PLAIN used to return before its arguments were read, so `sort -o path` wrote a
+# file the guard believed untouched (CabiCAD audit 2026-09-20, S-001). Each
+# entry: the program, and a checker over its arguments that refuses the form.
+def _sort_writes(args):
+    for i, a in enumerate(args):
+        if a in ("-o", "--output") or a.startswith("--output=") or (a.startswith("-o") and len(a) > 2):
+            refuse("sort -o writes a file")
+        if a == "--":
+            break
+
+def _uniq_writes(args):
+    # uniq [option]... [input [output]]: a second operand is the output file.
+    if len([a for a in _operands(args)]) >= 2:
+        refuse("uniq with an output operand writes a file")
+
+def _xxd_writes(args):
+    # xxd [options] [infile [outfile]]; -c -l -s -o -g take a value.
+    valued = {"-c", "-cols", "-l", "-len", "-s", "-seek", "-o", "-off", "-g", "-groupsize"}
+    ops, i = [], 0
+    while i < len(args):
+        a = args[i]
+        if a in valued:
+            i += 2
+            continue
+        if not a.startswith("-"):
+            ops.append(a)
+        i += 1
+    if len(ops) >= 2:
+        refuse("xxd with an outfile operand writes a file")
+
+def _less_writes(args):
+    for a in args:
+        if a in ("-o", "-O", "--log-file", "--LOG-FILE") or a.startswith(("-o", "-O", "--log-file=", "--LOG-FILE=")):
+            refuse("less -o writes a log file")
+
+def _date_sets(args):
+    for a in args:
+        if a in ("-s", "--set") or a.startswith(("-s", "--set=")):
+            refuse("date -s sets the clock")
+
+def _git_lfs(args):
+    # git-lfs is a network client with a few read subcommands.
+    sub = next((a for a in args if not a.startswith("-")), "")
+    if sub not in ("env", "version", "ls-files", "status", "logs"):
+        refuse(f"git-lfs {sub or '(no subcommand)'} may write or reach the network")
+
+def _operands(args):
+    return [a for a in args if not a.startswith("-") or a == "-"]
+
+PLAIN_ARGS = {
+    "sort": _sort_writes,
+    "uniq": _uniq_writes,
+    "xxd": _xxd_writes,
+    "less": _less_writes,
+    "date": _date_sets,
+    "git-lfs": _git_lfs,
+}
+
 GIT_READ = {
     "log", "show", "diff", "status", "rev-parse", "ls-files", "ls-tree", "cat-file",
     "grep", "blame", "describe", "rev-list", "name-rev", "shortlog", "check-ignore",
@@ -425,8 +484,17 @@ def check_git(args):
         refuse("git with no subcommand")
     sub, rest = args[i], args[i + 1:]
     if sub in GIT_READ:
-        if sub == "log" and any(r.startswith("--output") for r in rest):
-            refuse("git log --output")
+        # --output is a diff-family option: log, show, diff, diff-tree, diff-index
+        # and whatchanged all write the file it names. `git show HEAD --output=x`
+        # was allowed and wrote inside a verifier worktree (S-003, 2026-09-20).
+        # git grep -O / --open-files-in-pager runs the program it names.
+        for r in rest:
+            if r == "--":
+                break
+            if r == "--output" or r.startswith("--output="):
+                refuse(f"git {sub} --output writes a file")
+            if sub == "grep" and (r.startswith("-O") or r.startswith("--open-files-in-pager")):
+                refuse("git grep -O runs a program")
         return
     if sub in GIT_LISTING:
         if any(r in GIT_LISTING[sub] for r in rest) or (sub in ("branch", "tag", "stash") and not rest):
@@ -538,6 +606,8 @@ def check_segment(seg):
             refuse(f"{prog} with no command")
         return check_segment(args[i:])
     if prog in PLAIN:
+        if prog in PLAIN_ARGS:
+            PLAIN_ARGS[prog](args)
         return
     if prog in ("python3", "python", "python3.11", "python3.12", "python3.13", "python3.14"):
         return check_python(args)

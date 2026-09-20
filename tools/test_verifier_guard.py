@@ -19,6 +19,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import audit_env  # noqa: E402  (same directory; resolves "bash" on PATH, not System32)
+
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     ".claude", "hooks", "audit-verifier-guard.sh")
 
@@ -59,6 +61,13 @@ ALLOWED = [
     "command -v python3",
     "cd tools && python3 -m json.tool audit_vocab.json | head",
     "xxd AGENTS.md | head",
+    "xxd -l 16 AGENTS.md",
+    "sort tools/probes.txt | uniq -c",
+    "uniq -c tools/probes.txt",
+    "grep -o 'x' AGENTS.md",
+    "git show HEAD:AGENTS.md | head",
+    "git grep -n allowed-tools -- .claude",
+    "git-lfs ls-files",
     "printenv | grep -c CCGG",
     # A newline is a command separator, so each line is checked on its own; both
     # of these are allowed programs and the two-line form must stay allowed.
@@ -159,6 +168,27 @@ REFUSED = [
     "bash -c id",
     "printf x | bash",
     "sh -s < x",
+    # S-001 (CabiCAD audit 2026-09-20): a PLAIN program returned before its
+    # arguments were read, so the one form of each that writes a file passed.
+    "sort -o /tmp/pwned tools/validate.py",
+    "sort -o/tmp/pwned tools/validate.py",
+    "sort --output=/tmp/pwned tools/validate.py",
+    "uniq tools/probes.txt /tmp/pwned",
+    "xxd AGENTS.md /tmp/pwned",
+    "xxd -l 16 AGENTS.md /tmp/pwned",
+    "less -o /tmp/pwned README.md",
+    "date -s '2020-01-01'",
+    "git-lfs push origin main",
+    "git-lfs fetch",
+    # S-003 (same audit): --output is a diff-family option, not a `git log` one;
+    # `git show HEAD --output=x` was allowed and wrote inside the worktree.
+    "git show HEAD --output=/tmp/pwned",
+    "git show HEAD --output /tmp/pwned",
+    "git diff --output=/tmp/pwned HEAD~1",
+    "git diff-tree --output=/tmp/pwned HEAD",
+    "git whatchanged --output=/tmp/pwned",
+    "git grep -O vim foo",
+    "git grep --open-files-in-pager=vim foo",
     "git fetch origin",
     "git clone https://example.invalid/x /tmp/x",
     "git pull",
@@ -252,13 +282,13 @@ REFUSED = [
 
 def run_guard(command: str, tool: str = "Bash") -> tuple[int, str]:
     payload = json.dumps({"tool_name": tool, "tool_input": {"command": command}})
-    proc = subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True)
+    proc = subprocess.run(audit_env.resolve(["bash", HOOK]), input=payload, capture_output=True, text=True)
     return proc.returncode, proc.stderr
 
 
 def guard_stdout(command: str, tool: str = "Bash") -> str:
     payload = json.dumps({"tool_name": tool, "tool_input": {"command": command}})
-    return subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True).stdout
+    return subprocess.run(audit_env.resolve(["bash", HOOK]), input=payload, capture_output=True, text=True).stdout
 
 
 class AllowListTests(unittest.TestCase):
@@ -307,7 +337,7 @@ class AllowListTests(unittest.TestCase):
         self.assertEqual(rc, 0)
 
     def test_non_json_input_refused(self):
-        proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
+        proc = subprocess.run(audit_env.resolve(["bash", HOOK]), input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
 
 
@@ -349,7 +379,7 @@ class GuardFailureTests(unittest.TestCase):
                     fh.write(stub_body)
                 os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
                 env["PATH"] = tmp + os.pathsep + env.get("PATH", "")
-            proc = subprocess.run(["bash", hook], input=payload,
+            proc = subprocess.run(audit_env.resolve(["bash", hook]), input=payload,
                                   capture_output=True, text=True, env=env)
         return proc.returncode, proc.stderr
 
@@ -388,7 +418,7 @@ class GuardFailureTests(unittest.TestCase):
         rc, _ = self._run()
         self.assertEqual(rc, 2)
         payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
-        proc = subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True)
+        proc = subprocess.run(audit_env.resolve(["bash", HOOK]), input=payload, capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0)
 
 
