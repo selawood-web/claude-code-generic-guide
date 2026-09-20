@@ -119,6 +119,14 @@ class LinkInstallSetTests(unittest.TestCase):
         self.assertFalse(link_leaves_install_set("AGENTS.md#skill-system"))
         self.assertFalse(link_leaves_install_set("./.claude/skills/commit/SKILL.md"))
 
+    # a companion linked relatively from inside a skill directory resolves
+    # through normpath, which answers in os.sep — on Windows that used to
+    # read as leaving .claude/ and every installed skill failed the check
+    def test_relative_companion_from_skill_dir_ok(self):
+        self.assertFalse(link_leaves_install_set("gbb-ladder.md", ".claude/skills/gbb"))
+        self.assertFalse(link_leaves_install_set("../decide/research-cache.md", ".claude/skills/gbb"))
+        self.assertTrue(link_leaves_install_set("../../../docs/x.md", ".claude/skills/gbb"))
+
     # edge: a prefix that only looks installed must not slip through
     def test_lookalike_prefix_flagged(self):
         self.assertTrue(link_leaves_install_set(".claudex/notes.md"))

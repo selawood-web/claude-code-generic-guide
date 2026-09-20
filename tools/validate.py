@@ -674,8 +674,10 @@ def link_leaves_install_set(link: str, from_dir: str = "") -> bool:
         return False  # a bare anchor stays inside its own file
     if file_part.startswith("./"):
         file_part = file_part[2:]
-    file_part = os.path.normpath(os.path.join(from_dir, file_part))
-    if file_part.startswith(".." + os.sep) or file_part == "..":
+    # Git paths use "/" on every platform; normpath answers in os.sep, so on
+    # Windows every companion link inside .claude/ would "leave" the install set.
+    file_part = os.path.normpath(os.path.join(from_dir, file_part)).replace(os.sep, "/")
+    if file_part.startswith("../") or file_part == "..":
         return True  # climbs out of the repository entirely
     return not any(
         file_part == root or file_part.startswith(root + "/")
