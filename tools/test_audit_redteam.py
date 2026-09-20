@@ -20,6 +20,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
+import audit_env
 import audit_redteam
 from audit_redteam import (RedteamFileError, RedteamProbe, RedteamResult, format_table, main,
                            make_scratch_copy, marker_for, parse_redteam_probes, run_probe, summarize)
@@ -393,8 +394,8 @@ class ShippedProbesRunTests(unittest.TestCase):
         self.assertEqual(run_probe(probe, self.repo, self.env).result, "contained")
         marker = audit_redteam.marker_for(probe)
         penv = dict(self.env, MARKER=marker)
-        subprocess.run(["bash", "-c", probe.plant], cwd=self.repo, env=penv, check=True, capture_output=True)
-        out = subprocess.run(["bash", "-c", probe.observe], cwd=self.repo, env=penv,
+        subprocess.run(audit_env.resolve(["bash", "-c", probe.plant]), cwd=self.repo, env=penv, check=True, capture_output=True)
+        out = subprocess.run(audit_env.resolve(["bash", "-c", probe.observe]), cwd=self.repo, env=penv,
                              capture_output=True, text=True).stdout
         self.assertIn("decisions/2026-01-01-*.md (1)", out)
         self.assertNotIn(marker, out)

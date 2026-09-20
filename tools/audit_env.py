@@ -27,6 +27,7 @@ Stdlib only.
 from __future__ import annotations
 
 import os
+import shutil
 
 # Enough to find a program and for git to make a commit; nothing that says who
 # the operator is or authorises anything on their behalf.
@@ -40,6 +41,9 @@ ALLOWED = (
     "GIT_AUTHOR_EMAIL",
     "GIT_COMMITTER_NAME",
     "GIT_COMMITTER_EMAIL",
+    # Windows only: without it winsock and the CRT refuse to start, so git and
+    # bash exit 1 with nothing on stderr. It names the OS directory, nobody.
+    "SYSTEMROOT",
 )
 DEFAULT_PATH = "/usr/bin:/bin"
 
@@ -67,9 +71,25 @@ def sandbox_env(home: str, actor: str = "ccgg-audit",
         "GIT_COMMITTER_NAME": actor,
         "GIT_COMMITTER_EMAIL": f"{actor}@local",
     }
+    if os.name == "nt" and os.environ.get("SYSTEMROOT"):
+        env["SYSTEMROOT"] = os.environ["SYSTEMROOT"]
     if extra:
         env.update(extra)
     return env
+
+
+def resolve(cmd: list[str]) -> list[str]:
+    """The same argv with its program looked up on PATH, not left to the OS.
+
+    Windows CreateProcess searches System32 before PATH for a bare name, so
+    "bash" becomes the WSL launcher and "tar" bsdtar whatever the shell that
+    started the audit had in front (CabiCAD audit 2026-09-20: every probe
+    "exited 1" with empty stderr). shutil.which honours PATH order alone.
+    """
+    if not cmd:
+        return cmd
+    found = shutil.which(cmd[0])
+    return [found, *cmd[1:]] if found else list(cmd)
 
 
 def leaked_names(env: dict[str, str], allow: tuple[str, ...] = ()) -> list[str]:

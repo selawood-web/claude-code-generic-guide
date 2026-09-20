@@ -502,7 +502,7 @@ def run_gate(repo: str, label: str, cmd: list[str], facts: Facts, execute: bool 
         return
     home = tempfile.mkdtemp(prefix="ccgg-gate-home-")
     try:
-        proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, encoding="utf-8",
+        proc = subprocess.run(audit_env.resolve(cmd), cwd=repo, capture_output=True, text=True, encoding="utf-8",
                               errors="replace", timeout=900,
                               env=audit_env.sandbox_env(home, actor="ccgg-gate"))
     except (OSError, subprocess.TimeoutExpired) as exc:
