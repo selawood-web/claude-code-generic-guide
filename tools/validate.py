@@ -1769,7 +1769,11 @@ def check_guard_settings_registration() -> None:
 # and `-m unittest discover` imports whatever is in the directory whatever the
 # list says. Holding the list equal to the tree is what makes adding a script to
 # the gate a visible, named change to the guard rather than a silent one.
-GUARD_PATH = os.path.join(".claude", "hooks", "audit-verifier-guard.sh")
+# A git path, spelled with "/" on every platform: it is compared against the
+# command string in settings.json and used in messages, never opened directly
+# (see open_guard below) — os.path.join would put a backslash in it on Windows
+# and the registration check would then never match.
+GUARD_PATH = ".claude/hooks/audit-verifier-guard.sh"
 GUARD_HEREDOC_RE = re.compile(r"<<'PY'[^\n]*\n(.*?)\nPY\n", re.S)
 GUARD_LIST_NAMES = ("PY_SCRIPTS", "SH_SCRIPTS")
 
