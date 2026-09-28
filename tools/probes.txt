@@ -89,7 +89,7 @@ gate commands run with the inherited environment | caught | sed -i 's|env=audit_
 
 # --- the gate itself -------------------------------------------------------------
 feature marked shipped with an open idea | caught | test -e features/F001-feature-definition-tool.md || exit 3; sed -i 's/^status: building/status: shipped/' features/F001-feature-definition-tool.md
-CI workflow deleted | caught | git rm -qf .github/workflows/validate.yml
+CI workflow deleted | caught | test -f install.sh || exit 3; git rm -qf .github/workflows/validate.yml
 validator main forced to return 0 | caught | sed -i 's/^def main() -> int:/def main() -> int:\n    return 0/' tools/validate.py
 probe harness main forced to return 0 | caught | sed -i 's/^def main(argv: list\[str\]) -> int:/def main(argv: list[str]) -> int:\n    return 0/' tools/audit_probes.py
 red-team harness main forced to return 0 | caught | sed -i 's/^def main(argv: list\[str\]) -> int:/def main(argv: list[str]) -> int:\n    return 0/' tools/audit_redteam.py
@@ -100,9 +100,9 @@ docs claim hook stdout is ignored for an event that reaches the model | caught |
 guard canary removed from the verifier brief | caught | python3 -c "p='.claude/agents/audit-verifier.md';t=open(p).read();open(p,'w').write(t.replace('GUARD-CANARY','GUARD-REMOVED'))"
 python script added without naming it in the guard's allow-list | caught | printf 'print(1)\n' > tools/test_added.py
 shell script added without naming it in the guard's allow-list | caught | printf 'echo hi\n' > deploy.sh
-guard's script allow-list keeps a name whose file is gone | caught | git rm -q tools/audit_pr_comment.py
-deterministic fact checks dropped from CI | caught | sed -i '/audit_facts/d' .github/workflows/validate.yml
-unit test step dropped from CI | caught | sed -i '/unittest discover/d' .github/workflows/validate.yml
+guard's script allow-list keeps a name whose file is gone | caught | test -f install.sh || exit 3; git rm -q tools/audit_pr_comment.py
+deterministic fact checks dropped from CI | caught | test -f install.sh || exit 3; sed -i '/audit_facts/d' .github/workflows/validate.yml
+unit test step dropped from CI | caught | test -f install.sh || exit 3; sed -i '/unittest discover/d' .github/workflows/validate.yml
 soft hyphen planted in a skill body | caught | python3 -c "open('.claude/skills/debug/SKILL.md','a').write('a soft\u00adhyphen here\n')"
 vertical tab planted in a reference | caught | python3 -c "open('.claude/references/code-gate.md','a').write('a vertical\x0btab here\n')"
 Unicode tag character planted in an agent brief | caught | python3 -c "open('.claude/agents/audit-spec.md','a').write('a tag\U000e0041character here\n')"
