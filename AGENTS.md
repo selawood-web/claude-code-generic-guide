@@ -104,6 +104,7 @@ listed below — the three questions and the verdict live there, with the proced
 | `/deploy` | Deployment with pre-flight checklist |
 | `/dream` | Consolidate session logs into the knowledge base |
 | `/efficiency` | Audit the project against the charter's token-efficiency rules |
+| `/eli10` | Plain-words explanation or instructions, one ELI10 card at a time |
 | `/feature` | Feature idea into a checked, tracked definition |
 | `/flush` | Structured session summary written to the memory log |
 | `/gbb` | "Vision-to-product design gap: research, stranger walk, design council, GBB ladder" |

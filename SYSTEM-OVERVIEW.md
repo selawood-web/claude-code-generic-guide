@@ -35,7 +35,7 @@ start from than this one had.
 
 ```mermaid
 flowchart LR
-    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>28 skills, quality gate</i>"]
+    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>29 skills, quality gate</i>"]
     B --> C["Save knowledge<br/><i>learn · flush</i>"]
     C --> D["Session ends<br/><i>hook leaves a marker</i>"]
     D -. "the next session starts<br/>already knowing what this one learned" .-> A
@@ -90,7 +90,7 @@ through a pull request that the owner merges**. The AI proposes; the human decid
 
 ---
 
-## The workers: 28 skills
+## The workers: 29 skills
 
 A skill is a written procedure the AI follows instead of improvising — like a
 checklist an experienced engineer would use. Each triggers when you type its command
@@ -141,6 +141,7 @@ one line of explanation.
 | `/flush` | Save the session before it's lost | Writes a structured summary — goal, decisions with reasons, open threads — to the session log |
 | `/dream` | Turn piled-up logs into organized knowledge | Merges, removes duplicates, flags contradictions — never deletes sources, only archives them |
 | `/momentum` | Never stall halfway | Every reply names the next step, work continues until the whole task is done, and a blocker arrives as one precise, answerable request |
+| `/eli10` | Understand it on the first read | Re-explains the last reply, a list, or a set of steps as plain-words cards, one by one, each with what to do and how to tell it worked |
 | `/standup` | A clear progress report | Done / in progress / next / notes — specific and verifiable, never "worked on X" |
 
 ### Evolve — the system improving itself
@@ -217,8 +218,8 @@ twice by a human becomes a check run forever by the machine**.
 | Role | Responsibility |
 |------|----------------|
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
-| **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks at most one question at a time, escalates instead of proceeding on anything destructive |
-| **The 28 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
+| **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks all its questions at once as coded pick-lists, explains in plain-words cards, escalates instead of proceeding on anything destructive |
+| **The 29 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
 | **The 4 hooks** | Run automatically at session start, before compaction, at session end, and on every prompt (the context guard) — the part of the system that needs no one to remember it |
 | **The validator + CI** | Check every proposed change against every check in `tools/validate.py` and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |
