@@ -118,7 +118,7 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict]:
     os.makedirs(dest)
     os.makedirs(home)
     archive = subprocess.run(["git", "archive", "--format=tar", "HEAD"], cwd=repo, capture_output=True, check=True)
-    subprocess.run(["tar", "-xf", "-", "-C", dest], input=archive.stdout, check=True)
+    audit_env.unpack_tar(archive.stdout, dest)
     # An allow-list, not os.environ minus the three names somebody thought of.
     # A plant and an observe are shell snippets from a committed data file in the
     # audited tree; under dict(os.environ, ...) they ran with the operator's

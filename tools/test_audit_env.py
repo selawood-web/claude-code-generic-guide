@@ -107,6 +107,63 @@ class HarnessEnvTests(unittest.TestCase):
             self.assertNotIn(name, env)
 
 
+def _tar(members):
+    import io
+    import tarfile
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as archive:
+        for name, data in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+class UnpackTarTests(unittest.TestCase):
+    """PR #93: a bare "tar" on Windows is bsdtar, which skipped every non-ASCII name."""
+
+    def test_a_non_ascii_filename_survives(self):
+        with tempfile.TemporaryDirectory() as dest:
+            audit_env.unpack_tar(_tar([("docs/שלום.md", b"shalom\n"), ("a.txt", b"a")]), dest)
+            with open(os.path.join(dest, "docs", "שלום.md"), encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "shalom\n")
+            self.assertTrue(os.path.isfile(os.path.join(dest, "a.txt")))
+
+    def test_a_member_that_leaves_the_destination_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = os.path.join(tmp, "repo")
+            os.makedirs(dest)
+            with self.assertRaises(Exception):
+                audit_env.unpack_tar(_tar([("../escaped.txt", b"x")]), dest)
+            self.assertFalse(os.path.exists(os.path.join(tmp, "escaped.txt")))
+
+    def test_an_empty_archive_unpacks_to_nothing(self):
+        with tempfile.TemporaryDirectory() as dest:
+            audit_env.unpack_tar(_tar([]), dest)
+            self.assertEqual(os.listdir(dest), [])
+
+    def test_bytes_that_are_not_a_tar_are_an_error(self):
+        with tempfile.TemporaryDirectory() as dest:
+            with self.assertRaises(Exception):
+                audit_env.unpack_tar(b"not a tar archive at all", dest)
+
+
+class SystemRootTests(unittest.TestCase):
+    """PR #93: without SYSTEMROOT, winsock and the C runtime refuse to start on Windows."""
+
+    def test_windows_gets_systemroot(self):
+        with mock.patch.object(audit_env.os, "name", "nt"), \
+                mock.patch.dict(os.environ, {"SYSTEMROOT": r"D:\Win"}):
+            self.assertEqual(sandbox_env("/tmp/h")["SYSTEMROOT"], r"D:\Win")
+
+    def test_other_hosts_do_not(self):
+        with mock.patch.object(audit_env.os, "name", "posix"):
+            self.assertNotIn("SYSTEMROOT", sandbox_env("/tmp/h"))
+
+    def test_systemroot_is_on_the_allow_list_so_it_is_not_reported_as_a_leak(self):
+        self.assertIn("SYSTEMROOT", ALLOWED)
+
+
 class BashPathTests(unittest.TestCase):
     """S0-2: a bare "bash" on Windows is the WSL launcher, whatever PATH says."""
 

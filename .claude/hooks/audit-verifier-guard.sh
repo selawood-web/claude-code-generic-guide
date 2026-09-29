@@ -596,6 +596,10 @@ def check_plain(prog, args):
     elif prog == "file":
         if any(a in ("-C", "--compile") for a in args):
             refuse("file -C writes a compiled magic file")
+    elif prog == "date":
+        # Setting the clock is a write to the machine, whatever the privileges (PR #93).
+        if any(a in ("-s", "--set") or a.startswith(("--set=", "-s")) for a in args):
+            refuse("date -s sets the system clock")
     elif prog == "rg":
         if any(a == "--pre" or a.startswith("--pre=") for a in args):
             refuse("rg --pre runs a program on every file")
