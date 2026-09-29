@@ -123,7 +123,7 @@ environment prefix before a command accepted again | caught:guard | sed -i 's/if
 sed -i allowed to edit the worktree | caught:guard | sed -i 's/refuse("sed -i")/pass/' .claude/hooks/audit-verifier-guard.sh
 find -exec and -delete allowed | caught:guard | sed -i 's/refuse(f"find {a}")/pass/' .claude/hooks/audit-verifier-guard.sh
 unknown program allowed instead of refused | caught:guard | sed -i 's/refuse(f"{prog} is not in the allow-list")/pass/' .claude/hooks/audit-verifier-guard.sh
-python script allowed to sit outside the worktree | caught:guard | sed -i 's/refuse("python script outside the worktree")/pass/' .claude/hooks/audit-verifier-guard.sh
+python script allowed outside tools/ | caught:guard | sed -i 's/refuse("python script outside tools\/")/pass/' .claude/hooks/audit-verifier-guard.sh
 command separator set narrowed so a second command hides | caught:guard | python3 -c "import re,io;p='.claude/hooks/audit-verifier-guard.sh';t=open(p).read();t=t.replace('SEPARATOR_CHARS = frozenset(\"|&;', 'SEPARATOR_CHARS = frozenset(\";',1);open(p,'w').write(t)"
 refuse() stops refusing and lets the command run | caught:guard | python3 -c "p='.claude/hooks/audit-verifier-guard.sh';t=open(p).read();t=t.replace('from its allow-list only\", file=sys.stderr)\n    sys.exit(2)', 'from its allow-list only\", file=sys.stderr)\n    sys.exit(0)',1);open(p,'w').write(t)"
 guard stops failing closed when its program is empty | caught:guard | sed -i '/the guard program is empty; refusing/{n;s/exit 2/exit 0/}' .claude/hooks/audit-verifier-guard.sh

@@ -317,6 +317,8 @@ def check_py_script(path):
     copies in .github/workflows/audit.yml are for, not this hook.
     """
     norm = posixpath.normpath(path)
+    # A second layer since PY_SCRIPT_DIRS became tools/ only: every path this refuses,
+    # the directory rule below refuses too, so the mutation probes measure that rule.
     if posixpath.isabs(norm) or norm == ".." or norm.startswith("../"):
         refuse("python script outside the worktree")
     directory, _, name = norm.rpartition("/")
