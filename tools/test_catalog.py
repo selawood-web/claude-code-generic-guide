@@ -75,10 +75,10 @@ class RenderTableTests(unittest.TestCase):
             self.assertIn(f"| `{name}` |", table)
 
 
-def _skill(root: str, name: str, *, house_keys: bool = True) -> None:
+def _skill(root: str, name: str, *, house_keys: bool = True, description: bool = True) -> None:
     d = os.path.join(root, ".claude", "skills", name)
     os.makedirs(d, exist_ok=True)
-    body = f"---\nname: {name}\ndescription: d\n"
+    body = f"---\nname: {name}\n" + ("description: d\n" if description else "")
     if house_keys:
         body += f'when_to_use: w\nargument-hint: "[x]"\npurpose: "Purpose of {name}"\n'
     body += "---\n\nBody.\n"
@@ -115,21 +115,21 @@ class UnreadableSkillTests(unittest.TestCase):
         self.assertEqual(self._run(), catalog.EXIT_CURRENT)
 
     def test_unreadable_skill_is_returned_not_fatal(self):
-        _skill(self.root, "project-only", house_keys=False)
+        _skill(self.root, "project-only", house_keys=False, description=False)
         with mock.patch.object(catalog, "ROOT", self.root):
             skills, unreadable = catalog.read_skills()
         self.assertEqual([n for n, _ in skills], ["alpha"])
         self.assertEqual(unreadable, [os.path.join(".claude", "skills", "project-only", "SKILL.md")])
 
     def test_unreadable_skill_exits_distinctly_from_stale(self):
-        _skill(self.root, "project-only", house_keys=False)
+        _skill(self.root, "project-only", house_keys=False, description=False)
         self.assertEqual(self._run(), catalog.EXIT_UNREADABLE)
         self.assertNotEqual(catalog.EXIT_UNREADABLE, catalog.EXIT_STALE,
                             "update.sh tells the two apart by this code")
 
     def test_unreadable_skill_writes_nothing(self):
         """A count from a partial list is wrong — writing it would look consistent."""
-        _skill(self.root, "project-only", house_keys=False)
+        _skill(self.root, "project-only", house_keys=False, description=False)
         before = open(os.path.join(self.root, "AGENTS.md"), encoding="utf-8").read()
         self.assertEqual(self._run(("catalog.py", "--write")), catalog.EXIT_UNREADABLE)
         self.assertEqual(open(os.path.join(self.root, "AGENTS.md"), encoding="utf-8").read(), before)
@@ -147,6 +147,63 @@ class UnreadableSkillTests(unittest.TestCase):
     def test_empty_skill_tree_is_unreadable_not_current(self):
         shutil.rmtree(os.path.join(self.root, ".claude", "skills", "alpha"))
         self.assertEqual(self._run(), catalog.EXIT_UNREADABLE)
+
+
+class ProjectSkillTests(unittest.TestCase):
+    """S4-1: a project's own skill is a plain Claude Code skill — name and description.
+    Refusing it made every installed project's CI fail the day it added one."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="ccgg-catalog-")
+        self.addCleanup(shutil.rmtree, self.root, True)
+        _skill(self.root, "alpha")
+
+    def _read(self):
+        with mock.patch.object(catalog, "ROOT", self.root):
+            return catalog.read_skills()
+
+    def test_a_plain_skill_is_catalogued_from_its_description(self):
+        _skill(self.root, "project-only", house_keys=False)
+        skills, unreadable = self._read()
+        self.assertEqual(unreadable, [])
+        self.assertIn(("project-only", "d"), skills)
+
+    def test_a_skill_without_a_name_is_listed_under_its_directory(self):
+        d = os.path.join(self.root, ".claude", "skills", "nameless")
+        os.makedirs(d)
+        open(os.path.join(d, "SKILL.md"), "w", encoding="utf-8").write(
+            "---\ndescription: Does one thing. Then more.\n---\n")
+        skills, _ = self._read()
+        self.assertIn(("nameless", "Does one thing."), skills)
+
+    def test_a_purpose_is_used_whole_even_with_a_full_stop(self):
+        """The first-sentence cut is for descriptions only; a house purpose is the author's."""
+        d = os.path.join(self.root, ".claude", "skills", "dotted")
+        os.makedirs(d)
+        open(os.path.join(d, "SKILL.md"), "w", encoding="utf-8").write(
+            "---\nname: dotted\ndescription: x\npurpose: One. Two\n---\n")
+        self.assertIn(("dotted", "One. Two"), self._read()[0])
+
+    def test_a_non_utf8_byte_does_not_crash_the_read(self):
+        d = os.path.join(self.root, ".claude", "skills", "bytes")
+        os.makedirs(d)
+        open(os.path.join(d, "SKILL.md"), "wb").write(b"---\nname: bytes\ndescription: a \xff b\n---\n")
+        names = [n for n, _ in self._read()[0]]
+        self.assertIn("bytes", names)
+
+
+class FirstSentenceTests(unittest.TestCase):
+    def test_cuts_at_the_first_sentence_end(self):
+        self.assertEqual(catalog.first_sentence("Review code. Use when asked."), "Review code.")
+
+    def test_keeps_text_without_a_full_stop(self):
+        self.assertEqual(catalog.first_sentence("Review code"), "Review code")
+
+    def test_a_dot_inside_a_word_is_not_a_sentence_end(self):
+        self.assertEqual(catalog.first_sentence("Ship v1.2 notes. Then"), "Ship v1.2 notes.")
+
+    def test_empty_text(self):
+        self.assertEqual(catalog.first_sentence(""), "")
 
 
 class ReadSkillsTests(unittest.TestCase):

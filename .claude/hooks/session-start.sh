@@ -172,7 +172,9 @@ fi
 # something this hook forwards to the model.
 if [ -f "${CLAUDE_PROJECT_DIR:-.}/tools/validate.py" ] && command -v python3 >/dev/null 2>&1; then
   echo "-- repo validation --"
-  VERDICT="$(python3 "${CLAUDE_PROJECT_DIR:-.}/tools/validate.py" 2>&1)"
+  # UTF-8 on the pipe: Windows gives python3 the console code page when piped, and
+  # the verdict's em dash arrived as a stray byte ("FAIL <?> 1 finding(s)", S2-3).
+  VERDICT="$(PYTHONIOENCODING=utf-8 python3 "${CLAUDE_PROJECT_DIR:-.}/tools/validate.py" 2>&1)"
   RC=$?
   echo "${VERDICT%%$'\n'*}"
   if [ "$RC" -ne 0 ]; then
@@ -190,7 +192,7 @@ if [ -d "$SESSIONS_DIR" ]; then
     echo "-- last session log: ${LATEST} in ~/.claude/memory/<project>/sessions/ (read it to pick up open threads) --"
   fi
 fi
-MARKERS="${HOME}/.claude/memory/session-markers.log"
+MARKERS="${HOME}/.claude/memory/${PROJECT_SLUG}/session-markers.log"
 if [ -f "$MARKERS" ]; then
   STAMP="$(tail -1 "$MARKERS" | sed -n 's/^\(\[[0-9TZ:+-]*\]\).*/\1/p')"
   if [ -n "${STAMP:-}" ]; then

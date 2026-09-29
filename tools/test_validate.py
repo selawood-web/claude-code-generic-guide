@@ -2045,6 +2045,98 @@ class HookHeaderTests(unittest.TestCase):
                          {"session-end.sh": ["SessionEnd"], "session-start.sh": ["SessionStart"]})
 
 
+class TrackedCacheTests(unittest.TestCase):
+    """S4-7: one `git ls-files` per run, filtered here, must answer exactly as git does."""
+
+    def _patterns(self):
+        with open(validate.__file__, encoding="utf-8") as fh:
+            src = fh.read()
+        found = set(re.findall(r'tracked\("([^"]+)"\)', src))
+        found |= {validate.AUDIT_WORKFLOW_PATH, validate.GUARD_PATH, validate.VERIFIER_BRIEF}
+        return sorted(found | {"tools", "tools/", ".claude/skills", "nope.md", "*.zzz"})
+
+    def test_the_cache_answers_as_git_does_for_every_pattern_used(self):
+        self.assertIsNone(validate._TRACKED_ALL, "the cache is off outside main()")
+        listing = validate.tracked("*")
+        for pattern in self._patterns():
+            with self.subTest(pattern=pattern):
+                self.assertEqual(validate.pathspec_filter(listing, pattern), validate.tracked(pattern))
+
+    def test_a_star_crosses_directories_as_in_git(self):
+        paths = ["a.md", "docs/b.md", "docs/sub/c.md", "x.py"]
+        self.assertEqual(validate.pathspec_filter(paths, "*.md"), ["a.md", "docs/b.md", "docs/sub/c.md"])
+        self.assertEqual(validate.pathspec_filter(paths, "docs/*.md"), ["docs/b.md", "docs/sub/c.md"])
+
+    def test_a_literal_names_a_file_or_a_directory_and_nothing_longer(self):
+        paths = ["tools", "tools/a.py", "toolsx/b.py", "install.sh", "install.shx"]
+        self.assertEqual(validate.pathspec_filter(paths, "tools"), ["tools", "tools/a.py"])
+        self.assertEqual(validate.pathspec_filter(paths, "install.sh"), ["install.sh"])
+
+    def test_an_empty_listing_matches_nothing(self):
+        self.assertEqual(validate.pathspec_filter([], "*"), [])
+
+    def test_main_turns_the_cache_off_when_it_returns(self):
+        with mock.patch("sys.stdout"):
+            validate.main()
+        self.assertIsNone(validate._TRACKED_ALL)
+        del validate.findings[:]
+        del validate.cautions[:]
+
+
+class SkillKeysDownstreamTests(unittest.TestCase):
+    """S4-1: an installed project's own skill needs only the keys Claude Code reads."""
+
+    def _check(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path) or tmp, exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            del validate.findings[:]
+            try:
+                validate.check_skills()
+                return [f for f in validate.findings if "frontmatter missing key" in f]
+            finally:
+                validate.ROOT = old_root
+                del validate.findings[:]
+
+    PLAIN = {".claude/skills/notes/SKILL.md": "---\nname: notes\ndescription: Write notes.\n---\n\nBody.\n"}
+
+    def test_a_plain_skill_passes_in_an_installed_project(self):
+        self.assertEqual(self._check(dict(self.PLAIN)), [])
+
+    def test_the_guide_repository_still_requires_every_house_key(self):
+        missing = self._check(dict(self.PLAIN, **{"install.sh": "#!/bin/sh\n"}))
+        self.assertEqual(sorted(f.rsplit("'", 2)[1] for f in missing),
+                         ["argument-hint", "purpose", "when_to_use"])
+
+    def test_a_skill_without_a_description_still_fails_downstream(self):
+        missing = self._check({".claude/skills/notes/SKILL.md": "---\nname: notes\n---\n"})
+        self.assertTrue(any("'description'" in f for f in missing), missing)
+
+
+class NonUtf8ConfigTests(unittest.TestCase):
+    """S4-9: one stray byte crashed the validator with a traceback instead of a finding."""
+
+    def test_a_non_utf8_settings_file_is_a_finding(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, ".claude"))
+            with open(os.path.join(tmp, ".claude", "settings.json"), "wb") as fh:
+                fh.write(b'{"env": "\xff"}')
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            del validate.findings[:]
+            try:
+                validate.check_configs()
+                self.assertTrue(any("settings.json" in f for f in validate.findings), validate.findings)
+            finally:
+                validate.ROOT = old_root
+                del validate.findings[:]
+
+
 class CurrencyRuleHomeTests(unittest.TestCase):
     """C-001: the rule's item list lives in the charter; everywhere else points there."""
 
