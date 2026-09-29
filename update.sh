@@ -9,9 +9,14 @@
 # update.sh DOES overwrite the files CCGG owns — skills, hooks, audit subagents,
 # rule-file companions, the validator and audit tooling — so merged guide PRs
 # reach installed projects. tools/probes.txt and tools/redteam_probes.txt are the
-# project's own contracts and are installed once, never overwritten. It never touches
-# project-customized files (AGENTS.md, CLAUDE.md, WORKING-CHARTER.md,
-# settings.json) and leaves skills the project added under its own names alone.
+# project's own contracts and are installed once, never overwritten. It never
+# rewrites project-customized files (AGENTS.md, CLAUDE.md, WORKING-CHARTER.md) and
+# leaves skills the project added under its own names alone. settings.json is
+# touched in one way only: when this run delivers a hook file the project did not
+# have, the guide's registration for that hook is appended — a hook shipped without
+# its registration never runs (finding W-1). Existing entries are never changed or
+# removed, and a hook the project already had is never re-registered, so taking a
+# registration out stays taken out.
 #
 # Wired into every session automatically: the session-start hook runs
 # `"$CCGG_HOME/update.sh" --quiet .` when the CCGG_HOME environment variable
@@ -77,10 +82,14 @@ else
 fi
 
 changed=0
+NEW_HOOKS=() # hook files this run delivered for the first time
 sync_file() { # $1 = path under SRC; $2 = path under TARGET (defaults to $1)
   src_rel="$1"
   dst_rel="${2:-$1}"
   if ! cmp -s "$SRC/$src_rel" "$TARGET/$dst_rel" 2>/dev/null; then
+    case "$dst_rel" in
+      .claude/hooks/*.sh) [ -e "$TARGET/$dst_rel" ] || NEW_HOOKS+=("$dst_rel") ;;
+    esac
     mkdir -p "$TARGET/$(dirname "$dst_rel")"
     # Atomic rename, never in-place cp: this may replace the very hook that is
     # running us, and truncating a running script's inode corrupts its execution.
@@ -139,6 +148,60 @@ if [ "$USER_MODE" -eq 0 ]; then
     fi
   done
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
+  if [ "${#NEW_HOOKS[@]}" -gt 0 ]; then
+    # The executable bit has to reach the index too: with core.filemode=false (every
+    # Windows clone) chmod never does, and the hook commits as 100644 (finding S4-8).
+    # Intent-to-add, and only for the hook files this run created.
+    if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1; then
+      git -C "$TARGET" add -N -- "${NEW_HOOKS[@]}" >/dev/null 2>&1 \
+        && git -C "$TARGET" update-index --chmod=+x -- "${NEW_HOOKS[@]}" >/dev/null 2>&1 || true
+    fi
+    # Their registrations, appended from the guide's settings.json (see the header).
+    if [ -f "$TARGET/.claude/settings.json" ] && command -v python3 >/dev/null 2>&1; then
+      registered="$(python3 - "$SRC/.claude/settings.json" "$TARGET/.claude/settings.json" "${NEW_HOOKS[@]}" <<'PY'
+import json, sys
+guide_path, target_path, *new_hooks = sys.argv[1:]
+try:
+    guide = json.load(open(guide_path, encoding="utf-8"))
+    with open(target_path, encoding="utf-8") as fh:
+        target = json.load(fh)
+except (OSError, ValueError):
+    print("unreadable")
+    sys.exit(0)
+if not isinstance(target, dict) or not isinstance(target.get("hooks", {}), dict):
+    print("unreadable")
+    sys.exit(0)
+added = 0
+hooks = target.setdefault("hooks", {})
+for event, blocks in (guide.get("hooks") or {}).items():
+    for block in blocks or []:
+        for hook in block.get("hooks") or []:
+            cmd = hook.get("command", "")
+            if not any(h in cmd for h in new_hooks):
+                continue
+            have = hooks.setdefault(event, [])
+            if any(cmd == h.get("command") for b in have if isinstance(b, dict)
+                   for h in b.get("hooks") or [] if isinstance(h, dict)):
+                continue
+            entry = {k: v for k, v in block.items() if k != "hooks"}
+            entry["hooks"] = [hook]
+            have.append(entry)
+            added += 1
+if added:
+    with open(target_path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(target, fh, indent=2)
+        fh.write("\n")
+print(added)
+PY
+)" || registered="unreadable"
+      case "$registered" in
+        unreadable) echo "ccgg update: .claude/settings.json could not be read; register the new hook(s) by hand from the guide's settings.json" ;;
+        0) ;;
+        *) changed=$((changed+registered))
+           echo "ccgg update: registered $registered new hook entr$([ "$registered" -eq 1 ] && echo y || echo ies) in .claude/settings.json" ;;
+      esac
+    fi
+  fi
 fi
 
 # Report, never remove. A directory the guide no longer ships is either the
