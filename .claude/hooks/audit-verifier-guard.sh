@@ -97,24 +97,42 @@ def is_separator(tok):
     return bool(tok) and (tok in SEPARATORS or set(tok) <= SEPARATOR_CHARS)
 
 
-# Programs that never write and never reach the network on their own.
+# Programs that never write and never reach the network on their own — in the forms
+# check_plain allows. Gone, and why (finding S2-1/S2-2 of the 2026-09-29 check):
+# cd/pushd/popd moved the directory the script-name rules resolve against, so
+# `cd evil && bash install.sh` ran the branch's own install.sh; export/declare/local
+# put any variable into the next program's environment, the door the VAR= prefix rule
+# had closed; let assigned by name; git-lfs fetches; less and more run `+!cmd`.
 PLAIN = {
     "cat", "head", "tail", "wc", "ls", "stat", "file", "diff", "cmp", "sort", "uniq",
     "cut", "tr", "grep", "egrep", "fgrep", "rg", "xxd", "od", "hexdump", "strings",
     "jq", "which", "type", "id", "whoami", "pwd", "date", "basename", "dirname",
     "realpath", "readlink", "tree", "column", "nl", "tac", "rev", "expr", "seq",
     "echo", "printf", "test", "[", "true", "false", "read", "sleep", "printenv",
-    "md5sum", "sha256sum", "sha1sum", "du", "df", "cd", "pushd", "popd", "export",
-    "local", "declare", "set", "unset", "exit", "return", "break", "continue", ":",
-    "shift", "let", "shellcheck",
-    "git-lfs", "less", "more", "comm", "join", "paste", "fold", "fmt", "yes",
+    "md5sum", "sha256sum", "sha1sum", "du", "df",
+    "set", "unset", "exit", "return", "break", "continue", ":",
+    "shift", "shellcheck",
+    "comm", "join", "paste", "fold", "fmt", "yes",
 }
+# A name the command line binds — `x=…`, `for x in`, `read x`, `printf -v x` — must be
+# a shell-local one. An already-exported variable keeps its export when reassigned, so
+# `PATH=evil:$PATH; cat f` ran evil/cat. Exported names are upper-case by convention;
+# the lower-case ones that are exported by convention are the proxies, named here.
+LOCAL_NAME_RE = re.compile(r"[a-z_][a-z0-9_]*")
+PROXY_NAMES = frozenset(("http_proxy", "https_proxy", "ftp_proxy", "all_proxy", "no_proxy"))
 GIT_READ = {
     "log", "show", "diff", "status", "rev-parse", "ls-files", "ls-tree", "cat-file",
     "grep", "blame", "describe", "rev-list", "name-rev", "shortlog", "check-ignore",
     "check-attr", "diff-tree", "diff-index", "for-each-ref", "show-ref", "symbolic-ref",
     "var", "count-objects", "verify-commit", "verify-tag", "merge-base", "whatchanged",
-    "reflog", "fsck", "version", "help",
+    "reflog", "fsck", "version",
+}
+# Subcommand options that write a file or name a program to run. `--output` is
+# git's diff-option spelling on every diff-producing subcommand, not only log.
+GIT_REFUSED_OPTIONS = {
+    "grep": ("-O", "--open-files-in-pager"),
+    "reflog": ("expire", "delete"),
+    "fsck": ("--lost-found",),
 }
 # git's options before the subcommand, named rather than skipped. A deny-list here
 # would have to spell every option that names a program — `-c diff.external=`,
@@ -132,7 +150,7 @@ GIT_GLOBAL_FLAGS = frozenset((
 GIT_LISTING = {"branch": {"--list", "-a", "-r", "-v", "-vv", "--show-current", "--contains",
                           "--merged", "--no-merged", "-l"},
                "tag": {"--list", "-l", "-n", "--contains", "--points-at"},
-               "remote": {"-v", "show", "get-url"},
+               "remote": {"-v", "get-url"},
                "config": {"--get", "--get-all", "--get-regexp", "--list", "-l"},
                "worktree": {"list"},
                "stash": {"list", "show"},
@@ -151,7 +169,9 @@ PY_MODULES = {"unittest", "json.tool", "doctest", "py_compile", "tokenize"}
 # call test_something, which is the capability PY_SCRIPT_NAMES existed to remove
 # (finding S-004). check_guard_allow_lists in tools/validate.py keeps this equal
 # to the tree, so adding a script to the gate is a visible change to this list.
-PY_SCRIPT_DIRS = frozenset(("", "tools"))
+# tools/ only: "" existed for `cd tools && python3 validate.py`, and with cd gone a
+# bare `validate.py` can only be one the audited branch put at the root.
+PY_SCRIPT_DIRS = frozenset(("tools",))
 PY_SCRIPTS = frozenset((
     "audit_agents_json.py", "audit_env.py", "audit_facts.py", "audit_headless.py",
     "audit_pr_comment.py", "audit_probes.py", "audit_redteam.py", "audit_report.py",
@@ -226,6 +246,10 @@ def extract_substitutions(text):
                 j += 1
             if depth != 0:
                 refuse("unbalanced arithmetic expansion")
+            # bash expands a substitution inside arithmetic before evaluating it, and
+            # this branch never looked inside: `$(( $(curl x) ))` ran curl.
+            if "$(" in text[i + 3:j]:
+                refuse("command substitution inside arithmetic")
             out.append("__ARITH__")
             i = j + 1
             continue
@@ -293,6 +317,8 @@ def check_py_script(path):
     copies in .github/workflows/audit.yml are for, not this hook.
     """
     norm = posixpath.normpath(path)
+    # A second layer since PY_SCRIPT_DIRS became tools/ only: every path this refuses,
+    # the directory rule below refuses too, so the mutation probes measure that rule.
     if posixpath.isabs(norm) or norm == ".." or norm.startswith("../"):
         refuse("python script outside the worktree")
     directory, _, name = norm.rpartition("/")
@@ -331,6 +357,8 @@ def check_py_module(module, rest):
         if target:
             check_py_script(target)
         return
+    if module == "json.tool" and len([a for a in rest if not a.startswith("-")]) > 1:
+        refuse("json.tool writes its second argument")
 
 
 def check_python(args):
@@ -426,12 +454,16 @@ def check_git(args):
     if i >= len(args):
         refuse("git with no subcommand")
     sub, rest = args[i], args[i + 1:]
+    if any(r.startswith("--output") for r in rest):
+        refuse(f"git {sub} --output")
+    for bad in GIT_REFUSED_OPTIONS.get(sub, ()):
+        if any(r == bad or (bad.startswith("-") and r.startswith(bad)) for r in rest):
+            refuse(f"git {sub} {bad}")
     if sub in GIT_READ:
-        if sub == "log" and any(r.startswith("--output") for r in rest):
-            refuse("git log --output")
         return
     if sub in GIT_LISTING:
-        if any(r in GIT_LISTING[sub] for r in rest) or (sub in ("branch", "tag", "stash") and not rest):
+        # A bare `git stash` is `git stash push`: it rewrites the working tree.
+        if any(r in GIT_LISTING[sub] for r in rest) or (sub in ("branch", "tag") and not rest):
             return
         refuse(f"git {sub} in a form that may write")
     refuse(f"git {sub}")
@@ -468,6 +500,10 @@ def check_awk(args):
         a = args[i]
         if a in ("-f", "--file"):
             refuse("awk program from a file")
+        # gawk: -i inplace rewrites its input files; -l loads a shared library; -E
+        # reads the program from a file.
+        if a in ("-i", "--include", "-l", "--load", "-E", "--exec") or a.startswith(("-i", "-l")):
+            refuse(f"awk {a}")
         if a in ("-F", "-v"):
             i += 2
             continue
@@ -475,7 +511,8 @@ def check_awk(args):
             i += 1
             continue
         program = args[i + 1] if a == "--" and i + 1 < len(args) else a
-        if "system(" in program or ">" in program or "|" in program or "getline" in program:
+        if ("system(" in program or ">" in program or "|" in program or "getline" in program
+                or "@load" in program or "@include" in program):
             refuse("awk writes or executes")
         return
     refuse("awk with no program")
@@ -488,24 +525,80 @@ def check_find(args):
 
 
 def check_node(args):
-    """Same rule as check_python: node's letters cluster (`-pe`) and carry an
-    attached value (`-e'code'`), so they are split rather than matched whole."""
-    for a in args:
-        if a == "-":
-            refuse("node code on the command line")
-        if a.startswith("--"):
-            if a.partition("=")[0] in NODE_CODE_LONG:
-                refuse("node code on the command line")
-            continue
-        if a.startswith("-"):
-            for letter in a[1:]:
-                if letter in NODE_CODE_FLAGS:
-                    refuse("node code on the command line")
-                if letter == "r":  # --require takes a value; stop reading letters
-                    break
-            continue
+    """Only `node --version`. The code flags were refused, but any script path was
+    run — `node evil/x.js` executed whatever the audited branch carried — and the
+    gate has no node script for a reproduction to need."""
+    if args in (["--version"], ["-v"]):
         return
-    refuse("node with no script")
+    for a in args:
+        if a == "-" or a.partition("=")[0] in NODE_CODE_LONG or (
+                a.startswith("-") and not a.startswith("--") and set(a[1:]) & NODE_CODE_FLAGS):
+            refuse("node code on the command line")
+    refuse("node runs only --version here")
+
+
+def check_name(name, how):
+    """Refuse a binding to anything but a shell-local name (see LOCAL_NAME_RE)."""
+    if not LOCAL_NAME_RE.fullmatch(name or "") or name in PROXY_NAMES:
+        refuse(f"{how} binds {name or 'nothing'} — only lower-case shell-local names; "
+               f"an exported variable keeps its export and steers the next program")
+
+
+def value_operands(args, value_flags):
+    """The non-option operands, skipping the value each flag in `value_flags` takes."""
+    out, i = [], 0
+    while i < len(args):
+        a = args[i]
+        if a in value_flags:
+            i += 2
+            continue
+        if a.startswith("-") and a != "-":
+            i += 1
+            continue
+        out.append(a)
+        i += 1
+    return out
+
+
+def check_plain(prog, args):
+    """The PLAIN programs whose options can bind a variable, write a file, or run one."""
+    if prog == "read":
+        for k, a in enumerate(args):
+            if a == "-a":
+                check_name(args[k + 1] if k + 1 < len(args) else "", "read -a")
+        for name in value_operands(args, {"-a", "-d", "-i", "-n", "-N", "-p", "-t", "-u"}):
+            check_name(name, "read")
+    elif prog == "printf":
+        for k, a in enumerate(args):
+            if a == "-v":
+                check_name(args[k + 1] if k + 1 < len(args) else "", "printf -v")
+            elif a.startswith("-v"):
+                check_name(a[2:], "printf -v")
+    elif prog == "set":
+        # allexport turns every later assignment into an export.
+        for a in args:
+            if a == "allexport" or (a.startswith("-") and not a.startswith("--") and "a" in a[1:]):
+                refuse("set -a exports every later assignment")
+    elif prog == "sort":
+        for a in args:
+            if a.startswith(("--output", "--compress-program")) or (
+                    a.startswith("-") and not a.startswith("--") and "o" in a[1:]):
+                refuse(f"sort {a} writes a file or runs a program")
+    elif prog == "uniq":
+        if len(value_operands(args, {"-f", "-s", "-w"})) > 1:
+            refuse("uniq writes its second operand")
+    elif prog == "xxd":
+        if len(value_operands(args, {"-c", "-g", "-l", "-o", "-s", "-n"})) > 1:
+            refuse("xxd writes its second operand")
+    elif prog == "tree":
+        if any(a.startswith("-o") for a in args):
+            refuse("tree -o writes a file")
+    elif prog == "file":
+        if any(a in ("-C", "--compile") for a in args):
+            refuse("file -C writes a compiled magic file")
+    elif prog == "rg":
+        if any(a == "--pre" or a.startswith("--pre=") for a in args):
+            refuse("rg --pre runs a program on every file")
 
 
 def check_segment(seg):
@@ -513,13 +606,20 @@ def check_segment(seg):
     assigned = []
     while seg and (seg[0] in KEYWORDS or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", seg[0], re.S)):
         head = seg.pop(0)
-        if head in ("for", "select", "case"):
-            return  # the words of a for-list are data, not a command; case bodies follow
+        if head in ("for", "select"):
+            check_name(seg[0] if seg else "", head)  # `for PATH in evil` binds PATH
+            return  # the words of a for-list are data, not a command
+        if head == "case":
+            return  # case bodies follow as their own segments
         name, sep, _ = head.partition("=")
         if sep:
             assigned.append(name)
     if not seg:
-        return  # `x=$(...)` on its own is a shell variable, not an environment prefix
+        # `x=$(...)` on its own is a shell variable, not an environment prefix — but
+        # only while x is not already exported: `PATH=evil:$PATH` stays exported.
+        for name in assigned:
+            check_name(name, "an assignment")
+        return
     # A name only matters once a command follows it: `VAR=value cmd` puts VAR in that
     # command's environment, and a variable can name a program to run (finding S-002).
     for name in assigned:
@@ -540,7 +640,7 @@ def check_segment(seg):
             refuse(f"{prog} with no command")
         return check_segment(args[i:])
     if prog in PLAIN:
-        return
+        return check_plain(prog, args)
     if prog in ("python3", "python", "python3.11", "python3.12", "python3.13", "python3.14"):
         return check_python(args)
     if prog in ("bash", "sh", "dash", "zsh"):

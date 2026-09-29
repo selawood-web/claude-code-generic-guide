@@ -130,7 +130,7 @@ being able to change anything.
   `--max-turns`, `--max-budget-usd`, `--output-format json`), all verified against the
   official reference on 2026-09-16; a rename in either breaks the skill, and the
   currency check inside the audit is the early signal
-- Depends on `worktree.baseRef` set to `head` in the audit's settings, because a subagent
+- Depends on `worktree.baseRef` set to `local` in the audit's settings, because a subagent
   worktree otherwise branches from the remote default branch and the verifier would
   reproduce findings against the wrong commit; a worktree carries committed files only,
   so the audit runs on committed HEAD and the preflight says what is uncommitted
@@ -351,3 +351,8 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   scripts and `git -C` to the worktree's own path, so reproductions use relative paths.
   Still open from that run's proposed checks: `guard.json` recording which hook command
   the refusal named, so the report states the registration and not only the verdict — [in]
+- 2026-09-29 — The check of the whole guide found `worktree.baseRef: "head"` is not a value the
+  product accepts (`remote` | `local`), so verifier worktrees branched from the remote default
+  branch; now `local`. The same check found the verifier guard approving branch-supplied code
+  (`cd`, `export`, `PATH=` reassignment, `rg --pre`, `node` running a script) and writes to any path;
+  closed by class, every probe a refused test row — [in]
