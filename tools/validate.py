@@ -52,6 +52,7 @@ import ast
 import io
 import json
 import os
+import posixpath
 import re
 import shutil
 import subprocess
@@ -959,6 +960,16 @@ def import_targets(text: str) -> list[str]:
     return IMPORT_RE.findall(body)
 
 
+def import_dest(path: str, target: str) -> str:
+    """Where an @import in `path` points, as a git path: "/"-separated on every platform.
+
+    The tracked set and ALWAYS_LOADED hold git paths, so os.path.normpath's answer,
+    backslash-separated on Windows, matched neither: every import below the root read
+    as "not tracked" there (psychexpert wire, 2026-09-29).
+    """
+    return posixpath.normpath(posixpath.join(posixpath.dirname(path), target))
+
+
 def imported_closure(root: str | None = None,
                      roots: tuple[str, ...] = ("CLAUDE.md", "AGENTS.md")) -> set[str]:
     """Every file reachable by @import from the roots, the roots included.
@@ -981,7 +992,7 @@ def imported_closure(root: str | None = None,
         for target in import_targets(text):
             if target.startswith("~"):
                 continue
-            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            dest = import_dest(path, target)
             if os.path.exists(os.path.join(base, dest)):
                 queue.append(dest)
     return seen
@@ -1026,7 +1037,7 @@ def check_imports() -> None:
             if target.startswith("~"):
                 warn(f"{path}: imports @{target}, outside the repository — it loads every session and nothing here can review it")
                 continue
-            dest = os.path.normpath(os.path.join(os.path.dirname(path), target))
+            dest = import_dest(path, target)
             if not os.path.exists(os.path.join(ROOT, dest)):
                 fail(f"{path}: imports @{target}, which does not exist — the rules it holds never load")
             elif dest not in tracked_all:
@@ -2216,9 +2227,16 @@ def currency_restatements(path: str, text: str) -> list[str]:
     if path == CURRENCY_HOME:
         return []
     body = "\n".join(strip_code_blocks(text.splitlines()))
-    if CURRENCY_MARKER not in body.lower() and "searched, never recalled" not in body:
-        return []
-    if not CURRENCY_LIST_RE.search(body):
+    # The rule and its list have to share a paragraph. Matched file-wide, the marker in
+    # one place and any sentence naming two of the items elsewhere read as a restatement:
+    # the Next.js agent block ("This version has breaking changes — APIs…"), which
+    # `next dev` regenerates word for word, failed every Next.js project (clinicpsy wire).
+    for para in re.split(r"\n[ \t]*\n", body):
+        if CURRENCY_MARKER not in para.lower() and "searched, never recalled" not in para:
+            continue
+        if CURRENCY_LIST_RE.search(para):
+            break
+    else:
         return []
     return [f"{path}: restates the currency rule with its own list of what to search — the list "
             f"has one home, {CURRENCY_HOME}'s Currency check; name the rule and point there"]
