@@ -2050,6 +2050,46 @@ class HookHeaderTests(unittest.TestCase):
                          {"session-end.sh": ["SessionEnd"], "session-start.sh": ["SessionStart"]})
 
 
+class ContextBudgetTests(unittest.TestCase):
+    """S0-1: the charter read 13543 bytes on Windows against a 13305-byte blob —
+    core.autocrlf adds a byte per line, and the budget is about what the model gets."""
+
+    BUDGET = 13_312
+
+    def _findings(self, data: bytes):
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(os.path.join(tmp, "WORKING-CHARTER.md"), "wb") as fh:
+                fh.write(data)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            del validate.findings[:]
+            try:
+                validate.check_context_budget()
+                return [f for f in validate.findings if "WORKING-CHARTER.md" in f]
+            finally:
+                validate.ROOT = old_root
+                del validate.findings[:]
+
+    def _text(self, size):
+        line = b"x" * 9 + b"\n"   # short lines, so a CRLF copy grows ~10%
+        body = line * (size // len(line))
+        return body + b"y" * (size - len(body))
+
+    def test_a_crlf_checkout_within_budget_passes(self):
+        data = self._text(self.BUDGET - 200).replace(b"\n", b"\r\n")
+        self.assertGreater(len(data), self.BUDGET, "the fixture has to be over on disk")
+        self.assertEqual(self._findings(data), [])
+
+    def test_the_exact_budget_passes_and_one_byte_more_fails(self):
+        self.assertEqual(self._findings(self._text(self.BUDGET)), [])
+        self.assertTrue(self._findings(self._text(self.BUDGET + 1)))
+
+    def test_a_crlf_file_over_budget_after_normalising_still_fails(self):
+        self.assertTrue(self._findings(self._text(self.BUDGET + 50).replace(b"\n", b"\r\n")))
+
+    def test_a_lone_cr_is_not_a_line_ending_and_still_counts(self):
+        self.assertTrue(self._findings(self._text(self.BUDGET) + b"\r"))
+
+
 class TrackedCacheTests(unittest.TestCase):
     """S4-7: one `git ls-files` per run, filtered here, must answer exactly as git does."""
 
