@@ -13,6 +13,7 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 import audit_env
 import audit_probes
@@ -104,6 +105,49 @@ class HarnessEnvTests(unittest.TestCase):
         self.assertEqual(leaked_names(env), [])
         for name in CREDENTIALS:
             self.assertNotIn(name, env)
+
+
+class BashPathTests(unittest.TestCase):
+    """S0-2: a bare "bash" on Windows is the WSL launcher, whatever PATH says."""
+
+    def test_the_launcher_is_recognised_in_system32_and_windowsapps(self):
+        for path in (r"C:\Windows\System32\bash.exe", r"c:\windows\system32\BASH.EXE",
+                     r"C:\Users\u\AppData\Local\Microsoft\WindowsApps\bash.exe",
+                     "C:/Windows/System32/bash.exe"):
+            with self.subTest(path=path):
+                self.assertTrue(audit_env.is_wsl_launcher(path))
+
+    def test_git_for_windows_bash_is_not_the_launcher(self):
+        for path in (r"C:\Program Files\Git\usr\bin\bash.exe", r"C:\Program Files\Git\bin\bash.exe",
+                     "/usr/bin/bash", r"D:\Windows\System32\bash.exe"):
+            with self.subTest(path=path):
+                self.assertFalse(audit_env.is_wsl_launcher(path))
+
+    def test_a_windows_directory_elsewhere_is_honoured(self):
+        self.assertTrue(audit_env.is_wsl_launcher(r"D:\Win\System32\bash.exe", windir=r"D:\Win"))
+
+    def test_candidates_follow_git_exe_and_the_default_install(self):
+        found = audit_env.git_bash_candidates(r"C:\Program Files\Git\cmd\git.exe", r"C:\Program Files")
+        self.assertEqual(found[0], r"C:\Program Files\Git\bin\bash.exe")
+        self.assertIn(r"C:\Program Files\Git\usr\bin\bash.exe", found)
+        self.assertEqual(found[-1], r"C:\Program Files\Git\bin\bash.exe")
+
+    def test_mingw_git_exe_reaches_the_same_bash(self):
+        found = audit_env.git_bash_candidates(r"C:\Program Files\Git\mingw64\bin\git.exe", None)
+        self.assertIn(r"C:\Program Files\Git\bin\bash.exe", found)
+
+    def test_no_git_and_no_program_files_gives_nothing_to_try(self):
+        self.assertEqual(audit_env.git_bash_candidates(None, None), [])
+
+    def test_an_explicit_override_wins(self):
+        with mock.patch.dict(os.environ, {"CCGG_BASH": "/opt/bash5/bin/bash"}):
+            self.assertEqual(audit_env.bash_path(), "/opt/bash5/bin/bash")
+
+    def test_the_answer_is_never_the_launcher_where_git_bash_exists(self):
+        path = audit_env.bash_path()
+        if os.name == "nt" and os.path.isfile(r"C:\Program Files\Git\bin\bash.exe"):
+            self.assertFalse(audit_env.is_wsl_launcher(path), path)
+        self.assertTrue(path)
 
 
 if __name__ == "__main__":

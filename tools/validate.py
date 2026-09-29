@@ -133,7 +133,12 @@ _TRACKED_ALL: list[str] | None = None
 
 
 def pathspec_filter(paths: list[str], pattern: str) -> list[str]:
-    """git ls-files' default pathspec match, over a listing already taken."""
+    """git ls-files' default pathspec match, over a listing already taken.
+
+    A backslash is a separator, as git treats it on Windows: a pattern built with
+    os.path.join (VERIFIER_BRIEF) matched nothing there, so its check saw no file.
+    """
+    pattern = pattern.replace("\\", "/")
     if any(c in pattern for c in "*?["):
         return [p for p in paths if fnmatch.fnmatchcase(p, pattern)]
     prefix = pattern.rstrip("/") + "/"

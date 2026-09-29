@@ -11,6 +11,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
 from unittest import mock
 
 import validate
@@ -1405,7 +1410,7 @@ class UnitTestStepTests(unittest.TestCase):
                 with open(path, "w", encoding="utf-8") as fh:
                     fh.write(text)
             env = dict(os.environ, PATH=os.path.dirname(sys.executable) + os.pathsep + os.environ["PATH"])
-            proc = subprocess.run(["bash", "-c", body], cwd=tmp, capture_output=True, text=True, env=env)
+            proc = subprocess.run([BASH, "-c", body], cwd=tmp, capture_output=True, text=True, env=env)
         return proc.returncode, proc.stdout + proc.stderr
 
     def test_an_installed_project_without_tests_still_skips(self):
@@ -1670,7 +1675,14 @@ class GateIntegrationTests(unittest.TestCase):
         cls.env = dict(os.environ, HOME=os.path.join(cls.tmp.name, "home"), GIT_CONFIG_NOSYSTEM="1",
                        GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@local", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@local")
         os.makedirs(cls.env["HOME"])
-        for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "baseline"]):
+        # The index modes travel with the copy: with core.filemode=false (every Windows
+        # checkout) `git add` records 100644, and the gate then fails every hook.
+        executable = [line.split("\t", 1)[1] for line in subprocess.check_output(
+            ["git", "ls-files", "-s"], cwd=root, text=True, encoding="utf-8").splitlines()
+            if line.startswith("100755")]
+        for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
+                    ["git", "update-index", "--chmod=+x", "--", *executable],
+                    ["git", "commit", "-q", "-m", "baseline"]):
             subprocess.run(cmd, cwd=cls.repo, env=cls.env, check=True, capture_output=True)
 
     @classmethod
@@ -2203,8 +2215,8 @@ class GateScriptTests(unittest.TestCase):
         env = {**os.environ, **self.BASE, **overrides}
         with tempfile.TemporaryDirectory() as tmp:
             env["GITHUB_STEP_SUMMARY"] = os.path.join(tmp, "summary.md")
-            proc = subprocess.run(["bash", "-c", self.script], env=env, capture_output=True, text=True)
-            summary = open(env["GITHUB_STEP_SUMMARY"]).read() if os.path.exists(env["GITHUB_STEP_SUMMARY"]) else ""
+            proc = subprocess.run([BASH, "-c", self.script], env=env, capture_output=True, text=True, encoding="utf-8")
+            summary = open(env["GITHUB_STEP_SUMMARY"], encoding="utf-8").read() if os.path.exists(env["GITHUB_STEP_SUMMARY"]) else ""
         return proc.returncode, proc.stdout + summary
 
     def test_a_complete_run_with_no_blockers_passes(self):

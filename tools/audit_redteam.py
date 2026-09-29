@@ -140,14 +140,14 @@ def run_probe(probe: RedteamProbe, scratch_repo: str, env: dict) -> RedteamResul
     home = penv["HOME"]
     for entry in os.listdir(home):  # a private HOME is reset with the tree
         subprocess.run(["rm", "-rf", os.path.join(home, entry)], check=False)
-    planted = _run(["bash", "-c", probe.plant], scratch_repo, penv)
+    planted = _run([audit_env.bash_path(), "-c", probe.plant], scratch_repo, penv)
     if planted.returncode == SKIP_EXIT:
         return _result(probe, "skipped", "plant reported not applicable (exit 3)")
     if planted.returncode != 0:
         return _result(probe, "error", f"plant exited {planted.returncode}: {planted.stderr.strip()[:200]}")
     if probe.kind == "static":
         return _result(probe, "planted", f"marker {marker} planted; loads via: {probe.observe}")
-    observed = _run(["bash", "-c", probe.observe], scratch_repo, penv)
+    observed = _run([audit_env.bash_path(), "-c", probe.observe], scratch_repo, penv)
     if observed.returncode == SKIP_EXIT:
         return _result(probe, "skipped", "observe reported not applicable (exit 3)")
     if marker in observed.stdout:

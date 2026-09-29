@@ -18,6 +18,11 @@ import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 HOOK = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                     ".claude", "hooks", "audit-verifier-guard.sh")
@@ -319,13 +324,13 @@ REFUSED = [
 
 def run_guard(command: str, tool: str = "Bash") -> tuple[int, str]:
     payload = json.dumps({"tool_name": tool, "tool_input": {"command": command}})
-    proc = subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True)
+    proc = subprocess.run([BASH, HOOK], input=payload, capture_output=True, text=True)
     return proc.returncode, proc.stderr
 
 
 def guard_stdout(command: str, tool: str = "Bash") -> str:
     payload = json.dumps({"tool_name": tool, "tool_input": {"command": command}})
-    return subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True).stdout
+    return subprocess.run([BASH, HOOK], input=payload, capture_output=True, text=True).stdout
 
 
 class AllowListTests(unittest.TestCase):
@@ -374,7 +379,7 @@ class AllowListTests(unittest.TestCase):
         self.assertEqual(rc, 0)
 
     def test_non_json_input_refused(self):
-        proc = subprocess.run(["bash", HOOK], input="not json", capture_output=True, text=True)
+        proc = subprocess.run([BASH, HOOK], input="not json", capture_output=True, text=True)
         self.assertEqual(proc.returncode, 2)
 
 
@@ -416,7 +421,7 @@ class GuardFailureTests(unittest.TestCase):
                     fh.write(stub_body)
                 os.chmod(stub, os.stat(stub).st_mode | stat.S_IEXEC)
                 env["PATH"] = tmp + os.pathsep + env.get("PATH", "")
-            proc = subprocess.run(["bash", hook], input=payload,
+            proc = subprocess.run([BASH, hook], input=payload,
                                   capture_output=True, text=True, env=env)
         return proc.returncode, proc.stderr
 
@@ -455,7 +460,7 @@ class GuardFailureTests(unittest.TestCase):
         rc, _ = self._run()
         self.assertEqual(rc, 2)
         payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}})
-        proc = subprocess.run(["bash", HOOK], input=payload, capture_output=True, text=True)
+        proc = subprocess.run([BASH, HOOK], input=payload, capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0)
 
 
@@ -480,7 +485,7 @@ class ScopedRegistrationTests(unittest.TestCase):
         # A guard that never answers is a guard that blocks nothing a human is
         # waiting on; a hang here is a failure, not a pause (a mutant that accepted
         # an empty --only-agent looped forever on a lone flag).
-        proc = subprocess.run([shutil.which("bash"), HOOK, *args], input=json.dumps(payload),
+        proc = subprocess.run([BASH, HOOK, *args], input=json.dumps(payload),
                               capture_output=True, text=True, env=env, timeout=20)
         return proc.returncode, proc.stdout, proc.stderr
 
@@ -510,7 +515,7 @@ class ScopedRegistrationTests(unittest.TestCase):
     def test_compact_json_matches_too(self):
         # json.dumps writes a space after the colon; the product may not.
         payload = '{"tool_name":"Bash","tool_input":{"command":"uname -a"},"agent_type":"audit-verifier"}'
-        proc = subprocess.run([shutil.which("bash"), HOOK, *self.SCOPED], input=payload,
+        proc = subprocess.run([BASH, HOOK, *self.SCOPED], input=payload,
                               capture_output=True, text=True, timeout=20)
         self.assertEqual(proc.returncode, 2, proc.stderr)
 
@@ -535,9 +540,19 @@ class ScopedRegistrationTests(unittest.TestCase):
         """A project without python3 keeps its Bash; only the verifier's calls need it."""
         bindir = tempfile.mkdtemp(prefix="ccgg-nopy-")
         try:
-            for tool in ("cat", "env"):
-                os.symlink(shutil.which(tool), os.path.join(bindir, tool))
-            env = {"PATH": bindir}
+            if os.name == "nt":
+                # Git's cat.exe loads its MSYS runtime from its own directory, so a link
+                # to it elsewhere cannot run and the guard read no input. Git's usr/bin
+                # is the restricted PATH instead: cat and env, and no python3 in it.
+                tools_dir = os.path.dirname(shutil.which("cat") or "")
+                if not tools_dir or any(os.path.exists(os.path.join(tools_dir, n))
+                                        for n in ("python3.exe", "python3", "python.exe")):
+                    self.skipTest("no directory with cat and env and without python3")
+                env = {"PATH": tools_dir, "SystemRoot": os.environ.get("SystemRoot", "C:\\Windows")}
+            else:
+                for tool in ("cat", "env"):
+                    os.symlink(shutil.which(tool), os.path.join(bindir, tool))
+                env = {"PATH": bindir}
             rc, out, err = self.run_scoped("ls", env=env)
             self.assertEqual(rc, 0, err)
             self.assertEqual(out.strip(), "")

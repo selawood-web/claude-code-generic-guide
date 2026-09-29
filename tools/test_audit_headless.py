@@ -39,6 +39,12 @@ from audit_headless import (
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def MISSING(name: str) -> str:
+    """An absolute path that does not exist, on any host. "/nonexistent/x" is not
+    absolute on Windows (no drive), so the refusal tested was the wrong one."""
+    return os.path.join(tempfile.gettempdir(), "ccgg-does-not-exist", name)
 SKILL = os.path.join(ROOT, audit_headless.SKILL_PATH)
 
 SAMPLE = """---
@@ -650,7 +656,7 @@ class MainTests(unittest.TestCase):
 
     def test_missing_trusted_source_refused(self):
         code, _, err = self.run_main("--guard", self.guard,
-                                     "--trusted-source", "/nonexistent/trusted", "--dry-run")
+                                     "--trusted-source", MISSING("trusted"), "--dry-run")
         self.assertEqual(code, 2)
         self.assertIn("not a directory", err)
 
@@ -693,7 +699,7 @@ class MainTests(unittest.TestCase):
         self.assertIn("absolute", err)
 
     def test_missing_guard_file_refused(self):
-        code, _, err = self.run_main("--guard", "/nonexistent/guard.sh", "--trusted-source", self.source, "--dry-run")
+        code, _, err = self.run_main("--guard", MISSING("guard.sh"), "--trusted-source", self.source, "--dry-run")
         self.assertEqual(code, 2)
         self.assertIn("does not exist", err)
 

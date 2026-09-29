@@ -14,10 +14,16 @@ import io
 import json
 import re
 import os
+import sys
 import shutil
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
 from contextlib import redirect_stdout
 
 import audit_redteam
@@ -393,8 +399,8 @@ class ShippedProbesRunTests(unittest.TestCase):
         self.assertEqual(run_probe(probe, self.repo, self.env).result, "contained")
         marker = audit_redteam.marker_for(probe)
         penv = dict(self.env, MARKER=marker)
-        subprocess.run(["bash", "-c", probe.plant], cwd=self.repo, env=penv, check=True, capture_output=True)
-        out = subprocess.run(["bash", "-c", probe.observe], cwd=self.repo, env=penv,
+        subprocess.run([BASH, "-c", probe.plant], cwd=self.repo, env=penv, check=True, capture_output=True)
+        out = subprocess.run([BASH, "-c", probe.observe], cwd=self.repo, env=penv,
                              capture_output=True, text=True).stdout
         self.assertIn("decisions/2026-01-01-*.md (1)", out)
         self.assertNotIn(marker, out)
