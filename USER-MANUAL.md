@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 28 Skill workflows | Step-by-step procedures for every common dev task |
+| 29 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 28 skill workflows
+- All 29 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 28 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 29 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -794,6 +794,27 @@ what's the next step
 ```
 
 **Note:** It layers on the charter's handoff rules and never overrides a boundary — branch scope, the code-module gate, and approval-gated deploys still stop the work, but the stop still ends with `NEXT →` naming what unblocks it.
+
+### `/eli10` — Plain Words, One Card at a Time
+
+**Use when:** A reply was hard to follow, you want to know what to do next, or you have steps to carry out yourself.
+
+**What it does:**
+1. Splits the last reply (or one item of it, or your steps) into the things you act on or decide
+2. Orders them the way you should act — blocking first, optional last
+3. Writes one card each: **What**, **Why**, **You do**, **Done when** — everyday words, no term left to look up
+4. Gives steps you carry out one per turn when they can fail: reply `done` for the next, `stuck` to fix this one
+5. Ends with a coded pick-list or a single next step, so you answer with `ok`, `go`, or codes like `1B`
+
+**Examples:**
+```
+/eli10
+eli10 one by one
+why 2
+/eli10 steps
+```
+
+**Note:** The card format and the reply codes (`ok`, `1A 2C`, `no 2`, `why 2`, `more`) are the fast-reply system in `.claude/references/dialogue.md`; every reply follows it, the skill just applies it on request.
 ## 7. Memory System
 
 Memory is the most powerful feature of this infrastructure. It is what makes sessions accumulate knowledge instead of resetting.
@@ -1127,6 +1148,7 @@ Details for each command are in [section 6](#6-skills-reference).
 | `/testing <target>` | A module needs tests, or coverage is thin | medium |
 | `/refactor <target>` | Cleaning up structure without changing behavior | medium |
 | `/momentum <task>` | A task will take several turns and must not stall | low overhead |
+| `/eli10 [item]` | A reply, a list, or your steps need plain words, one at a time | low overhead |
 
 **Review** — scope every review to what changed; a whole-repo pass is the expensive exception
 
