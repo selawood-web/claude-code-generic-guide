@@ -130,7 +130,7 @@ being able to change anything.
   `--max-turns`, `--max-budget-usd`, `--output-format json`), all verified against the
   official reference on 2026-09-16; a rename in either breaks the skill, and the
   currency check inside the audit is the early signal
-- Depends on `worktree.baseRef` set to `local` in the audit's settings, because a subagent
+- Depends on `worktree.baseRef` set to `head` in the audit's settings, because a subagent
   worktree otherwise branches from the remote default branch and the verifier would
   reproduce findings against the wrong commit; a worktree carries committed files only,
   so the audit runs on committed HEAD and the preflight says what is uncommitted
@@ -356,3 +356,7 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   branch; now `local`. The same check found the verifier guard approving branch-supplied code
   (`cd`, `export`, `PATH=` reassignment, `rg --pre`, `node` running a script) and writes to any path;
   closed by class, every probe a refused test row — [in]
+- 2026-09-29 — Measured, and reversed: on Claude Code 2.1.274 `worktree.baseRef: "head"` puts a
+  worktree subagent on the local feature branch (2/2 runs) and `"local"` on `main` (2/2), the
+  same as unset. The earlier entry followed the settings reference without measuring; the
+  setting is `"head"` again and the decision record carries the method — [in]

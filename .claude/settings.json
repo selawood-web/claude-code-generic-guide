@@ -63,6 +63,6 @@
     ]
   },
   "worktree": {
-    "baseRef": "local"
+    "baseRef": "head"
   }
 }

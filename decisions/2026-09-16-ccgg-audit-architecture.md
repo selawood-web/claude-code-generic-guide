@@ -56,12 +56,12 @@ Verified against code.claude.com/docs on 2026-09-16:
   written; the design below removes Bash from specialists entirely and confines it to
   the verifier.
 - **`isolation: worktree` branches from the remote default branch** unless
-  `worktree.baseRef` is `"local"` (corrected 2026-09-29 — see the last Corrections section), and a worktree is a fresh checkout of tracked files —
+  `worktree.baseRef` is `"head"` (measured 2026-09-29 — see the last Corrections section), and a worktree is a fresh checkout of tracked files —
   uncommitted changes are not carried. Commands inside are mechanically confined: edits,
   working directory, and git redirects into the main checkout are blocked, and a command
   whose shape cannot be verified is refused. *(worktrees reference)* Consequence: the
   audit runs on committed HEAD, the skill's preflight says so, and the audit's settings
-  set `baseRef` to `"local"`.
+  set `baseRef` to `"head"`.
 - **`omitClaudeMd: true`** launches a subagent without user, project, and local
   `CLAUDE.md`. *(sub-agents reference)* Every audit subagent sets it: the audited
   repository's rules are evidence, not instructions.
@@ -205,9 +205,9 @@ command mechanically; `disallowedTools` removes the write tools; the audit's own
 settings deny `Bash(git push *)`, `Bash(rm *)`, `Bash(curl *)`, `Bash(wget *)` as a
 second layer.
 
-*Why `baseRef: "local"`:* the default worktree base is the remote default branch, which
+*Why `baseRef: "head"`:* the default worktree base is the remote default branch, which
 would make the verifier reproduce findings against `master` while the specialists read
-the feature branch. The audit's settings fragment sets `worktree.baseRef` to `"local"`.
+the feature branch. The audit's settings fragment sets `worktree.baseRef` to `"head"`.
 
 **5. The skill — `.claude/skills/ccgg-audit/SKILL.md`.** Owns the order and nothing
 else: preflight (git clean or say what is uncommitted; scope parsed; report directory
@@ -450,11 +450,15 @@ _Empty at creation._
 
 ## Corrections — 2026-09-29 check
 
-- *`baseRef` value.* `"head"` was never a value the product accepts: the settings reference
-  lists `"remote"` (the default) and `"local"` ("branch from your local HEAD"). An
-  unrecognised value leaves the default in force, so verifier worktrees were branching
-  from the remote default branch — the exact behaviour this record set out to avoid. The
-  setting is now `"local"`; every reference above is updated in place.
+- *`baseRef` value — measured, and the docs' value is the wrong one.* The settings reference
+  lists only `"remote"` (default) and `"local"` ("branch from your local HEAD"), so an earlier
+  change the same day (#97) moved this to `"local"` on the docs' word, without measuring.
+  Measured on Claude Code 2.1.274 — a scratch origin with commit A on `main`, a local
+  `feature` branch with commit B, a worktree-isolated subagent printing its branch and
+  commit, fresh clone per run: `"head"` put the worktree on **B** (2/2), `"local"` on **A**
+  (2/2), unset on **A** (1/1). `"local"` behaves as the default here, not as documented;
+  `"head"` is the value that does what this record needs. Restored to `"head"`. Re-measure
+  whenever the pinned CLI version moves — the docs and the product disagree.
 - *The verifier guard's allow-list* approved code from the audited branch through `cd`,
   `export`/`declare`, re-assigned exported variables (`PATH=evil:$PATH`), `rg --pre`,
   `git grep -O`, `node <script>`, and several write-to-any-path options. Closed by class in
