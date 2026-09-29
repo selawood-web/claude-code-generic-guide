@@ -1099,41 +1099,97 @@ what do you remember about this project?   # verify memory loaded
 I want to: [your goal today]               # state the goal
 ```
 
-### Common tasks
+### Which command, when
 
-```
-/requirements    ← new feature idea
-/architecture    ← design a system
-/debug           ← something is broken
-/ccgg-code-review     ← review changes
-/refactor        ← clean up code
-/testing         ← write tests
-/ccgg-security-review ← audit for vulnerabilities
-```
+**Cost** is how much one run spends: **low** is a single pass over what is in
+front of it, **medium** reads across the codebase, **high** launches subagents
+or runs for many steps. **Fresh** means start it in a new session (`/flush`,
+then `/clear`). Every step re-reads the whole conversation, so a high-cost
+command on a long session costs several times what it costs on a fresh one.
+Details for each command are in [section 6](#6-skills-reference).
 
-### Git workflow
+**Plan**
 
-```
-/commit          ← stage and commit with conventional message
-/pr              ← create a pull request
-/deploy          ← deploy to an environment
-```
+| Command | Use it when | Cost |
+|---------|-------------|------|
+| `/requirements <idea>` | An idea is still vague and needs to become a spec | medium |
+| `/feature <idea>` | A capability is clear enough to define and track to done | low |
+| `/decide <question>` | Choosing between options: X vs Y, go/no-go. Reversible, low-stakes choices take the light path by themselves | medium, high on big calls |
+| `/architecture <system>` | Designing something new, or restructuring across modules | medium |
+| `/product-brief <idea>` | Deciding whether an app or feature is worth building at all | high, fresh |
 
-### Knowledge management
+**Build**
 
-```
-remember: [fact] — reason: [why]   ← save something now
-/learn                             ← structured knowledge capture
-/flush                             ← save session summary (before ending)
-/dream                             ← consolidate memory (weekly)
-/memory                            ← browse all memory files
-```
+| Command | Use it when | Cost |
+|---------|-------------|------|
+| `/code-generation <what>` | Implementing a feature to the full quality bar | medium |
+| `/debug <error>` | Something is broken and the cause is not obvious | medium |
+| `/testing <target>` | A module needs tests, or coverage is thin | medium |
+| `/refactor <target>` | Cleaning up structure without changing behavior | medium |
+| `/momentum <task>` | A task will take several turns and must not stall | low overhead |
+
+**Review** — scope every review to what changed; a whole-repo pass is the expensive exception
+
+| Command | Use it when | Cost |
+|---------|-------------|------|
+| `/ccgg-code-review [PR or path]` | Before opening or merging a PR — reviews the diff | medium |
+| `/ccgg-security-review <scope>` | A change touches auth, user input, secrets, file or network access, or dependencies | medium |
+| `/ccgg-audit harness` | You changed rules, skills, hooks or settings — checks they fire, agree, and resist planted content (4 agents) | high, fresh |
+| `/ccgg-audit process` | You want to know whether the tests and feature definitions prove what they claim (2 agents) | high, fresh |
+| `/ccgg-audit product` | Security and test quality of the application code (2 agents) | high, fresh |
+| `/ccgg-audit <path>` | One directory, all angles | high, fresh |
+| `/ccgg-audit all` | Before a release or after a large harness change — all six specialists. Prefer running the layers one at a time | highest, fresh |
+| `/efficiency` | Sessions feel expensive, or after adding to the always-loaded files | medium |
+| `/reconcile-docs <topic>` | Two documents state the same rule differently | medium |
+| `/gbb <app>` | The product works but feels worse than the vision | high, fresh |
+
+**Ship**
+
+| Command | Use it when | Cost |
+|---------|-------------|------|
+| `/commit` | Saving work as a conventional commit | low |
+| `/pr` | Opening a pull request for review | low |
+| `/ship` | The whole finish line: commit, push, PR, green CI, merge. Typing it authorizes the merge | medium |
+| `/deploy <env>` | Releasing to an environment that already exists | medium |
+| `/deploy-steward` | A project has no deploy target yet | medium |
+
+**Set up and remember**
+
+| Command | Use it when | Cost |
+|---------|-------------|------|
+| `/git-steward` | Starting a new project that needs a repo | low |
+| `/wire <repo>` | Installing CCGG into another repository | medium |
+| `/learn` or `remember: …` | Something non-obvious was just discovered | low |
+| `/flush` | A task is finished, before `/clear` or ending the session | low |
+| `/standup` | You need a summary of recent work | low |
+| `/dream` | Weekly, or after five or more sessions without consolidation | high, fresh |
+| `/skillify` | You just finished a workflow the team will repeat | low |
+
+### Keeping sessions cheap
+
+- **One task, one session.** Finished a task? `/flush`, then `/clear`. Mid-task
+  and the session is long? `/compact`. `/clear` is cheaper: nothing is carried
+  over and nothing has to be summarized.
+- **The context guard enforces the worst case.** `.claude/hooks/context-guard.sh`
+  blocks `/ccgg-audit`, `/gbb`, `/product-brief` and `/dream` once when the
+  session already holds more than 100k tokens, and tells you to flush and clear.
+  Type the command again to run it anyway. Past 300k tokens it shows one
+  warning per 100k. `CCGG_CONTEXT_GUARD=off` disables it; the thresholds are
+  `CCGG_HEAVY_MAX_TOKENS` and `CCGG_CONTEXT_WARN_TOKENS`.
+- **Scope, then widen.** Audit one layer, review one diff. Widen only when the
+  narrow pass finds something.
+- **Check in sections.** For a large check, take one section at a time: its
+  findings go to a file, you pick what to fix, and a section is not re-checked
+  in the same session.
+- **Never poll by hand.** Waiting on CI, a deploy or a build belongs in a
+  background task that reports when it finishes, not in repeated status calls.
 
 ### Context management
 
 ```
-/compact [focus]       ← compress history before it auto-compacts
 /context               ← see what's loaded and how much context it uses
+/flush then /clear     ← between tasks: save the summary, start clean
+/compact [focus]       ← mid-task on a long session: compress history
 /memory                ← browse and edit memory files
 ```
 
