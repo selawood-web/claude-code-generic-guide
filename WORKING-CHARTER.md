@@ -205,7 +205,7 @@ These travel with the charter into any project:
 
 > Copying the charter into another project? Replace this section. The list above stays.
 
-**What it is:** a drop-in documentation and configuration layer — markdown, four bash
+**What it is:** a drop-in documentation and configuration layer — markdown, five bash
 hooks, a JSON settings file, VS Code tasks, and the Python tooling in `tools/`
 (validator, feature lint, catalog, audit) that CI runs on every pull request.
 

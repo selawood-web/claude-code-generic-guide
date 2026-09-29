@@ -23,17 +23,22 @@ Two research layers are explicitly **not** CCGG's job: serving infrastructure
 
 ## Success Criteria
 
-- [ ] Auto-loaded context (`CLAUDE.md`, `AGENTS.md`, charter, memory index) is
+- [x] Auto-loaded context (`CLAUDE.md`, `AGENTS.md`, charter, memory index) is
       cache-stable: no volatile content (dates, counters, session-specific
       text) in any file loaded at session start; validator enforces it.
 - [ ] A session following the new rules performs heavy exploration only in
       subagents; the main context receives bounded summaries.
-- [ ] An `/efficiency` audit runs on any CCGG-equipped project and produces a
+- [x] An `/efficiency` audit runs on any CCGG-equipped project and produces a
       concrete findings list with at least the four checks defined below.
-- [ ] All existing repo validations stay green; docs/skill catalog/validator
+- [x] All existing repo validations stay green; docs/skill catalog/validator
       remain consistent (the "one home per rule" invariant holds).
-- [ ] Rollout to other repos requires no new manual steps — `install.sh` and
+- [x] Rollout to other repos requires no new manual steps — `install.sh` and
       `/wire` carry the pack automatically.
+
+*Ticked 2026-09-29 against the tree: `check_volatile_content` in `tools/validate.py`;
+`.claude/skills/efficiency/SKILL.md` with its four checks; CI green; `install.sh`
+copies the skill and `/wire` runs it. The second stays open on purpose: the rule
+shipped (the charter's *Efficiency*), but nothing measures whether sessions follow it.*
 
 ## User Stories (MVP scope)
 

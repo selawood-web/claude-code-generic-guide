@@ -56,6 +56,9 @@ if [ "$USER_MODE" -eq 1 ]; then
   TARGET="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
   mkdir -p "$TARGET/skills"
   SKILLS_DIR="skills"
+  # A personal skill wins a name clash with a project's, so this overrides every wired
+  # project's pinned copy on the machine until it is removed (finding S3-1).
+  echo "ccgg update: personal skills override same-named project skills in every project on this machine — re-run this after each pull, or remove them"
 else
   TARGET="${1:-.}"
   if [ ! -d "$TARGET" ]; then

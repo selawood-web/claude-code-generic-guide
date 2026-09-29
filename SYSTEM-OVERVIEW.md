@@ -154,7 +154,7 @@ one line of explanation.
 
 ---
 
-## The automation: three hooks that run by themselves
+## The automation: four hooks that run by themselves
 
 A hook is a small script the system runs automatically at fixed moments — no one
 has to remember anything.
@@ -163,9 +163,10 @@ has to remember anything.
 |------|-------------|--------------|
 | **Session start** | The moment a session opens | Syncs CCGG-owned files from the guide clone when `CCGG_HOME`, `CCGG_REPO` and `CCGG_REF` are all set (so merged guide PRs reach every session; any one of them missing and it runs nothing), runs the validator and shows the repo's health, points at the last session log, and surfaces open decision records. In a project without these tools, it stays silent |
 | **Before compaction** | Just before the AI compresses its conversation history | Tells the compaction model what the summary must keep — boundary, decisions, gate state, open threads — so the facts whose loss causes re-work survive the compression |
-| **Session end** | The session closes | Leaves a timestamped marker that the next session's start hook reads back |
+| **Session end** | The session closes | Leaves a timestamped marker, per project, that the next session's start hook reads back |
+| **Context guard** | Every prompt, and every typed command | Stops a heavy command (`/ccgg-audit`, `/gbb`, `/product-brief`, `/dream`) once when the session is already over 100k tokens and names the cheaper path — `/flush`, `/clear`, run it again; past 300k it warns once per 100k. Typing the command again runs it anyway |
 
-A fourth hook script, the audit verifier's guard, is not registered here: it is scoped to
+A fifth hook script, the audit verifier's guard, is not registered here: it is scoped to
 one subagent by its own definition and refuses write-shaped commands only while that
 agent runs.
 
@@ -218,8 +219,8 @@ twice by a human becomes a check run forever by the machine**.
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks at most one question at a time, escalates instead of proceeding on anything destructive |
 | **The 28 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
-| **The 3 hooks** | Run automatically at session start, before compaction, and at session end — the part of the memory system that needs no one to remember it |
-| **The validator + CI** | Check every proposed change against twelve rules and block anything broken from reaching the main branch |
+| **The 4 hooks** | Run automatically at session start, before compaction, at session end, and on every prompt (the context guard) — the part of the system that needs no one to remember it |
+| **The validator + CI** | Check every proposed change against every check in `tools/validate.py` and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |
 
 ---

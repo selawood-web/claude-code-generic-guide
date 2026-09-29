@@ -1579,13 +1579,6 @@ class HookStdoutDocTests(unittest.TestCase):
         finally:
             del validate.findings[:]
 
-    def test_the_hooks_chapter_states_the_reaching_events(self):
-        with open(os.path.join(validate.ROOT, "docs", "10-hooks.md"), encoding="utf-8") as fh:
-            text = fh.read()
-        for event in validate.hook_stdout_reaches_model():
-            with self.subTest(event=event):
-                self.assertIn(f"`{event}`", text)
-
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
             validate.hook_stdout_conflicts("docs/x.md", None)

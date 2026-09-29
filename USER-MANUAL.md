@@ -1,6 +1,6 @@
 # User Manual — AI Development Infrastructure
 
-**Version 1.0 · July 2026**
+**Version 1** — kept current with the repository; `git log USER-MANUAL.md` dates every change.
 
 This manual explains how to install, configure, and use the generic AI development infrastructure in this repository. It is written for software developers who want an AI coding assistant that gets smarter the longer they use it.
 
@@ -1299,4 +1299,4 @@ ls ~/.claude/memory/*/sessions/           # session logs written by /flush
 
 ---
 
-*For the full Claude Code / Copilot CLI reference, see the `docs/` directory (22 chapters covering every feature).*
+*For Claude Code itself — every feature, setting and command — see the official documentation at https://code.claude.com/docs.*

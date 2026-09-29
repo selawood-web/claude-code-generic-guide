@@ -232,6 +232,20 @@ def _hook_modes(target, env):
             for line in _git(target, env, "ls-files", "-s", ".claude/hooks").splitlines()}
 
 
+class PersonalInstallTests(unittest.TestCase):
+    """S3-1: personal skills override every project's same-named copy, and a stale set
+    kept running /ship and /deploy in every wired project. The run says so."""
+
+    def test_a_personal_install_warns_that_it_overrides_projects(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-user-") as tmp:
+            env = dict(_git_env(tmp), CLAUDE_CONFIG_DIR=os.path.join(tmp, "config"))
+            proc = subprocess.run(["bash", os.path.join(ROOT, "update.sh"), "--user"], env=env,
+                                  capture_output=True, text=True)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn("override same-named project skills", proc.stdout)
+            self.assertTrue(os.path.isfile(os.path.join(tmp, "config", "skills", "commit", "SKILL.md")))
+
+
 class ProjectOwnSkillTests(unittest.TestCase):
     """S4-1 end to end: an installed project adds an ordinary Claude Code skill — name
     and description only — and its own gate still passes once the catalog is

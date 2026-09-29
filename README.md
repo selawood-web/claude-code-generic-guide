@@ -35,14 +35,15 @@ prints the only steps that need a human: filling in your project's conventions
 and constraints, and the `/context` verification. Prefer to understand each
 piece first? The manual steps:
 
-### 1. Drop AGENTS.md and CLAUDE.md into your project root
+### 1. Drop AGENTS.md, WORKING-CHARTER.md and CLAUDE.md into your project root
 ```bash
-cp AGENTS.md CLAUDE.md /path/to/your-project/
+cp AGENTS.md WORKING-CHARTER.md CLAUDE.md /path/to/your-project/
 ```
-This gives your AI assistant professional engineering behavior. Both files are
-needed: Claude Code reads `CLAUDE.md` (which imports `@AGENTS.md`), while other
-assistants read `AGENTS.md` directly — without the `CLAUDE.md` bridge, Claude
-Code never loads the rules at all.
+This gives your AI assistant professional engineering behavior. All three are
+needed: Claude Code reads `CLAUDE.md`, which imports `@AGENTS.md` and
+`@WORKING-CHARTER.md`, while other assistants read `AGENTS.md` directly. Without
+the bridge Claude Code loads none of the rules; without the charter the import
+points at nothing, and the rules only it states never load.
 
 ### 2. Copy the .claude/ directory
 ```bash
@@ -134,6 +135,15 @@ them in unrelated repositories, while the validator and catalog need a repositor
 to act on. A personal install therefore gives you the skills without the behavior
 rules; wire the project itself to get both.
 
+**A personal skill overrides the project's copy of the same name** — Claude Code
+resolves a name clash as enterprise over personal over project
+([skills reference](https://code.claude.com/docs/en/skills)). So in every wired
+project on the machine, `/deploy`, `/ship`, `/wire` and the rest run the personal
+copy, not the one the project pinned with `CCGG_REF`, and a personal copy left
+behind by an older guide keeps running long after the projects moved on. Use the
+personal install on a machine without wired projects, or keep it current with every
+pull — never both unattended.
+
 Neither mode ever deletes. A skill directory in the target that the guide does
 not ship — one of yours, or what an upstream rename left behind — is reported and
 left in place.
@@ -199,13 +209,8 @@ claude-code-generic-guide/
 ├── features/                    ← Feature definitions — what is being built, and when it is done
 │
 ├── knowledge-base/              ← Seeded engineering wisdom (patterns, principles, pitfalls)
-├── tools/                       ← validate.py + feature_lint.py — the repo's CI quality gate
-├── .github/workflows/           ← CI: runs the validator on every PR
-│
-└── docs/                        ← Full Claude Code / Copilot CLI reference (22 chapters)
-    ├── 01-getting-started.md
-    ├── ...
-    └── 22-permissions-and-safety.md
+├── tools/                       ← the gate: validate.py, feature_lint.py, catalog.py, the audit scripts, and their tests
+└── .github/workflows/           ← CI: runs the validator on every PR
 ```
 
 ---
@@ -307,11 +312,12 @@ After any significant session:
 
 ---
 
-## Claude Code / Copilot CLI Reference
+## Claude Code Reference
 
-Full 22-chapter documentation in `/docs/` — a snapshot mirror (see the provenance note in `docs/index.md`); for current product behavior the canonical source is https://code.claude.com/docs:
-- Sessions, memory, skills, agents, MCP servers, plugins, hooks, and more
-- See `docs/index.md` for the full table of contents
+For the product itself — sessions, memory, skills, subagents, MCP servers, plugins,
+hooks, settings — the source is the official documentation at
+https://code.claude.com/docs. This repository does not mirror it: a copy goes
+stale, and a stale copy is read as current.
 
 ---
 
