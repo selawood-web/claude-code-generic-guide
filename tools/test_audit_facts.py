@@ -434,6 +434,11 @@ class ConfigSurfaceTests(unittest.TestCase):
         (fact,) = self.facts_for({})
         self.assertEqual(fact.status, "ok")
 
+    def test_servers_declared_says_none_for_unparsable_json_only(self):
+        self.assertIsNone(audit_facts.mcp_servers_declared(".mcp.json", "{"))
+        self.assertEqual(audit_facts.mcp_servers_declared(".mcp.json", "{}"), (0, 0))
+        self.assertEqual(audit_facts.mcp_servers_declared(".mcp.json", '{"mcpServers": []}'), (0, 0))
+
     def test_an_mcp_json_server_is_a_finding_with_its_command_count(self):
         (fact,) = self.facts_for({".mcp.json": '{"mcpServers": {"x": {"command": "node", "args": ["s.js"]}}}'})
         self.assertEqual(fact.status, "finding")
@@ -455,9 +460,12 @@ class ConfigSurfaceTests(unittest.TestCase):
                                 ".mcp.json": '{"mcpServers": {}}'})
         self.assertEqual([f.status for f in facts], ["ok", "ok"])
 
-    def test_unparseable_json_declares_nothing_rather_than_crashing(self):
+    def test_unparseable_json_is_reported_rather_than_crashing(self):
+        """Never a crash — and never "ok" either. This used to assert status ok: a file
+        nobody could read, rendered as one that declares no server (finding S4-4)."""
         (fact,) = self.facts_for({".mcp.json": "{not json"})
-        self.assertEqual(fact.status, "ok")
+        self.assertEqual(fact.status, "finding")
+        self.assertIn("does not parse", fact.evidence)
 
     def test_both_files_get_their_own_fact(self):
         facts = self.facts_for({".mcp.json": '{"mcpServers": {"a": {"url": "https://x"}}}',

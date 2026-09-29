@@ -240,7 +240,10 @@ def deterministic_stages(report_dir: str) -> dict:
     """
     facts = read_json(os.path.join(report_dir, "facts.json"))
     scope = facts.get("scope") if isinstance(facts, dict) else None
-    present = {name: os.path.exists(os.path.join(report_dir, f"{name}.json"))
+    # Present means it parses. A stage killed mid-write leaves a truncated file that
+    # existed, so it counted as run, while every line it should have produced simply
+    # vanished from the report (finding S4-3).
+    present = {name: read_json(os.path.join(report_dir, f"{name}.json")) is not None
                for name in ("facts", "probes", "redteam")}
     # An unknown scope (no facts.json) cannot require the scope-specific stages;
     # the missing facts.json is the thing worth reporting in that case.
@@ -259,11 +262,20 @@ def run_evidence(report_dir: str) -> dict:
     "Found nothing" and "never ran" both produce zero findings, and only one of
     them is a clean bill. The deterministic stage leaves facts and probes behind
     whether or not a model follows it, so those are not evidence: the specialists'
-    candidate files, a findings file with records in it, and the orchestrator's
-    revision stamp are.
+    candidate files (one per specialist, `[]` when it found nothing) and a findings
+    file with records in it are.
+
+    The revision stamp is evidence only when it carries a measured spawn count. It
+    is written at the end of every run — by the launcher whenever the CLI exits 0,
+    by the orchestrator in its render step — so on its own it proves the run ended,
+    not that a specialist ever started: a run that spawned nothing rendered
+    "complete, 0 findings" (finding S4-2).
     """
     candidates = bool(glob.glob(os.path.join(report_dir, "candidates", "*.json")))
-    stamped = bool(glob.glob(os.path.join(report_dir, "REVISION-*.json")))
+    stamps = [read_json(p) for p in glob.glob(os.path.join(report_dir, "REVISION-*.json"))]
+    stamped = bool(stamps)
+    spawned_proof = any(isinstance(s, dict) and type(s.get("subagents_spawned")) is int
+                        and s["subagents_spawned"] >= 1 for s in stamps)
     records = 0
     findings_path = os.path.join(report_dir, "findings.jsonl")
     if os.path.exists(findings_path):
@@ -279,7 +291,7 @@ def run_evidence(report_dir: str) -> dict:
         # `complete` is about the model stage. A deterministic stage that did not
         # run is reported separately: it does not mean nothing was audited, and it
         # does mean part of the audit measured nothing.
-        "complete": bool(candidates or stamped or records),
+        "complete": bool(candidates or spawned_proof or records),
         "guard": guard_state(report_dir),
         **deterministic_stages(report_dir),
     }

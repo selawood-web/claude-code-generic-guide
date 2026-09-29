@@ -533,13 +533,18 @@ TOML_TABLE_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$", re.M)
 TOML_COMMAND_RE = re.compile(r"^\s*(command|args|url)\s*=", re.M)
 
 
-def mcp_servers_declared(path: str, text: str) -> tuple[int, int]:
-    """(server count, command/url line count) declared by one MCP config file."""
+def mcp_servers_declared(path: str, text: str) -> tuple[int, int] | None:
+    """(server count, command/url line count) declared by one MCP config file.
+
+    None when a JSON file does not parse. It used to answer (0, 0), which rendered
+    as "0 MCP server(s)", status ok — the same line as a file that declares none,
+    for a file nobody could read (finding S4-4).
+    """
     if path.endswith(".json"):
         try:
             data = json.loads(text)
-        except json.JSONDecodeError:
-            return (0, 0)
+        except ValueError:
+            return None
         servers = data.get("mcpServers") if isinstance(data, dict) else None
         if not isinstance(servers, dict):
             return (0, 0)
@@ -560,7 +565,13 @@ def mcp_config_facts(present: dict[str, str], facts: "Facts") -> None:
         facts.add("mcp-config", "ok", " or ".join(MCP_CONFIG_FILES), "no project-scoped MCP configuration")
         return
     for path, text in present.items():
-        servers, commands = mcp_servers_declared(path, text)
+        declared = mcp_servers_declared(path, text)
+        if declared is None:
+            facts.add("mcp-config", "finding", path,
+                      "does not parse — the servers it declares cannot be counted",
+                      "class: supply-chain; a config the audit cannot read is one it cannot vouch for")
+            continue
+        servers, commands = declared
         facts.add("mcp-config", "finding" if servers else "ok", path,
                   f"{servers} MCP server(s), {commands} command/url line(s)",
                   "class: supply-chain; a project-scoped MCP server runs with the session's permissions")

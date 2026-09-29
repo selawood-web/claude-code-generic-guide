@@ -375,7 +375,16 @@ def revision_stamp(root: str, scope: str, specialists: list[str], result: dict |
         "duration_s": round(elapsed_s, 1),
         "cost_usd": cost,
         "turns": (result or {}).get("num_turns"),
+        # Measured by the CLI, not asked of the model: the renderer counts this stamp
+        # as proof the specialists ran only when this is at least one (S4-2).
+        "subagents_spawned": spawned_count(result),
     }
+
+
+def spawned_count(result: dict | None) -> int | None:
+    """subagent_stats.spawned from the CLI's result, or None when it did not say."""
+    spawned = ((result or {}).get("subagent_stats") or {}).get("spawned")
+    return spawned if isinstance(spawned, int) and not isinstance(spawned, bool) else None
 
 
 def write_revision_stamp(root: str, report_dir: str, scope: str, specialists: list[str],
