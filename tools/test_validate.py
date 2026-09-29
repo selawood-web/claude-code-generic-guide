@@ -2050,6 +2050,19 @@ class HookHeaderTests(unittest.TestCase):
                          {"session-end.sh": ["SessionEnd"], "session-start.sh": ["SessionStart"]})
 
 
+class ModuleDocstringTests(unittest.TestCase):
+    """S4-12: the header's list of checks stopped at 24 while the gate ran through 34."""
+
+    def test_every_numbered_check_is_listed_in_the_header(self):
+        with open(validate.__file__, encoding="utf-8") as fh:
+            src = fh.read()
+        numbers = set(re.findall(r"^# --- (\d+[a-z]?)\. ", src, re.M))
+        self.assertTrue(numbers, "the sections are numbered")
+        for number in sorted(numbers):
+            with self.subTest(check=number):
+                self.assertRegex(validate.__doc__, rf"(?m)(^\s*|, and ){re.escape(number)}\. ")
+
+
 class ContextBudgetTests(unittest.TestCase):
     """S0-1: the charter read 13543 bytes on Windows against a 13305-byte blob —
     core.autocrlf adds a byte per line, and the budget is about what the model gets."""

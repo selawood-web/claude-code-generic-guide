@@ -139,9 +139,6 @@ def main() -> int:
         "SYSTEM-OVERVIEW.md": (None, True),
         "install.sh": (None, True),
     }
-    # AGENTS.md: marked table without the Invoke column, no counts
-    plans["AGENTS.md"] = (False, False)
-
     for fname, (invoke_style, has_counts) in plans.items():
         path = os.path.join(ROOT, fname)
         if not os.path.exists(path):
@@ -153,7 +150,10 @@ def main() -> int:
             replaced = replace_region(updated, table)
             if replaced is not None:
                 updated = replaced
-        if has_counts or invoke_style is not None:
+        # Counts only where the plan says so. `or invoke_style is not None` made every
+        # table-bearing file count-bearing too, and AGENTS.md prose that merely said
+        # "5 skills" was rewritten to the catalog's number (finding S4-10).
+        if has_counts:
             updated = update_counts(updated, n)
         if updated != original:
             stale.append(fname)

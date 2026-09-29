@@ -43,6 +43,20 @@ Checks, in order:
      allowed-tools; the audit skill's grants are exactly the audit's four commands
      and its report directory; skills that act outward (push, PR, merge, deploy,
      wire) carry disable-model-invocation: true, so only a typed command starts them.
+ 25. The probe contract parses: every line of tools/probes.txt and
+     redteam_probes.txt names a known gate and expectation.
+ 26. A reference that states a numeric threshold names what measures it.
+ 27. No page under docs/ says hook stdout is ignored for an event whose stdout
+     reaches the model (tools/audit_vocab.json).
+ 28. The verifier's brief still runs the guard canary first, and 28b. the guard
+     is registered where hooks fire (settings.json PreToolUse, --only-agent).
+ 29. The guard's script allow-lists name exactly the tree's gate scripts.
+ 30. Every script a pinned grant pre-approves, and every deterministic producer,
+     is rescued from the base ref in the audit workflow.
+ 31. Decision records are named YYYY-MM-DD-slug.md.
+ 32. The audit workflow's trust anchor holds: head code never runs with a secret.
+ 33. Hook headers promise only what their event delivers to the model.
+ 34. The currency rule's item list has one home, the charter.
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
