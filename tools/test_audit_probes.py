@@ -6,11 +6,17 @@ Run: python -m unittest discover -s tools -p "test_*.py"
 
 import json
 import os
+import sys
 import subprocess
 import tempfile
 import contextlib
 import io
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
 
 import audit_probes
 
@@ -182,8 +188,8 @@ def _tiny_repo(root: str) -> str:
     return repo
 
 
-GATE = ["bash", "-c", "test ! -e BROKEN"]
-GATES = {audit_probes.DEFAULT_GATE_NAME: GATE, "guard": ["bash", "-c", "test ! -e GUARD_BROKEN"]}
+GATE = [BASH, "-c", "test ! -e BROKEN"]
+GATES = {audit_probes.DEFAULT_GATE_NAME: GATE, "guard": [BASH, "-c", "test ! -e GUARD_BROKEN"]}
 
 
 class RunProbeTests(unittest.TestCase):

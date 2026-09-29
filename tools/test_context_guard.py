@@ -8,10 +8,16 @@ Needs a bash; skipped where it is missing. Stdlib only.
 
 import json
 import os
+import sys
 import shutil
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUIDE = os.path.dirname(HERE)
@@ -57,7 +63,7 @@ class ContextGuardTests(unittest.TestCase):
             payload.update(command_name=command, arguments="", expansion_type="skill")
         else:
             payload["prompt"] = "hello"
-        return subprocess.run([shutil.which("bash"), HOOK], input=json.dumps(payload),
+        return subprocess.run([BASH, HOOK], input=json.dumps(payload),
                               capture_output=True, text=True, encoding="utf-8",
                               env=dict(self.env, **env))
 

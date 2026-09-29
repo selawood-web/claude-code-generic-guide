@@ -26,7 +26,9 @@ Stdlib only.
 """
 from __future__ import annotations
 
+import ntpath
 import os
+import shutil
 
 # Enough to find a program and for git to make a commit; nothing that says who
 # the operator is or authorises anything on their behalf.
@@ -42,6 +44,55 @@ ALLOWED = (
     "GIT_COMMITTER_EMAIL",
 )
 DEFAULT_PATH = "/usr/bin:/bin"
+
+
+def is_wsl_launcher(path: str, windir: str = "C:\\Windows") -> bool:
+    """True for Windows' own bash.exe, the WSL launcher, wherever it answers from.
+
+    It lives in System32 and in WindowsApps; with no distribution installed it
+    fails every command with "execvpe(/bin/bash) failed". Windows semantics on any
+    host, so the rule is testable where CI runs.
+    """
+    p = ntpath.normcase(path)
+    system32 = ntpath.normcase(ntpath.join(windir, "system32")) + "\\"
+    return p.startswith(system32) or "\\windowsapps\\" in p
+
+
+def bash_path() -> str:
+    """The bash that runs shell code from the tree: never the WSL launcher.
+
+    A bare "bash" handed to subprocess on Windows is resolved by CreateProcess,
+    which searches System32 before PATH, so it always reached the launcher — no
+    PATH order could fix it, and every probe and red-team stage failed there
+    (finding S0-2). CCGG_BASH names one explicitly; otherwise PATH's bash unless it
+    is the launcher, then Git for Windows' bin\\bash.exe, which sets up the Unix
+    tools a probe's shell code needs.
+    """
+    override = os.environ.get("CCGG_BASH")
+    if override:
+        return override
+    found = shutil.which("bash")
+    if os.name != "nt":
+        return found or "bash"
+    windir = os.environ.get("SystemRoot") or os.environ.get("windir") or "C:\\Windows"
+    if found and not is_wsl_launcher(found, windir):
+        return found
+    for candidate in git_bash_candidates(shutil.which("git"), os.environ.get("ProgramFiles")):
+        if os.path.isfile(candidate):
+            return candidate
+    return found or "bash"
+
+
+def git_bash_candidates(git: str | None, program_files: str | None) -> list[str]:
+    """Where Git for Windows keeps bash, derived from its git.exe, then the default install."""
+    out = []
+    if git:
+        # ...\Git\cmd\git.exe, ...\Git\bin\git.exe or ...\Git\mingw64\bin\git.exe
+        for root in (ntpath.dirname(ntpath.dirname(git)), ntpath.dirname(ntpath.dirname(ntpath.dirname(git)))):
+            out += [ntpath.join(root, "bin", "bash.exe"), ntpath.join(root, "usr", "bin", "bash.exe")]
+    if program_files:
+        out.append(ntpath.join(program_files, "Git", "bin", "bash.exe"))
+    return out
 
 
 def sandbox_env(home: str, actor: str = "ccgg-audit",

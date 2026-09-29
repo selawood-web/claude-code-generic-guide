@@ -7,18 +7,37 @@ Needs git and a bash; skipped where either is missing. Stdlib only.
 """
 
 import os
+import sys
 import shutil
+import stat
 import subprocess
 import tempfile
 import unittest
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GUIDE = os.path.dirname(HERE)
 HOOK = os.path.join(GUIDE, ".claude", "hooks", "session-start.sh")
 
 
+def rmtree_writable(path):
+    """Remove a tree that holds git objects. Git marks them read-only, and on Windows
+    that stops a plain rmtree with "Access is denied" (finding S0-4)."""
+    def make_writable(func, p, _exc):
+        os.chmod(p, stat.S_IWRITE)
+        func(p)
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=make_writable)
+    else:
+        shutil.rmtree(path, onerror=make_writable)
+
+
 def bash():
-    return shutil.which("bash")
+    return BASH if (os.path.isfile(BASH) or shutil.which(BASH)) else None
 
 
 @unittest.skipUnless(bash() and shutil.which("git"), "needs bash and git")
@@ -32,7 +51,7 @@ class PinFollowingTests(unittest.TestCase):
     """
 
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix="ccgg-hook-")
+        self.tmp = tempfile.TemporaryDirectory(prefix="ccgg-hook-", ignore_cleanup_errors=True)
         self.env = dict(
             os.environ,
             HOME=os.path.join(self.tmp.name, "home"),
@@ -61,6 +80,7 @@ class PinFollowingTests(unittest.TestCase):
         self.trust(self.origin)
 
     def tearDown(self):
+        rmtree_writable(self.tmp.name)
         self.tmp.cleanup()
 
     def git(self, cwd, *args):
@@ -297,7 +317,7 @@ class PinFollowingTests(unittest.TestCase):
         """A git status that fails is a refusal, never a clean bill."""
         self.run_hook(self.commits[0])
         os.remove(os.path.join(self.project, "ran.txt"))
-        shutil.rmtree(os.path.join(self.clone, ".git"))
+        rmtree_writable(os.path.join(self.clone, ".git"))
         proc = self.run_hook(self.commits[0])
         self.assertIn("live sync skipped", proc.stdout)
         self.assertIsNone(self.ran())

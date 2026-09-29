@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import posixpath
 import re
 import shlex
 import subprocess
@@ -236,7 +237,8 @@ def retarget_write_grant(grants: list[str], report_dir: str, root: str = "") -> 
     directory = report_dir.rstrip("/")
     pinned = [f"Edit({directory}/**)"]
     if root:
-        pinned.append(f"Edit(//{os.path.join(root, directory).lstrip('/')}/**)")
+        # Rule paths are /-separated on every host; os.path.join mixed in a backslash.
+        pinned.append(f"Edit(//{posixpath.join(root.replace(os.sep, '/'), directory).lstrip('/')}/**)")
     out, replaced = [], False
     for grant in grants:
         if WRITE_GRANT_RE.fullmatch(grant):

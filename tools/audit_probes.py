@@ -170,6 +170,11 @@ def summarize(results: list[ProbeResult]) -> dict:
 
 
 def _run(cmd: list[str], cwd: str, env: dict) -> subprocess.CompletedProcess:
+    # A gate given as "bash -c ..." reaches here as a bare "bash", which Windows
+    # resolves to the WSL launcher: every gate failed, every probe read as caught,
+    # and no regression could ever show (finding S0-2).
+    if cmd and cmd[0] == "bash":
+        cmd = [audit_env.bash_path(), *cmd[1:]]
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
 
 
@@ -219,7 +224,7 @@ def run_probe(probe: Probe, scratch_repo: str, gates: dict[str, list[str]],
     gate = gates.get(probe.gate)
     if not gate:
         return result("error", f"no command for gate '{probe.gate}'")
-    mutated = _run(["bash", "-c", probe.mutation], scratch_repo, env)
+    mutated = _run([audit_env.bash_path(), "-c", probe.mutation], scratch_repo, env)
     if mutated.returncode == SKIP_EXIT:
         return result("skipped", "mutation reported not applicable (exit 3)")
     if mutated.returncode != 0:

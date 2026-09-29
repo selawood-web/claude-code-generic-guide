@@ -16,6 +16,11 @@ import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import audit_env  # noqa: E402  (the bash that runs shell code; never the WSL launcher)
+
+BASH = audit_env.bash_path()
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOL_FILE_RE = re.compile(r"tools/[A-Za-z0-9_]+\.(?:py|json|txt)")
 
@@ -62,7 +67,7 @@ class FreshInstallTests(unittest.TestCase):
                        GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@local", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@local")
             os.makedirs(env["HOME"])
             subprocess.run(["git", "init", "-q"], cwd=target, env=env, check=True)
-            install = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), target], env=env,
+            install = subprocess.run([BASH, os.path.join(ROOT, "install.sh"), target], env=env,
                                      capture_output=True, text=True)
             self.assertEqual(install.returncode, 0, install.stdout + install.stderr)
             self.assertNotIn("validator reported findings", install.stdout)
@@ -102,7 +107,7 @@ class SkillDeliveryTests(unittest.TestCase):
             os.makedirs(target)
         env = dict(os.environ, HOME=os.path.join(tmp, "home"))
         os.makedirs(env["HOME"], exist_ok=True)
-        proc = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), target], env=env,
+        proc = subprocess.run([BASH, os.path.join(ROOT, "install.sh"), target], env=env,
                               capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         return target, proc.stdout
@@ -150,13 +155,13 @@ class UpdateReportsTests(unittest.TestCase):
                    GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@local")
         os.makedirs(env["HOME"])
         subprocess.run(["git", "init", "-q"], cwd=target, env=env, check=True)
-        install = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), target], env=env,
+        install = subprocess.run([BASH, os.path.join(ROOT, "install.sh"), target], env=env,
                                  capture_output=True, text=True)
         self.assertEqual(install.returncode, 0, install.stdout + install.stderr)
         return target, env
 
     def _update(self, target, env):
-        proc = subprocess.run(["bash", os.path.join(ROOT, "update.sh"), target], env=env,
+        proc = subprocess.run([BASH, os.path.join(ROOT, "update.sh"), target], env=env,
                               capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         return proc.stdout + proc.stderr
@@ -221,7 +226,7 @@ def _git(target, env, *args):
 
 
 def _install(target, env):
-    proc = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), target], env=env,
+    proc = subprocess.run([BASH, os.path.join(ROOT, "install.sh"), target], env=env,
                           capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     return proc.stdout
@@ -239,7 +244,7 @@ class PersonalInstallTests(unittest.TestCase):
     def test_a_personal_install_warns_that_it_overrides_projects(self):
         with tempfile.TemporaryDirectory(prefix="ccgg-user-") as tmp:
             env = dict(_git_env(tmp), CLAUDE_CONFIG_DIR=os.path.join(tmp, "config"))
-            proc = subprocess.run(["bash", os.path.join(ROOT, "update.sh"), "--user"], env=env,
+            proc = subprocess.run([BASH, os.path.join(ROOT, "update.sh"), "--user"], env=env,
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             self.assertIn("override same-named project skills", proc.stdout)
@@ -372,7 +377,7 @@ class UpdateRegistersNewHooksTests(unittest.TestCase):
             json.dump(data, fh, indent=2)
 
     def _update(self, target, env):
-        proc = subprocess.run(["bash", os.path.join(ROOT, "update.sh"), target], env=env,
+        proc = subprocess.run([BASH, os.path.join(ROOT, "update.sh"), target], env=env,
                               capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         return proc.stdout + proc.stderr
