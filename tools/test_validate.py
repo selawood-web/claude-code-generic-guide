@@ -625,6 +625,37 @@ class TransitiveImportTests(unittest.TestCase):
         self.assertEqual(findings, [])
         self.assertTrue(any("~/.claude/private.md" in c for c in cautions), cautions)
 
+    def test_a_tracked_import_in_a_subdirectory_is_accepted(self):
+        """psychexpert wire: `@spec/CLAUDE.md`, tracked, read as untracked on Windows."""
+        findings, _ = self._check({"CLAUDE.md": "@AGENTS.md\n@spec/CLAUDE.md\n",
+                                   "AGENTS.md": "rules\n", "spec/CLAUDE.md": "context\n"})
+        self.assertEqual(findings, [])
+
+
+class ImportDestTests(unittest.TestCase):
+    """An import's destination is a git path on every platform."""
+
+    def test_a_subdirectory_import(self):
+        self.assertEqual(validate.import_dest("AGENTS.md", "rules/mid.md"), "rules/mid.md")
+
+    def test_a_parent_import_is_folded(self):
+        self.assertEqual(validate.import_dest("rules/mid.md", "../CLAUDE.md"), "CLAUDE.md")
+
+    def test_a_dot_segment_is_folded(self):
+        self.assertEqual(validate.import_dest("CLAUDE.md", "./AGENTS.md"), "AGENTS.md")
+
+    def test_a_nested_import_stays_relative_to_its_file(self):
+        self.assertEqual(validate.import_dest("a/b.md", "c/d.md"), "a/c/d.md")
+
+    def test_never_answers_with_a_backslash(self):
+        for path, target in (("CLAUDE.md", "spec/CLAUDE.md"), ("a/b/c.md", "../d/e.md")):
+            with self.subTest(path=path, target=target):
+                self.assertNotIn("\\", validate.import_dest(path, target))
+
+    def test_an_import_above_the_root_stays_above_it(self):
+        """The failure path: check_imports then reports it missing, never as a root file."""
+        self.assertEqual(validate.import_dest("CLAUDE.md", "../outside.md"), "../outside.md")
+
 
 class DescriptionContentTests(unittest.TestCase):
     """R-005: the description loads every session, before any invocation."""
@@ -2036,6 +2067,31 @@ class CurrencyRuleHomeTests(unittest.TestCase):
     def test_a_pointer_without_a_list_passes(self):
         text = '- Answer "what exists now" from memory — see the charter\'s Currency check.\n'
         self.assertEqual(validate.currency_restatements("AGENTS.md", text), [])
+
+    NEXTJS_BLOCK = ("<!-- BEGIN:nextjs-agent-rules -->\n\n# This is NOT the Next.js you know\n\n"
+                    "This version has breaking changes — APIs, conventions, and file structure may "
+                    "all differ from your training data.\n\n<!-- END:nextjs-agent-rules -->\n")
+    POINTER = '- Answer "what exists now" from memory — see the charter\'s Currency check.\n'
+
+    def test_a_vendor_block_beside_the_pointer_passes(self):
+        """clinicpsy wire: the Next.js block names two items in a paragraph of its own."""
+        text = self.POINTER + "\n" + self.NEXTJS_BLOCK
+        self.assertEqual(validate.currency_restatements("AGENTS.md", text), [])
+
+    def test_marker_and_list_in_separate_paragraphs_pass(self):
+        text = self.POINTER + "\nPin versions and prices in the lockfile.\n"
+        self.assertEqual(validate.currency_restatements("AGENTS.md", text), [])
+
+    def test_a_whitespace_only_line_separates_paragraphs(self):
+        text = self.POINTER + "   \t\nPin versions and prices in the lockfile.\n"
+        self.assertEqual(validate.currency_restatements("AGENTS.md", text), [])
+
+    def test_marker_and_list_across_lines_of_one_paragraph_are_reported(self):
+        text = 'Never answer "what exists now" from memory:\nversions, prices and APIs get searched.\n'
+        self.assertTrue(validate.currency_restatements("AGENTS.md", text))
+
+    def test_empty_text_passes(self):
+        self.assertEqual(validate.currency_restatements("AGENTS.md", ""), [])
 
     def test_the_charter_is_the_home_and_is_exempt(self):
         text = "versions, prices, APIs, part numbers, model names — never answer what exists now from memory"
