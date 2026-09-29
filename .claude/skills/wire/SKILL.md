@@ -129,7 +129,7 @@ reported as skipped.
 
 | Anti-pattern | Correct approach |
 |--------------|-----------------|
-| Re-installing over a wired project | Detect `.claude/skills/` and switch to update-only |
+| Re-installing over a wired project | Detect a CCGG file (Step 1: `AGENTS.md`, `WORKING-CHARTER.md`, `tools/validate.py`) and switch to update-only — never `.claude/skills/` alone |
 | Overwriting an existing settings.json | Merge the env keys into it |
 | Pushing to the default branch | Working branch + PR, always |
 | Skipping the target-side validation | The wire isn't done until the target validates OK |

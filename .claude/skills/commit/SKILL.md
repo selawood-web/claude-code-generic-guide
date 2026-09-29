@@ -23,19 +23,10 @@ purpose: Conventional commits with staged diff review
    - If all: `git add -A`
    - If specific: `git add <files>`
 
-3. **Determine commit type and scope**
-   - `feat` — new user-visible feature
-   - `fix` — bug fix
-   - `refactor` — no behavior change, restructured code
-   - `test` — test additions or changes
-   - `docs` — documentation only
-   - `chore` — build, tooling, dependencies
-   - `perf` — performance improvement
-   - `style` — formatting only
+3. **Determine commit type and scope** — the types, subject rules and body rule are
+   AGENTS.md's *Commit conventions*, in one place; pick from there.
 
-4. **Compose message**
-   - Subject: `<type>(<scope>): <imperative verb> <what>` — max 72 chars, no period
-   - Body (if needed): explain WHY, not WHAT
+4. **Compose message** by those conventions, then:
    - Footer: use your team's AI attribution convention if one exists (e.g. a
      `Co-authored-by:` trailer naming the assistant actually in use). Do not
      hardcode a specific assistant — attribution must match who did the work.

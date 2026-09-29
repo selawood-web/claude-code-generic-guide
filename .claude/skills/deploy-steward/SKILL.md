@@ -65,9 +65,9 @@ stack new work on an undeployable head.
 
 ### Step 4 — Production
 Production deploys run through the `deploy` skill's checklist, always with explicit
-user confirmation, targeting the production environment. Rollback on Railway:
-redeploy the previous deployment (`railway redeploy`); the `deploy` skill's
-rollback rules apply.
+user confirmation, targeting the production environment. Rollback on Railway is
+dashboard-only (a previous deployment's menu → Rollback); `railway redeploy` only
+rebuilds the latest. The `deploy` skill's rollback rules apply.
 
 ## Lifecycle checkpoints (where this skill hooks in)
 The obligation starts before any code exists — each stage's skill carries a

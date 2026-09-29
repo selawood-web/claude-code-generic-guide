@@ -49,11 +49,11 @@ Read the code. Identify:
 // Assert — verify the expected outcome
 ```
 
-### Step 4 — Cover these cases for every public function
-1. **Happy path** — valid input, expected output
-2. **Edge case** — boundary values (0, -1, empty string, max int)
-3. **Failure path** — invalid/null/missing input → expect specific error
-4. **Side effects** — verify external calls were made with correct args
+### Step 4 — Cover the gate's floor for every public function
+The per-function bar — a happy path, at least three edge cases, one failure mode — is
+stage 3 of the code gate ([`code-gate.md`](../../references/code-gate.md)); meet it
+there, not a shorter copy here. Add **side effects** — external calls made with the
+right arguments — wherever the function has them.
 
 ### Step 5 — Write tests first for new code (TDD)
 ```

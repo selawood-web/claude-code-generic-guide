@@ -1,8 +1,8 @@
 ---
 name: deploy
 disable-model-invocation: true
-description: Execute a deployment workflow safely. Use when the user says "deploy", "ship", "release", "push to production", or "go live".
-when_to_use: deploy, ship, release, push to production, go live, rollout
+description: Execute a deployment workflow safely. Use when the user says "deploy", "release", "push to production", or "go live" — "ship" is the /ship skill, which merges.
+when_to_use: deploy, release, push to production, go live, rollout
 argument-hint: "[environment: staging|production, or service name]"
 purpose: Deployment with pre-flight checklist
 ---
@@ -40,8 +40,14 @@ npm run build / make build
 # Smoke test locally if possible
 ```
 
-### Step 3 — Execute deployment
-Adapt to your deployment system:
+### Step 3 — Owner confirmation, then execute
+A production deploy is an owner gate (AGENTS.md, *Escalate instead of proceeding*), and
+invoking `/deploy` is not the confirmation: it starts the checklist. Before the first
+command that changes production, stop and ask once, naming the target environment,
+the commit or artifact, and the rollback below — and run nothing until the answer is
+yes. A staging deploy the owner already asked for needs no second question.
+
+Then adapt to your deployment system:
 
 **GitHub Actions / CI:**
 ```bash
@@ -94,6 +100,11 @@ git revert HEAD && git push
 
 # Docker rollback
 kubectl rollout undo deployment/app
+
+# Railway: rollback is dashboard-only — a previous deployment's "..." menu → Rollback
+# restores its image and variables (docs.railway.com/guides/deployment-actions).
+# `railway redeploy` rebuilds the LATEST deployment: it is not a rollback. From the
+# CLI, revert the commit instead and let the next deploy carry it.
 
 # Database: only backward-compatible changes allow rollback
 # If migration is not backward-compatible: this is a breaking deployment

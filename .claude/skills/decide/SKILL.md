@@ -58,8 +58,8 @@ If web tools are unavailable: say so explicitly, and tag every claim drawn from 
 
 ### Step 6 — Debate (full path only)
 Run the five personas from [`decision-critics.md`](decision-critics.md) against the frame, criteria, and research:
-- **If a subagent/Task tool is available:** launch the personas in parallel, each receiving the decision statement, criteria, research findings, and option table, each returning its case and single strongest objection.
-- **If not:** run sequential persona passes — fully adopt one persona, write its case and strongest objection, then move to the next. Never blend personas in a single pass.
+- They fan out as the charter's *Efficiency* says. Each receives the decision statement, criteria, research findings, and option table, and returns its case and single strongest objection.
+- One persona fully adopted at a time — never blended in a single pass.
 
 ### Step 7 — Synthesize
 Produce a recommendation that:

@@ -1,8 +1,7 @@
 # Decision Critics — Debate Personas
 
-Five personas argue every full-path decision (see `SKILL.md`, Step 6). Run them as
-parallel subagents when a subagent tool is available; otherwise as sequential passes,
-fully adopting one persona at a time. Each persona receives the decision statement,
+Five personas argue every full-path decision (see `SKILL.md`, Step 6), fanned out as
+the charter's *Efficiency* says, one persona fully adopted at a time. Each receives the decision statement,
 weighted criteria, research findings, and the option table.
 
 ## Output contract (every persona)

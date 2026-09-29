@@ -190,5 +190,5 @@ was asked for.
 
 ## Knowledge Extraction
 ```
-remember: [repository] audit — [the class of defect the gate missed and the check that closed it]
+remember: [repository] audit — [the class of defect the gate missed and the check that closed it] — reason: [why a later run needs it]
 ```

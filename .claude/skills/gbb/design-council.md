@@ -3,9 +3,8 @@
 The council exists because one reviewer has one taste. Ten disciplines, one from
 inside the interface craft and the rest from outside software, each with a stance, a signature move and a **kill
 question** — the one question that, unanswered, makes that member's other findings
-irrelevant. Run them as parallel subagents on a smaller model when the runner
-offers one; otherwise as sequential passes, fully adopting one member at a time,
-never blended. Each member receives the hand-over package from
+irrelevant. They fan out as the charter's *Efficiency* says, one member fully
+adopted at a time, never blended. Each member receives the hand-over package from
 [`research-protocol.md`](research-protocol.md) B6 — screenshots and the spatial map
 included — and nothing else.
 

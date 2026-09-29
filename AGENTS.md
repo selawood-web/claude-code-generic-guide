@@ -30,11 +30,9 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 4. State what you know and what you need.
 
 ### During a session
-- For any real code change — feature, bugfix, refactor, hotfix — run the charter's gate in order:
-  **draft → static analysis → tests → requirement check**, no stage skipped. Questions, explanations,
-  and planning do not trigger it. A failing stage restores the baseline and re-enters at draft, counted
-  out loud, three passes maximum (charter, *Code Module*).
-- Fix the branch boundary before the first code change: your own branch only, or the whole repo. Ask once if it is unstated; when in doubt the default is strict.
+- Any real code change — feature, bugfix, refactor, hotfix — runs the charter's *Code Module*:
+  the branch boundary first, then the gate, in the order and with the failure loop it defines.
+  Questions, explanations, and planning do not wake it.
 - Run `/plan` before starting complex multi-file changes.
 - Run `/compact` proactively when context is getting large — before it forces you.
   `/flush` durable facts first; what must survive compaction is in the charter (*Efficiency*).
@@ -59,7 +57,7 @@ Memory lives in four places; the first two load automatically every session.
 |----------|---------------|
 | `~/.claude/CLAUDE.md` | Global: your preferred patterns, universal engineering principles (seed from this repo's `MEMORY.md`) |
 | `~/.claude/projects/<project>/memory/` | Auto memory: notes Claude writes itself; the `MEMORY.md` index loads each session, topic files on demand |
-| `~/.claude/memory/<project>/sessions/` | Session logs written by `/flush`, consolidated by `/dream` (read on demand) |
+| `~/.claude/memory/<project>/` | Session logs in `sessions/`, written by `/flush`; `/dream` consolidates them into `MEMORY.md` there, which the session-start hook points at |
 | `decisions/` (in the repo) | Durable decision records and product briefs written by `/decide` and `/product-brief` — recall before re-deciding |
 | `features/` (in the repo) | Feature definitions written by `/feature` — what is being built and when it is done, checked by `tools/feature_lint.py` |
 
