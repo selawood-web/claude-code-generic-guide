@@ -147,17 +147,50 @@ class RunEvidenceTests(unittest.TestCase):
         self.write("inventory.json")
         self.assertFalse(audit_report.run_evidence(self.dir)["complete"])
 
-    def test_candidates_stamp_or_records_each_prove_the_run(self):
-        for rel in ("candidates/audit-harness.json", "REVISION-abc.json"):
-            with self.subTest(rel=rel):
-                with tempfile.TemporaryDirectory() as d:
-                    path = os.path.join(d, rel)
-                    os.makedirs(os.path.dirname(path), exist_ok=True)
-                    with open(path, "w", encoding="utf-8") as fh:
-                        fh.write("[]")
-                    self.assertTrue(audit_report.run_evidence(d)["complete"])
+    def test_candidates_or_records_each_prove_the_run(self):
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "candidates"))
+            with open(os.path.join(d, "candidates", "audit-harness.json"), "w", encoding="utf-8") as fh:
+                fh.write("[]")
+            self.assertTrue(audit_report.run_evidence(d)["complete"])
         self.write("findings.jsonl", json.dumps(GOOD) + "\n")
         self.assertTrue(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_a_stamp_alone_is_not_evidence(self):
+        """S4-2: every run writes the stamp at its end, spawned specialists or not.
+        This test used to assert the opposite — the defect, written down as the contract."""
+        self.write("REVISION-abc.json", json.dumps({"head": "abc", "specialists_run": ["audit-harness"]}))
+        evidence = audit_report.run_evidence(self.dir)
+        self.assertTrue(evidence["revision_stamp"], "the stamp is still reported as present")
+        self.assertFalse(evidence["complete"])
+
+    def test_a_stamp_with_a_measured_spawn_is_evidence(self):
+        self.write("REVISION-abc.json", json.dumps({"head": "abc", "subagents_spawned": 6}))
+        self.assertTrue(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_a_spawn_count_that_is_not_a_positive_int_is_not_evidence(self):
+        for value in (0, -1, True, "6", None, 6.0):
+            with self.subTest(value=value):
+                with tempfile.TemporaryDirectory() as d:
+                    with open(os.path.join(d, "REVISION-x.json"), "w", encoding="utf-8") as fh:
+                        json.dump({"subagents_spawned": value}, fh)
+                    self.assertFalse(audit_report.run_evidence(d)["complete"])
+
+    def test_an_unparsable_stamp_is_not_evidence(self):
+        self.write("REVISION-abc.json", '{"subagents_spawned": 6')
+        self.assertFalse(audit_report.run_evidence(self.dir)["complete"])
+
+    def test_a_truncated_stage_file_counts_as_missing(self):
+        """S4-3: a stage killed mid-write left a file that existed, so it counted as run."""
+        self.write("facts.json", json.dumps({"scope": "all", "facts": []}))
+        self.write("probes.json", '{"results": [')
+        stages = audit_report.deterministic_stages(self.dir)
+        self.assertNotIn("probes", stages["stages_present"])
+        self.assertIn("facts", stages["stages_present"])
+
+    def test_a_truncated_facts_file_is_reported_missing(self):
+        self.write("facts.json", '{"scope": "all", "facts": [')
+        self.assertIn("facts", audit_report.deterministic_stages(self.dir)["stages_missing"])
 
     def test_empty_findings_file_is_not_evidence(self):
         self.write("findings.jsonl", "\n\n")

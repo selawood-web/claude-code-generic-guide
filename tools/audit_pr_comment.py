@@ -40,10 +40,23 @@ def comment_body(report: str, run_url: str | None = None, max_body: int = MAX_BO
     return f"{MARKER}\n{text}{tail}\n\n{FOOTER}\n"
 
 
-def find_existing(comments: list, marker: str = MARKER) -> int | None:
-    """The id of this workflow's own comment, or None. Anyone else's is left alone."""
+# The account GITHUB_TOKEN posts as. A different token posts as someone else; say so
+# with --author.
+BOT_LOGIN = "github-actions[bot]"
+
+
+def find_existing(comments: list, marker: str = MARKER, author: str = BOT_LOGIN) -> int | None:
+    """The id of this workflow's own comment, or None. Anyone else's is left alone.
+
+    The marker alone is text anyone can type: a comment from another account that
+    carried it was the one this run PATCHed (finding S4-5). Ours is the marker and
+    the posting account together.
+    """
     for comment in comments or []:
-        if isinstance(comment, dict) and marker in str(comment.get("body") or ""):
+        if not isinstance(comment, dict) or marker not in str(comment.get("body") or ""):
+            continue
+        user = comment.get("user")
+        if isinstance(user, dict) and user.get("login") == author:
             return comment.get("id")
     return None
 
@@ -68,6 +81,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--pr", required=True, type=int, help="pull request number")
     parser.add_argument("--run-url", default=None, help="link back to the workflow run")
     parser.add_argument("--dry-run", action="store_true", help="print the comment, post nothing")
+    parser.add_argument("--author", default=BOT_LOGIN,
+                        help="login the comment is posted as (default: the GITHUB_TOKEN bot)")
     args = parser.parse_args(argv)
 
     try:
@@ -88,7 +103,7 @@ def main(argv: list[str]) -> int:
     base = f"{API}/repos/{args.repo}/issues/{args.pr}/comments"
     try:
         existing = _call(f"{base}?per_page=100", token)
-        comment_id = find_existing(existing if isinstance(existing, list) else [])
+        comment_id = find_existing(existing if isinstance(existing, list) else [], author=args.author)
         if comment_id:
             _call(f"{API}/repos/{args.repo}/issues/comments/{comment_id}", token, "PATCH", {"body": body})
             print(f"audit-pr-comment: updated comment {comment_id}")

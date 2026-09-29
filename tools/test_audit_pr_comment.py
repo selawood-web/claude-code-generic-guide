@@ -48,9 +48,30 @@ class CommentBodyTests(unittest.TestCase):
 
 
 class FindExistingTests(unittest.TestCase):
+    BOT = {"login": "github-actions[bot]"}
+
     def test_finds_our_own_comment(self):
-        comments = [{"id": 1, "body": "unrelated"}, {"id": 2, "body": f"{MARKER}\nold report"}]
+        comments = [{"id": 1, "body": "unrelated", "user": self.BOT},
+                    {"id": 2, "body": f"{MARKER}\nold report", "user": self.BOT}]
         self.assertEqual(find_existing(comments), 2)
+
+    def test_the_marker_in_someone_elses_comment_is_not_ours(self):
+        """S4-5: the marker is text anyone can type; the PATCH went to their comment."""
+        comments = [{"id": 7, "body": f"quoting {MARKER}", "user": {"login": "someone"}}]
+        self.assertIsNone(find_existing(comments))
+
+    def test_ours_is_found_past_a_planted_copy(self):
+        comments = [{"id": 7, "body": MARKER, "user": {"login": "someone"}},
+                    {"id": 9, "body": MARKER, "user": self.BOT}]
+        self.assertEqual(find_existing(comments), 9)
+
+    def test_a_comment_without_an_author_is_not_ours(self):
+        self.assertIsNone(find_existing([{"id": 3, "body": MARKER}, {"id": 4, "body": MARKER, "user": None}]))
+
+    def test_another_posting_account_can_be_named(self):
+        comments = [{"id": 5, "body": MARKER, "user": {"login": "ccgg-bot"}}]
+        self.assertEqual(find_existing(comments, author="ccgg-bot"), 5)
+        self.assertIsNone(find_existing(comments))
 
     def test_leaves_other_comments_alone(self):
         self.assertIsNone(find_existing([{"id": 1, "body": "a human's review"}]))

@@ -743,6 +743,18 @@ class RevisionStampTests(unittest.TestCase):
         self.assertIsNone(stamp["turns"])
         self.assertEqual(stamp["duration_s"], 3.0)
 
+    def test_the_stamp_records_the_measured_spawn_count(self):
+        """S4-2: the renderer counts the stamp as evidence only through this field."""
+        _, stamp = revision_stamp(ROOT, "all", [], dict(self.RESULT, subagent_stats={"spawned": 6}), 1.0)
+        self.assertEqual(stamp["subagents_spawned"], 6)
+
+    def test_an_unmeasured_spawn_count_is_null_never_guessed(self):
+        for result in (None, self.RESULT, {"subagent_stats": {"spawned": True}},
+                       {"subagent_stats": {"spawned": "6"}}, {"subagent_stats": None}):
+            with self.subTest(result=result):
+                _, stamp = revision_stamp(ROOT, "all", [], result, 1.0)
+                self.assertIsNone(stamp["subagents_spawned"])
+
     def test_a_non_numeric_cost_does_not_crash_the_stamp(self):
         _, stamp = revision_stamp(ROOT, "all", [], {"total_cost_usd": "n/a"}, 1.0)
         self.assertIsNone(stamp["cost_usd"])
