@@ -26,9 +26,11 @@ Stdlib only.
 """
 from __future__ import annotations
 
+import io
 import ntpath
 import os
 import shutil
+import tarfile
 
 # Enough to find a program and for git to make a commit; nothing that says who
 # the operator is or authorises anything on their behalf.
@@ -42,6 +44,7 @@ ALLOWED = (
     "GIT_AUTHOR_EMAIL",
     "GIT_COMMITTER_NAME",
     "GIT_COMMITTER_EMAIL",
+    "SYSTEMROOT",           # Windows only: without it winsock and the C runtime refuse to start
 )
 DEFAULT_PATH = "/usr/bin:/bin"
 
@@ -83,6 +86,25 @@ def bash_path() -> str:
     return found or "bash"
 
 
+def unpack_tar(data: bytes, dest: str) -> None:
+    """Unpack a `git archive` stream into dest with Python's tarfile, never a `tar` binary.
+
+    On Windows a bare "tar" is System32's bsdtar, which skips every non-ASCII filename
+    and exits 1 — the CabiCAD run lost 27 Hebrew-named files from every scratch copy
+    (PR #93). The "data" filter refuses members that would land outside dest.
+    """
+    with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+        if hasattr(tarfile, "data_filter"):
+            archive.extractall(dest, filter="data")
+        else:  # Python before 3.12 has no filter: refuse a path that leaves dest by hand
+            root = os.path.realpath(dest)
+            for member in archive.getmembers():
+                target = os.path.realpath(os.path.join(dest, member.name))
+                if os.path.commonpath([root, target]) != root:
+                    raise ValueError(f"archive member {member.name!r} would land outside {dest}")
+            archive.extractall(dest)
+
+
 def git_bash_candidates(git: str | None, program_files: str | None) -> list[str]:
     """Where Git for Windows keeps bash, derived from its git.exe, then the default install."""
     out = []
@@ -118,6 +140,8 @@ def sandbox_env(home: str, actor: str = "ccgg-audit",
         "GIT_COMMITTER_NAME": actor,
         "GIT_COMMITTER_EMAIL": f"{actor}@local",
     }
+    if os.name == "nt":
+        env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT") or os.environ.get("SystemRoot") or r"C:\Windows"
     if extra:
         env.update(extra)
     return env

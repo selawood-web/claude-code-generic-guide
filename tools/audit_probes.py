@@ -198,7 +198,7 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
     archive = subprocess.run(
         ["git", "archive", "--format=tar", "HEAD"], cwd=repo, capture_output=True, check=True
     )
-    subprocess.run(["tar", "-xf", "-", "-C", dest], input=archive.stdout, check=True)
+    audit_env.unpack_tar(archive.stdout, dest)
     env = probe_env(scratch)
     for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "baseline"]):
         proc = _run(cmd, dest, env)

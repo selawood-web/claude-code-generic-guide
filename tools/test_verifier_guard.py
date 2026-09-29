@@ -96,6 +96,8 @@ ALLOWED = [
     "git stash list",
     "echo $((2*3))",
     "node --version",
+    "date +%F",
+    "date -u",
     # S-001: the repository's own shell scripts stay runnable.
     "bash -n .claude/hooks/session-start.sh",
     "bash -n update.sh",
@@ -319,6 +321,10 @@ REFUSED = [
     "git remote show origin",
     "git help -w log",
     "git-lfs fetch",
+    # PR #93: setting the clock is a write to the machine.
+    "date -s 2020-01-01",
+    "date --set=2020-01-01",
+    "date -s2020-01-01",
 ]
 
 
