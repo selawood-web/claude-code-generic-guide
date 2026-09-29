@@ -161,10 +161,10 @@ class UpdateReportsTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         return proc.stdout + proc.stderr
 
-    def _project_skill(self, target, *, house_keys: bool) -> None:
+    def _project_skill(self, target, *, house_keys: bool, description: bool = True) -> None:
         d = os.path.join(target, ".claude", "skills", "project-only")
         os.makedirs(d, exist_ok=True)
-        body = "---\nname: project-only\ndescription: a skill this project wrote\n"
+        body = "---\nname: project-only\n" + ("description: a skill this project wrote\n" if description else "")
         if house_keys:
             body += 'when_to_use: local\nargument-hint: "[x]"\npurpose: "A skill this project wrote"\n'
         body += "---\n\nBody.\n"
@@ -173,7 +173,7 @@ class UpdateReportsTests(unittest.TestCase):
     def test_unparsable_project_skill_is_not_reported_as_stale(self):
         with tempfile.TemporaryDirectory(prefix="ccgg-update-") as tmp:
             target, env = self._project(tmp)
-            self._project_skill(target, house_keys=False)
+            self._project_skill(target, house_keys=False, description=False)
             out = self._update(target, env)
             self.assertIn("could not read every skill", out)
             self.assertIn("project-only", out)
@@ -230,6 +230,33 @@ def _install(target, env):
 def _hook_modes(target, env):
     return {line.split("\t")[1]: line.split()[0]
             for line in _git(target, env, "ls-files", "-s", ".claude/hooks").splitlines()}
+
+
+class ProjectOwnSkillTests(unittest.TestCase):
+    """S4-1 end to end: an installed project adds an ordinary Claude Code skill — name
+    and description only — and its own gate still passes once the catalog is
+    regenerated. It used to fail on three house keys and a catalog refusal."""
+
+    def test_a_plain_project_skill_passes_the_installed_gate(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-s41-") as tmp:
+            target = os.path.join(tmp, "project")
+            os.makedirs(target)
+            env = _git_env(tmp)
+            _git(target, env, "init", "-q")
+            _install(target, env)
+            d = os.path.join(target, ".claude", "skills", "release-notes")
+            os.makedirs(d)
+            with open(os.path.join(d, "SKILL.md"), "w", encoding="utf-8") as fh:
+                fh.write("---\nname: release-notes\ndescription: Draft release notes. Use on tags.\n---\n\nBody.\n")
+            write = subprocess.run([sys.executable, "tools/catalog.py", "--write"], cwd=target,
+                                   env=env, capture_output=True, text=True)
+            self.assertEqual(write.returncode, 0, write.stdout + write.stderr)
+            _git(target, env, "add", "-A")
+            gate = subprocess.run([sys.executable, "tools/validate.py"], cwd=target, env=env,
+                                  capture_output=True, text=True)
+            self.assertEqual(gate.returncode, 0, gate.stdout)
+            with open(os.path.join(target, "AGENTS.md"), encoding="utf-8") as fh:
+                self.assertIn("| `/release-notes` | Draft release notes. |", fh.read())
 
 
 class InstallTouchesOnlyItsOwnFilesTests(unittest.TestCase):

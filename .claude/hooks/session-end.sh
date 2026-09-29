@@ -10,8 +10,10 @@
 # the sentence after it, which is for a human reading the log. A reminder the
 # model should see belongs in session-start.sh as a fixed string (finding H-001).
 
-SESSION_DIR="${HOME}/.claude/sessions"
-MEMORY_DIR="${HOME}/.claude/memory"
+# Per project, under the same slug session-start.sh reads: one shared file made the
+# "last session end" it prints belong to whichever project ended last (finding S2-4).
+PROJECT_SLUG="$(basename "${CLAUDE_PROJECT_DIR:-$(pwd)}")"
+MEMORY_DIR="${HOME}/.claude/memory/${PROJECT_SLUG}"
 HOOK_LOG="${HOME}/.claude/hooks/session-end.log"
 
 # date -Iseconds is GNU-only; this format works on BSD/macOS date too

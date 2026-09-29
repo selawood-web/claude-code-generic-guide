@@ -49,6 +49,7 @@ Stdlib only — no dependencies to install.
 """
 
 import ast
+import fnmatch
 import io
 import json
 import os
@@ -64,6 +65,12 @@ ROOT = subprocess.check_output(
 ).strip()
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 SKILL_KEYS = ("name", "description", "when_to_use", "argument-hint", "purpose")
+# What Claude Code itself reads to list a skill. The other three are CCGG's house
+# keys: required of every skill this repository ships, but an installed project's
+# own skill is a plain Claude Code skill and failed its CI on keys it had no reason
+# to carry (finding S4-1). CCGG's own skills there are synced copies of ours,
+# already held to all five here.
+PRODUCT_SKILL_KEYS = ("name", "description")
 VOCAB_PATH = os.path.join("tools", "audit_vocab.json")
 # A hook that clones without a pinned ref, or pipes a download into a shell, runs
 # whatever the remote serves at that moment — with the user's permissions.
@@ -120,6 +127,19 @@ def warn(msg: str) -> None:
     cautions.append(msg)
 
 
+# Set by main() to the whole listing; None everywhere else, so a test that points
+# ROOT at a fixture and changes it between calls always asks git afresh.
+_TRACKED_ALL: list[str] | None = None
+
+
+def pathspec_filter(paths: list[str], pattern: str) -> list[str]:
+    """git ls-files' default pathspec match, over a listing already taken."""
+    if any(c in pattern for c in "*?["):
+        return [p for p in paths if fnmatch.fnmatchcase(p, pattern)]
+    prefix = pattern.rstrip("/") + "/"
+    return [p for p in paths if p == pattern or p.startswith(prefix)]
+
+
 def tracked(pattern: str) -> list[str]:
     """Files git knows or would add: the index plus untracked, minus ignored.
 
@@ -128,7 +148,15 @@ def tracked(pattern: str) -> list[str]:
     frontmatter checks and "does not exist" to the catalog check, until
     somebody staged it (MemoMe audit 2026-09-17, H-5). Ignored files stay
     out, so scratch and build output never count.
+
+    Inside main() the listing is taken once and filtered here: ~70 calls, one
+    `git ls-files` each, were ~2.5 s of a 3.5 s run on Windows, paid at every
+    session start (finding S4-7). The filter is git's own default pathspec rule —
+    `*` crosses `/`, and a pattern without wildcards names a file or a directory —
+    and a test holds the two answers equal for every pattern this file uses.
     """
+    if _TRACKED_ALL is not None:
+        return pathspec_filter(_TRACKED_ALL, pattern)
     out = subprocess.check_output(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", pattern],
         cwd=ROOT,
@@ -292,7 +320,7 @@ def check_skill_semantics() -> None:
         fail(f"{VOCAB_PATH}: missing or unreadable — install.sh and update.sh ship it; skill semantics not checked")
         return
     for path in skills:
-        lines = open(os.path.join(ROOT, path), encoding="utf-8").read().splitlines()
+        lines = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read().splitlines()
         fields, _ = parse_frontmatter_fields(lines)
         if fields is None:
             continue  # check_skills already reported the structural problem
@@ -334,7 +362,7 @@ def check_fetch_exec() -> None:
 
 def check_skills() -> None:
     for path in tracked(".claude/skills/*/SKILL.md"):
-        lines = open(os.path.join(ROOT, path), encoding="utf-8").read().splitlines()
+        lines = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read().splitlines()
         if not lines or lines[0].strip() != "---":
             fail(f"{path}: frontmatter must start with --- on line 1")
             continue
@@ -348,7 +376,7 @@ def check_skills() -> None:
             if problem:
                 fail(f"{path}: {problem}")
         keys = {ln.split(":", 1)[0].strip() for ln in lines[1:end] if ":" in ln}
-        for key in SKILL_KEYS:
+        for key in (SKILL_KEYS if tracked("install.sh") else PRODUCT_SKILL_KEYS):
             if key not in keys:
                 fail(f"{path}: frontmatter missing key '{key}'")
         fields, _ = parse_frontmatter_fields(lines)
@@ -434,7 +462,7 @@ def agent_frontmatter_problems(path: str, fields: dict[str, str]) -> list[str]:
 
 def check_agents() -> None:
     for path in tracked(".claude/agents/*.md"):
-        lines = open(os.path.join(ROOT, path), encoding="utf-8").read().splitlines()
+        lines = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read().splitlines()
         fields, why = parse_frontmatter_fields(lines)
         if fields is None:
             fail(f"{path}: {why}")
@@ -453,7 +481,7 @@ def check_configs() -> None:
     for path in tracked(".claude/settings.json") + tracked(".vscode/*.json"):
         try:
             json.load(open(os.path.join(ROOT, path), encoding="utf-8"))
-        except json.JSONDecodeError as exc:
+        except ValueError as exc:  # UnicodeDecodeError too
             fail(f"{path}: invalid JSON — {exc}")
 
 
@@ -484,7 +512,7 @@ def check_catalogs() -> None:
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
             return None
-        text = open(path, encoding="utf-8").read()
+        text = open(path, encoding="utf-8", errors="replace").read()
         if marker not in text:
             return None  # the project's own doc, not a CCGG catalog
         return text
@@ -720,7 +748,7 @@ def check_claude_md_bridge() -> None:
     path = os.path.join(ROOT, "CLAUDE.md")
     if not os.path.exists(path):
         fail("CLAUDE.md: missing — AGENTS.md never loads into Claude Code without it")
-    elif "@AGENTS.md" not in open(path, encoding="utf-8").read():
+    elif "@AGENTS.md" not in open(path, encoding="utf-8", errors="replace").read():
         fail("CLAUDE.md: does not import @AGENTS.md — the behavior rules never load")
 
 
@@ -832,7 +860,7 @@ def hook_references(settings_text: str, agent_texts: dict[str, str]) -> dict[str
 def check_hook_registration() -> None:
     files = {os.path.basename(p) for p in tracked(".claude/hooks/*.sh")}
     settings_path = os.path.join(ROOT, ".claude", "settings.json")
-    settings_text = open(settings_path, encoding="utf-8").read() if os.path.exists(settings_path) else ""
+    settings_text = open(settings_path, encoding="utf-8", errors="replace").read() if os.path.exists(settings_path) else ""
     agents = {p: open(os.path.join(ROOT, p), encoding="utf-8", errors="replace").read()
               for p in tracked(".claude/agents/*.md")}
     if not files and not settings_text:
@@ -868,7 +896,7 @@ def ccgg_origins(root: str) -> list[str] | None:
     path = os.path.join(root, ORIGIN_RECORD)
     if not os.path.isfile(path):
         return None
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8", errors="replace") as fh:
         lines = (line.strip() for line in fh)
         return [line for line in lines if line and not line.startswith("#")]
 
@@ -936,7 +964,7 @@ def check_ccgg_env() -> None:
         return
     try:
         settings = json.load(open(path, encoding="utf-8"))
-    except json.JSONDecodeError:
+    except ValueError:
         return  # check 6 reports it
     env = settings.get("env") if isinstance(settings, dict) else None
     if not isinstance(env, dict):
@@ -1768,7 +1796,7 @@ def check_guard_settings_registration() -> None:
         return
     try:
         settings = json.load(open(path, encoding="utf-8"))
-    except json.JSONDecodeError:
+    except ValueError:
         return                      # check 6 reports it
     for problem in guard_registration_problems(settings):
         fail(problem)
@@ -2200,7 +2228,7 @@ def check_hook_headers() -> None:
         return
     try:
         settings = json.load(open(path, encoding="utf-8"))
-    except json.JSONDecodeError:
+    except ValueError:
         return                      # check 6 reports it
     reaching = hook_stdout_reaches_model()
     for name, events in registered_hook_events(settings).items():
@@ -2283,6 +2311,8 @@ def print_cautions() -> None:
 
 
 def main() -> int:
+    global _TRACKED_ALL
+    _TRACKED_ALL = tracked("*")
     check_markdown()
     check_skills()
     check_skill_semantics()
@@ -2325,9 +2355,11 @@ def main() -> int:
         for f in findings:
             print(f"  {f}")
         print_cautions()
+        _TRACKED_ALL = None
         return 1
     print("OK — markdown links, skills and agents frontmatter, configs, and hooks all valid")
     print_cautions()
+    _TRACKED_ALL = None
     return 0
 
 

@@ -485,5 +485,43 @@ class DecisionNameTests(unittest.TestCase):
         self.assertNotIn("open decisions", out)
 
 
+@unittest.skipUnless(bash() and shutil.which("git"), "needs bash and git")
+class SessionMarkerTests(unittest.TestCase):
+    """S2-4: one shared marker file made "last session end" belong to whichever
+    project ended last. Each project now reads back only its own."""
+
+    END_HOOK = os.path.join(GUIDE, ".claude", "hooks", "session-end.sh")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="ccgg-markers-")
+        self.env = dict(os.environ, HOME=os.path.join(self.tmp.name, "home"), GIT_CONFIG_NOSYSTEM="1")
+        self.env.pop("CCGG_HOME", None)
+        os.makedirs(self.env["HOME"])
+        self.alpha = os.path.join(self.tmp.name, "alpha")
+        self.beta = os.path.join(self.tmp.name, "beta")
+        for d in (self.alpha, self.beta):
+            os.makedirs(d)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def _run(self, hook, project):
+        return subprocess.run([bash(), hook], cwd=project, env=dict(self.env, CLAUDE_PROJECT_DIR=project),
+                              capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+    def test_a_project_sees_its_own_last_end(self):
+        self.assertEqual(self._run(self.END_HOOK, self.alpha).returncode, 0)
+        self.assertIn("-- last session end: [", self._run(HOOK, self.alpha).stdout)
+
+    def test_another_projects_end_is_not_reported(self):
+        self._run(self.END_HOOK, self.alpha)
+        self.assertNotIn("last session end", self._run(HOOK, self.beta).stdout)
+
+    def test_the_marker_lives_under_the_projects_memory_directory(self):
+        self._run(self.END_HOOK, self.alpha)
+        self.assertTrue(os.path.isfile(os.path.join(
+            self.env["HOME"], ".claude", "memory", "alpha", "session-markers.log")))
+
+
 if __name__ == "__main__":
     unittest.main()

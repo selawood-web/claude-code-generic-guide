@@ -60,17 +60,35 @@ def read_skills() -> tuple[list[tuple[str, str]], list[str]]:
     the problem. It does not make them harmless: a count computed from a
     partial list is wrong, so main() refuses to write anything while any
     remain.
+
+    So a project's own skill falls back to the keys Claude Code itself reads:
+    its directory for a missing `name` (the product's own default) and the first
+    sentence of `description` for a missing `purpose`. Refusing it outright made
+    every installed project's CI fail the moment it added an ordinary skill
+    (finding S4-1). Unreadable now means no purpose and no description either.
     """
     skills, unreadable = [], []
     for path in sorted(glob.glob(os.path.join(ROOT, ".claude/skills/*/SKILL.md"))):
-        text = open(path, encoding="utf-8").read()
+        text = open(path, encoding="utf-8", errors="replace").read()
         name = re.search(r"^name:\s*(\S+)", text, re.M)
         purpose = re.search(r"^purpose:\s*(.+?)\s*$", text, re.M)
-        if not name or not purpose:
+        description = re.search(r"^description:\s*[\"']?(.+?)[\"']?\s*$", text, re.M)
+        if purpose:
+            summary = purpose.group(1)
+        elif description:
+            summary = first_sentence(description.group(1))
+        else:
             unreadable.append(os.path.relpath(path, ROOT))
             continue
-        skills.append((name.group(1), purpose.group(1)))
+        label = name.group(1) if name else os.path.basename(os.path.dirname(path))
+        skills.append((label, summary))
     return skills, unreadable
+
+
+def first_sentence(text: str) -> str:
+    """Up to the first full stop that ends a sentence; the whole text when there is none."""
+    match = re.match(r"(.+?[.!?])(?:\s|$)", text)
+    return (match.group(1) if match else text).strip()
 
 
 def render_table(skills: list[tuple[str, str]], with_invoke: bool) -> str:
@@ -104,9 +122,9 @@ def main() -> int:
         # Never write from a partial list: the counts would be rewritten to a
         # number that counts only the skills this tool could parse.
         for path in unreadable:
-            print(f"catalog: {path} missing name or purpose frontmatter")
-        print("catalog: nothing written — every skill needs name and purpose before "
-              "the counts can be trusted")
+            print(f"catalog: {path} has neither a purpose nor a description")
+        print("catalog: nothing written — every skill needs a purpose or a description "
+              "before the counts can be trusted")
         return EXIT_UNREADABLE
     if not skills:
         print("catalog: no skills found under .claude/skills/")
