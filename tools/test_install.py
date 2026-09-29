@@ -8,6 +8,7 @@ repository and asserts the validator passes there on the first run — F002's
 fresh-install criterion, previously stated and never tested.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -204,6 +205,203 @@ class UpdateReportsTests(unittest.TestCase):
                                  env=env, capture_output=True, text=True)
             self.assertEqual(fix.returncode, 0, fix.stdout + fix.stderr)
             self.assertNotIn("STALE", self._update(target, env))
+
+
+def _git_env(tmp):
+    env = dict(os.environ, HOME=os.path.join(tmp, "home"), GIT_CONFIG_NOSYSTEM="1",
+               GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@local",
+               GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@local")
+    os.makedirs(env["HOME"], exist_ok=True)
+    return env
+
+
+def _git(target, env, *args):
+    return subprocess.run(["git", *args], cwd=target, env=env, capture_output=True,
+                          text=True, check=True).stdout
+
+
+def _install(target, env):
+    proc = subprocess.run(["bash", os.path.join(ROOT, "install.sh"), target], env=env,
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return proc.stdout
+
+
+def _hook_modes(target, env):
+    return {line.split("\t")[1]: line.split()[0]
+            for line in _git(target, env, "ls-files", "-s", ".claude/hooks").splitlines()}
+
+
+class InstallTouchesOnlyItsOwnFilesTests(unittest.TestCase):
+    """S5-1: the validator step marked every untracked file intent-to-add, so the
+    owner's next `git commit -a` committed whatever sat there — a .env.local included."""
+
+    def _repo(self, tmp, *, filemode=True):
+        target = os.path.join(tmp, "project")
+        os.makedirs(target)
+        env = _git_env(tmp)
+        _git(target, env, "init", "-q")
+        if not filemode:
+            _git(target, env, "config", "core.filemode", "false")
+        return target, env
+
+    def test_an_unrelated_untracked_file_stays_untracked(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-s51-") as tmp:
+            target, env = self._repo(tmp)
+            with open(os.path.join(target, ".env.local"), "w", encoding="utf-8") as fh:
+                fh.write("SECRET=1\n")
+            _install(target, env)
+            self.assertNotIn(".env.local", _git(target, env, "ls-files"))
+            self.assertIn("?? .env.local", _git(target, env, "status", "--porcelain"))
+
+    def test_a_commit_all_after_install_leaves_the_secret_out(self):
+        """The failure the finding describes, end to end."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-s51-") as tmp:
+            target, env = self._repo(tmp)
+            with open(os.path.join(target, ".env.local"), "w", encoding="utf-8") as fh:
+                fh.write("SECRET=1\n")
+            _install(target, env)
+            _git(target, env, "commit", "-qam", "install")
+            committed = _git(target, env, "show", "--name-only", "--format=", "HEAD")
+            self.assertNotIn(".env.local", committed)
+            self.assertIn("AGENTS.md", committed, "what install copied is what the commit carries")
+
+    def test_hooks_are_executable_in_the_index_with_filemode_off(self):
+        """S4-8: core.filemode=false is every Windows clone; chmod never reached git."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-s48-") as tmp:
+            target, env = self._repo(tmp, filemode=False)
+            _install(target, env)
+            modes = _hook_modes(target, env)
+            self.assertTrue(modes, "the hooks are in the index")
+            self.assertEqual(set(modes.values()), {"100755"}, modes)
+
+    def test_a_catch_all_eol_rule_is_accepted_for_the_hooks(self):
+        """W-5: `* text=auto eol=lf` pins the hooks as well as a `*.sh` rule does."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-w5-") as tmp:
+            target, env = self._repo(tmp)
+            with open(os.path.join(target, ".gitattributes"), "w", encoding="utf-8") as fh:
+                fh.write("* text=auto eol=lf\n")
+            out = _install(target, env)
+            self.assertNotIn("without a *.sh rule", out)
+
+    def test_a_gitattributes_without_any_eol_rule_is_still_reported(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w5-") as tmp:
+            target, env = self._repo(tmp)
+            with open(os.path.join(target, ".gitattributes"), "w", encoding="utf-8") as fh:
+                fh.write("*.png binary\n")
+            self.assertIn("without a *.sh rule", _install(target, env))
+
+
+class UpdateRegistersNewHooksTests(unittest.TestCase):
+    """W-1: update.sh delivered a new hook file and never registered it, so it never
+    ran. It now appends the guide's registration for a hook it delivers for the first
+    time — and only then, so a registration the owner took out stays out."""
+
+    GUARD = ".claude/hooks/context-guard.sh"
+
+    def _wired_before_the_guard(self, tmp, *, filemode=True):
+        """An installed project from before context-guard.sh existed."""
+        target = os.path.join(tmp, "project")
+        os.makedirs(target)
+        env = _git_env(tmp)
+        _git(target, env, "init", "-q")
+        if not filemode:
+            _git(target, env, "config", "core.filemode", "false")
+        _install(target, env)
+        os.remove(os.path.join(target, self.GUARD))
+        settings = self._settings(target)
+        for event in list(settings["hooks"]):
+            settings["hooks"][event] = [b for b in settings["hooks"][event]
+                                        if not any("context-guard" in h.get("command", "")
+                                                   for h in b.get("hooks", []))]
+            if not settings["hooks"][event]:
+                del settings["hooks"][event]
+        settings["env"] = {"PROJECT_OWN": "kept"}
+        self._write_settings(target, settings)
+        _git(target, env, "add", "-A")
+        _git(target, env, "commit", "-qm", "wired")
+        return target, env
+
+    def _settings(self, target):
+        with open(os.path.join(target, ".claude", "settings.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+
+    def _write_settings(self, target, data):
+        with open(os.path.join(target, ".claude", "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+
+    def _update(self, target, env):
+        proc = subprocess.run(["bash", os.path.join(ROOT, "update.sh"), target], env=env,
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return proc.stdout + proc.stderr
+
+    def _guard_events(self, target):
+        return sorted(event for event, blocks in self._settings(target).get("hooks", {}).items()
+                      for b in blocks for h in b.get("hooks", [])
+                      if "context-guard" in h.get("command", ""))
+
+    def test_a_new_hook_is_delivered_and_registered_on_both_events(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp)
+            out = self._update(target, env)
+            self.assertTrue(os.path.exists(os.path.join(target, self.GUARD)))
+            self.assertEqual(self._guard_events(target), ["UserPromptExpansion", "UserPromptSubmit"])
+            self.assertIn("registered 2 new hook entries", out)
+
+    def test_the_projects_own_settings_survive_the_merge(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp)
+            before = self._settings(target)
+            self._update(target, env)
+            after = self._settings(target)
+            self.assertEqual(after["env"], {"PROJECT_OWN": "kept"})
+            for event, blocks in before["hooks"].items():
+                self.assertEqual(after["hooks"][event][: len(blocks)], blocks, event)
+
+    def test_a_second_update_adds_nothing(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp)
+            self._update(target, env)
+            once = self._settings(target)
+            out = self._update(target, env)
+            self.assertEqual(self._settings(target), once)
+            self.assertNotIn("registered", out)
+
+    def test_a_registration_the_owner_removed_stays_removed(self):
+        """The hook file is already there, so this run is not its first delivery."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp)
+            with open(os.path.join(ROOT, self.GUARD), "rb") as src, \
+                    open(os.path.join(target, self.GUARD), "wb") as dst:
+                dst.write(src.read())
+            self._update(target, env)
+            self.assertEqual(self._guard_events(target), [])
+
+    def test_an_unreadable_settings_file_is_left_alone_and_reported(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp)
+            path = os.path.join(target, ".claude", "settings.json")
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write("{ not json")
+            out = self._update(target, env)
+            with open(path, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "{ not json")
+            self.assertIn("could not be read", out)
+
+    def test_the_new_hook_is_executable_in_the_index_with_filemode_off(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp, filemode=False)
+            self._update(target, env)
+            self.assertEqual(_hook_modes(target, env).get(self.GUARD), "100755")
+
+    def test_update_does_not_mark_unrelated_files(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-w1-") as tmp:
+            target, env = self._wired_before_the_guard(tmp)
+            with open(os.path.join(target, ".env.local"), "w", encoding="utf-8") as fh:
+                fh.write("SECRET=1\n")
+            self._update(target, env)
+            self.assertNotIn(".env.local", _git(target, env, "ls-files"))
 
 
 if __name__ == "__main__":

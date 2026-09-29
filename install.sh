@@ -33,6 +33,9 @@ fi
 
 copied=0
 skipped=0
+# Every path this run created, so the validator step below can make exactly these
+# visible to git — and nothing else in the project (finding S5-1).
+INSTALLED=()
 
 note_copied()  { echo "  + $1"; copied=$((copied+1)); }
 note_skipped() { echo "  = $1 (already exists, left alone)"; skipped=$((skipped+1)); }
@@ -43,6 +46,7 @@ copy_file() { # relative path
   else
     mkdir -p "$TARGET/$(dirname "$1")"
     cp "$SRC/$1" "$TARGET/$1"
+    INSTALLED+=("$1")
     note_copied "$1"
   fi
 }
@@ -67,6 +71,7 @@ for dir in "$SRC"/.claude/skills/*/; do
     skills_kept=$((skills_kept+1))
   else
     cp -r "$dir" "$TARGET/.claude/skills/$name"
+    INSTALLED+=(".claude/skills/$name")
     skills_copied=$((skills_copied+1))
   fi
 done
@@ -82,6 +87,7 @@ if [ -e "$TARGET/.claude/hooks" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/hooks" "$TARGET/.claude/hooks"
+  INSTALLED+=(".claude/hooks")
   note_copied ".claude/hooks/ (5 hooks: 3 lifecycle, 1 context guard, 1 verifier guard)"
 fi
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
@@ -92,6 +98,7 @@ if [ -e "$TARGET/.claude/agents" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/agents" "$TARGET/.claude/agents"
+  INSTALLED+=(".claude/agents")
   note_copied ".claude/agents/ (audit subagents)"
 fi
 
@@ -102,6 +109,7 @@ if [ -e "$TARGET/.claude/references" ]; then
 else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/references" "$TARGET/.claude/references"
+  INSTALLED+=(".claude/references")
   note_copied ".claude/references/ (rule-file companions)"
 fi
 
@@ -112,15 +120,17 @@ if [ -e "$TARGET/.claude/settings.json" ]; then
   echo "    hooks that are not registered there never run."
 else
   cp "$SRC/.claude/settings.json" "$TARGET/.claude/settings.json"
+  INSTALLED+=(".claude/settings.json")
   note_copied ".claude/settings.json (hook registration)"
 fi
 
 # Line endings for the hooks. Checked out with CRLF they die on macOS and Linux
-# with "bad interpreter: /bin/bash^M" — and the session-start hook fails SILENTLY,
-# because settings.json invokes it with `|| true`. A target that already has its
-# own .gitattributes is never edited; it is reported instead.
+# with "bad interpreter: /bin/bash^M", and a hook that cannot start adds nothing to
+# the session — no error in front of anyone. A target that already has its own
+# .gitattributes is never edited; it is reported instead. A `*.sh` rule pins the
+# hooks, and so does a catch-all `* … eol=lf` (clinicpsy's).
 if [ -e "$TARGET/.gitattributes" ]; then
-  if grep -qE '^\*\.sh[[:space:]]' "$TARGET/.gitattributes"; then
+  if grep -qE '^\*\.sh[[:space:]]|^\*[[:space:]].*eol=lf' "$TARGET/.gitattributes"; then
     note_skipped ".gitattributes (already pins *.sh)"
   else
     echo "  ! .gitattributes exists without a *.sh rule — add '*.sh text eol=lf' or the hooks break on macOS/Linux"
@@ -165,6 +175,7 @@ else
   mkdir -p "$TARGET/.github/workflows"
   sed "s/branches: \[master\]/branches: [$DEFAULT_BRANCH]/" \
     "$SRC/.github/workflows/validate.yml" > "$TARGET/.github/workflows/validate.yml"
+  INSTALLED+=(".github/workflows/validate.yml")
   note_copied ".github/workflows/validate.yml (CI on branch '$DEFAULT_BRANCH')"
 fi
 
@@ -184,6 +195,7 @@ if [ ! -e "$TARGET/CLAUDE.md" ]; then
     printf 'imports (e.g. @docs/context.md) or instructions below.\n'
     printf -- '-->\n'
   } > "$TARGET/CLAUDE.md"
+  INSTALLED+=("CLAUDE.md")
   note_copied "CLAUDE.md (the bridge — without it the rules never load)"
 elif ! grep -q "@AGENTS.md" "$TARGET/CLAUDE.md"; then
   note_skipped "CLAUDE.md"
@@ -203,7 +215,23 @@ echo "Copied: $copied · left alone: $skipped"
 echo
 if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
   echo "Running the validator in the target (new files must be git-tracked to be checked):"
-  git -C "$TARGET" add -N . >/dev/null 2>&1 || true
+  # Intent-to-add, and only for what this run created. `git add -N .` used to mark
+  # every untracked file in the project, so the owner's next `git commit -a` swept in
+  # whatever sat there unignored — a .env.local included (finding S5-1).
+  if [ "${#INSTALLED[@]}" -gt 0 ]; then
+    git -C "$TARGET" add -N -- "${INSTALLED[@]}" >/dev/null 2>&1 || true
+  fi
+  # The hooks' executable bit, in the index: with core.filemode=false (every Windows
+  # clone) `chmod +x` never reaches git, the hooks commit as 100644, and the validator
+  # fails them on the first run (finding S4-8).
+  for f in "$TARGET"/.claude/hooks/*.sh; do
+    rel=".claude/hooks/$(basename "$f")"
+    if [ -f "$f" ] && git -C "$TARGET" ls-files --error-unmatch -- "$rel" >/dev/null 2>&1; then
+      case " ${INSTALLED[*]:-} " in
+        *" .claude/hooks "*) git -C "$TARGET" update-index --chmod=+x -- "$rel" >/dev/null 2>&1 || true ;;
+      esac
+    fi
+  done
   (cd "$TARGET" && python3 tools/validate.py) || echo "  ! validator reported findings in the target — fix them before the first session"
 else
   echo "Target is not a git repository (or python3 is missing) — validator not run."
