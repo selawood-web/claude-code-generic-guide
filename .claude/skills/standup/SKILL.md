@@ -26,11 +26,9 @@ gh pr list --author @me
 gh issue list --state closed --limit 10
 ```
 
-### Step 2 — Check the chronicle (if available)
-```
-/chronicle
-```
-This retrieves the session history for a richer summary.
+### Step 2 — Read the session log
+The latest `/flush` log under `~/.claude/memory/<project>/sessions/` (the session-start
+hook names it) holds the decisions and open threads a commit list cannot show.
 
 ### Step 3 — Write the standup
 

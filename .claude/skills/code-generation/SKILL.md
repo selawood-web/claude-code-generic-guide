@@ -23,8 +23,8 @@ back here. See `WORKING-CHARTER.md`, *Code Module*.
 - [ ] Error handling is explicit — no swallowed errors
 - [ ] Edge cases are handled (null, empty, out-of-range)
 - [ ] No hardcoded values that belong in config/constants
-- [ ] No TODO comments without context (why and when)
-- [ ] Security: no injection points, no secret in code
+- [ ] No TODO without a tracked issue (AGENTS.md, *Never*)
+- [ ] Security as AGENTS.md's *Always* states it — no injection points, secrets, or unvalidated input at a boundary
 
 ### Structure Guidelines
 ```

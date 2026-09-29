@@ -117,9 +117,8 @@ test reports `not run`, and every ladder row the run produces is marked unmeasur
 
 ### Step 4 — The design council
 Run the members in [`design-council.md`](design-council.md) against the vision, the
-research, the screenshots and the spatial map. Parallel subagents on a smaller model
-when available, sequential passes fully adopting one member at a time otherwise
-(never blended). Each member returns its three ranked gaps, one Best move, and one
+research, the screenshots and the spatial map, fanned out as the charter's
+*Efficiency* says — one member fully adopted at a time, never blended. Each member returns its three ranked gaps, one Best move, and one
 kill question, per the contract in that file. The full path runs all ten; the light
 path runs the three whose discipline the surface calls for, named in the file.
 

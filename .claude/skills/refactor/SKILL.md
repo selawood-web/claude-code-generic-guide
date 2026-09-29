@@ -52,7 +52,9 @@ Common refactoring targets:
 Never refactor + add features in the same commit.
 
 ### Step 5 — Final check
-After refactoring:
+A refactor is a real code change, so the code gate runs in full
+([`code-gate.md`](../../references/code-gate.md)) — the steps above are its baseline
+and its tests stage, not a replacement for it. After refactoring:
 ```
 # All tests pass?
 # Any new tests needed?

@@ -55,8 +55,8 @@ is genuinely unknown; do not invent it. Then close the gaps by running `/require
 Steps 1–5 (problem, success, MVP scope, user stories, constraints) against only the
 sections still empty — the interview is defined there, and is not restated here.
 
-Ask by the charter: one question per turn, as a pick-list with a recommended default
-first, and never a question whose answer the codebase already holds.
+Ask the way the charter's *How a turn ends* says, and never a question whose answer
+the codebase already holds.
 
 ### Step 4 — Write the file
 - Allocate the next id: the highest in `features/` plus one, or the team's tracker key

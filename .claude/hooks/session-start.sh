@@ -192,6 +192,12 @@ if [ -d "$SESSIONS_DIR" ]; then
     echo "-- last session log: ${LATEST} in ~/.claude/memory/<project>/sessions/ (read it to pick up open threads) --"
   fi
 fi
+# /dream consolidates the logs into this file and archives them, so after a dream
+# the pointer above goes quiet. Nothing named it, and the consolidated knowledge sat
+# where no session looked (finding S3-2). A fixed string: its content is not forwarded.
+if [ -s "${HOME}/.claude/memory/${PROJECT_SLUG}/MEMORY.md" ]; then
+  echo "-- consolidated memory: ~/.claude/memory/<project>/MEMORY.md (read it before re-deciding anything) --"
+fi
 MARKERS="${HOME}/.claude/memory/${PROJECT_SLUG}/session-markers.log"
 if [ -f "$MARKERS" ]; then
   STAMP="$(tail -1 "$MARKERS" | sed -n 's/^\(\[[0-9TZ:+-]*\]\).*/\1/p')"
