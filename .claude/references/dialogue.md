@@ -51,7 +51,7 @@ Five items at most; more means some of them were really the owner's and belong i
 pick-list. Trivia is never listed — a list padded with it teaches the owner to skip it.
 
 > **Decided** — `no N` reverses
-> 1. New skill named `/eli10`, not `/simple` — matches the word you already use.
+> 1. New skill named `/eli10`, not "simple" — matches the word you already use.
 > 2. Rules live in the dialogue reference; the charter only points at them.
 
 ### Reply layout — understood in one read
