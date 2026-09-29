@@ -25,6 +25,44 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOL_FILE_RE = re.compile(r"tools/[A-Za-z0-9_]+\.(?:py|json|txt)")
 
 
+_GUIDE_COPY: str | None = None
+
+
+def guide_copy() -> str:
+    """This working tree, copied to a temporary git repository with no remote.
+
+    update.sh first refreshes the clone it lives in: with CCGG_REF unset that is a
+    `git pull --ff-only`. Run from ROOT, it pulled the checkout under test forward to
+    its upstream's tip in the middle of the suite — CI re-run on db59dc1 then read
+    #108's validate.py from disk while the imported module was db59dc1's, and failed
+    on a check that commit does not have (2026-09-30). A copy with no remote has
+    nothing to pull, and still carries uncommitted changes, which a clone would not.
+    """
+    global _GUIDE_COPY
+    if _GUIDE_COPY is None:
+        import atexit
+        import shutil
+        dest = tempfile.mkdtemp(prefix="ccgg-guide-copy-")
+        atexit.register(shutil.rmtree, dest, True)
+        listing = subprocess.run(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                                 cwd=ROOT, capture_output=True, check=True).stdout.decode("utf-8")
+        for rel in filter(None, listing.split("\0")):
+            src = os.path.join(ROOT, rel)
+            if os.path.isfile(src):
+                os.makedirs(os.path.dirname(os.path.join(dest, rel)), exist_ok=True)
+                shutil.copy2(src, os.path.join(dest, rel))
+        env = dict(os.environ, GIT_CONFIG_NOSYSTEM="1", GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@local",
+                   GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@local")
+        for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "guide copy"]):
+            subprocess.run(cmd, cwd=dest, env=env, check=True, capture_output=True)
+        _GUIDE_COPY = dest
+    return _GUIDE_COPY
+
+
+def update_sh() -> str:
+    return os.path.join(guide_copy(), "update.sh")
+
+
 def tool_files(script: str) -> set[str]:
     with open(os.path.join(ROOT, script), encoding="utf-8") as fh:
         body = "\n".join(ln for ln in fh.read().splitlines() if not ln.lstrip().startswith("#"))
@@ -161,7 +199,7 @@ class UpdateReportsTests(unittest.TestCase):
         return target, env
 
     def _update(self, target, env):
-        proc = subprocess.run([BASH, os.path.join(ROOT, "update.sh"), target], env=env,
+        proc = subprocess.run([BASH, update_sh(), target], env=env,
                               capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         return proc.stdout + proc.stderr
@@ -237,6 +275,37 @@ def _hook_modes(target, env):
             for line in _git(target, env, "ls-files", "-s", ".claude/hooks").splitlines()}
 
 
+class TestsNeverPullTheCheckoutTests(unittest.TestCase):
+    """update.sh pulls the clone it lives in. The suite must never run it from the
+    checkout under test, or a re-run of an old commit tests a mix of old and new."""
+
+    def test_the_guide_copy_has_nothing_to_pull_from(self):
+        remotes = subprocess.run(["git", "remote"], cwd=guide_copy(), capture_output=True, text=True).stdout
+        self.assertEqual(remotes.strip(), "")
+
+    def test_the_guide_copy_carries_the_working_tree(self):
+        with open(os.path.join(ROOT, "update.sh"), "rb") as a, open(update_sh(), "rb") as b:
+            self.assertEqual(a.read(), b.read(), "uncommitted edits are what a test run should exercise")
+
+    def test_running_update_leaves_the_checkout_where_it_was(self):
+        head = lambda: subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout
+        before = head()
+        with tempfile.TemporaryDirectory(prefix="ccgg-nopull-") as tmp:
+            env = dict(_git_env(tmp), CLAUDE_CONFIG_DIR=os.path.join(tmp, "config"))
+            subprocess.run([BASH, update_sh(), "--user"], env=env, capture_output=True, text=True)
+        self.assertEqual(head(), before)
+
+    def test_no_test_file_runs_update_sh_from_the_checkout(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        for name in sorted(os.listdir(here)):
+            if not (name.startswith("test_") and name.endswith(".py")):
+                continue
+            with open(os.path.join(here, name), encoding="utf-8") as fh:
+                text = fh.read()
+            with self.subTest(file=name):
+                self.assertNotRegex(text, r'\[BASH, os\.path\.join\(ROOT, "update\.sh"\)')
+
+
 class PersonalInstallTests(unittest.TestCase):
     """S3-1: personal skills override every project's same-named copy, and a stale set
     kept running /ship and /deploy in every wired project. The run says so."""
@@ -244,7 +313,7 @@ class PersonalInstallTests(unittest.TestCase):
     def test_a_personal_install_warns_that_it_overrides_projects(self):
         with tempfile.TemporaryDirectory(prefix="ccgg-user-") as tmp:
             env = dict(_git_env(tmp), CLAUDE_CONFIG_DIR=os.path.join(tmp, "config"))
-            proc = subprocess.run([BASH, os.path.join(ROOT, "update.sh"), "--user"], env=env,
+            proc = subprocess.run([BASH, update_sh(), "--user"], env=env,
                                   capture_output=True, text=True)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
             self.assertIn("override same-named project skills", proc.stdout)
@@ -377,7 +446,7 @@ class UpdateRegistersNewHooksTests(unittest.TestCase):
             json.dump(data, fh, indent=2)
 
     def _update(self, target, env):
-        proc = subprocess.run([BASH, os.path.join(ROOT, "update.sh"), target], env=env,
+        proc = subprocess.run([BASH, update_sh(), target], env=env,
                               capture_output=True, text=True)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         return proc.stdout + proc.stderr
