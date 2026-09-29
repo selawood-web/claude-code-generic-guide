@@ -37,7 +37,7 @@ hidden character planted in a cached research note | caught | test -d knowledge-
 CLAUDE.md bridge removed | caught | echo '# nothing' > CLAUDE.md
 
 # --- skill frontmatter -----------------------------------------------------------
-skill frontmatter missing a house key | caught | sed -i '/^purpose:/d' .claude/skills/debug/SKILL.md
+skill frontmatter missing a house key | caught | test -f install.sh || exit 3; sed -i '/^purpose:/d' .claude/skills/debug/SKILL.md
 skill allowed-tools set to nonsense names | caught | sed -i '/^name: debug$/a allowed-tools: teleport, mindread' .claude/skills/debug/SKILL.md
 skill name differs from its directory | caught | sed -i 's/^name: debug/name: debugger/' .claude/skills/debug/SKILL.md
 skill description emptied | caught | sed -i 's/^description:.*/description: /' .claude/skills/debug/SKILL.md
@@ -98,8 +98,8 @@ redteam_probes.txt emptied so no channel is measured | caught | : > tools/redtea
 numeric threshold added to a reference with nothing measuring it | caught | printf '\n\nKeep flaky failures under 5 percent.\n' >> .claude/references/code-gate.md
 docs claim hook stdout is ignored for an event that reaches the model | caught | python3 -c "import os; os.makedirs('docs', exist_ok=True); open('docs/10-hooks.md','a').write('\nFor events like SessionStart, stdout is ignored.\n')"
 guard canary removed from the verifier brief | caught | python3 -c "p='.claude/agents/audit-verifier.md';t=open(p).read();open(p,'w').write(t.replace('GUARD-CANARY','GUARD-REMOVED'))"
-python script added without naming it in the guard's allow-list | caught | printf 'print(1)\n' > tools/test_added.py
-shell script added without naming it in the guard's allow-list | caught | printf 'echo hi\n' > deploy.sh
+python script added without naming it in the guard's allow-list | caught | test -f install.sh || exit 3; printf 'print(1)\n' > tools/test_added.py
+shell script added without naming it in the guard's allow-list | caught | test -f install.sh || exit 3; printf 'echo hi\n' > deploy.sh
 guard's script allow-list keeps a name whose file is gone | caught | test -f install.sh || exit 3; git rm -q tools/audit_pr_comment.py
 deterministic fact checks dropped from CI | caught | test -f install.sh || exit 3; sed -i '/audit_facts/d' .github/workflows/validate.yml
 unit test step dropped from CI | caught | test -f install.sh || exit 3; sed -i '/unittest discover/d' .github/workflows/validate.yml
