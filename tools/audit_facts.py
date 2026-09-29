@@ -520,9 +520,9 @@ def run_gate(repo: str, label: str, cmd: list[str], facts: Facts, execute: bool 
 # Code's project-scoped MCP file is .mcp.json at the repository root — the file
 # `claude mcp add --scope project` writes, under a top-level `mcpServers` key —
 # and settings.json's enableAllProjectMcpServers / enabledMcpjsonServers decide
-# which of its servers load without a prompt. This repository's docs/ snapshot
-# also documents .claude/config.toml with an [mcp_servers] section; the current
-# product does not read that file (docs/index.md says the snapshot differs), but
+# which of its servers load without a prompt. A docs/ snapshot this repository
+# once carried (another CLI's docs, removed 2026-09-29) documented
+# .claude/config.toml with an [mcp_servers] section; Claude Code does not read it, but
 # a tree that carries one is still a tree that meant to configure a server, so it
 # is inventoried too. Neither was, so a server added to either executed commands
 # and passed the gate silently (finding R-005). Parsing is deliberately shallow:
