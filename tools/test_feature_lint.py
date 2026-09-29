@@ -508,5 +508,94 @@ class MainIntegrationTests(unittest.TestCase):
             self.assertIn("2 file(s), 2 failing", out.getvalue())
 
 
+OUTCOME = "- Metric: month-end close, from 8 hours to 30 minutes, measured by the close checklist"
+CRITERIA = ("- Given 200 invoices in a month, when the user exports it, then one file contains all 200\n"
+            "- Given an empty month, when the user exports it, then an empty file downloads with headers\n")
+
+
+class PrecisionTests(unittest.TestCase):
+    """Findings S4-6 and S4-11 of the 2026-09-29 check: rules matched letters, not meaning."""
+
+    def with_outcome(self, text):
+        return messages(COMPLETE.replace(OUTCOME, f"- {text}"))
+
+    def with_criteria(self, *items):
+        return messages(COMPLETE.replace(CRITERIA, "".join(f"- {i}\n" for i in items)))
+
+    def test_words_that_contain_given_when_then_are_not_criteria(self):
+        found = self.with_criteria("The rules were forgiven whenever needed, then reverted.",
+                                   "Nothing testable, but forgiven, whenever mentioned, then so be it.")
+        self.assertTrue(any("Given/When/Then" in m for m in found), found)
+
+    def test_the_three_clauses_out_of_order_are_not_a_criterion(self):
+        found = self.with_criteria("Then a file downloads, when the user exports, given a month.",
+                                   "Then it is empty, when exported, given an empty month.")
+        self.assertTrue(any("Given/When/Then" in m for m in found), found)
+
+    def test_marked_up_clauses_still_count(self):
+        found = self.with_criteria("**Given** a month, **when** exported, **then** one file",
+                                   "*Given* an empty month, *when* exported, *then* headers only")
+        self.assertFalse(any("Given/When/Then" in m for m in found), found)
+
+    def test_a_version_number_is_not_a_measurable_target(self):
+        for text in ("We will ship version 2b of the exporter.", "Moves the exporter to v2 for everyone.",
+                     "Adopts schema 1.2.3 across teams."):
+            with self.subTest(text=text):
+                self.assertTrue(any("measurable" in m for m in self.with_outcome(text)))
+
+    def test_real_units_still_count(self):
+        for text in ("Close in 10s.", "p95 under 40ms.", "3x faster.", "Save $10k a year.",
+                     "Cut errors by 40%.", "Serve 500 users.", "Ship v2, and close 40% faster."):
+            with self.subTest(text=text):
+                self.assertFalse(any("measurable" in m for m in self.with_outcome(text)))
+
+    def test_a_generic_type_is_not_a_placeholder(self):
+        text = COMPLETE.replace("Closing the month costs a day of manual downloads.",
+                                "The API returns List<int> and Optional<string> ids.")
+        self.assertFalse(any("placeholder" in m for m in messages(text)))
+
+    def test_a_template_slot_is_still_a_placeholder(self):
+        for slot in ("The <one sentence> here.", "Owner (<name>)."):
+            with self.subTest(slot=slot):
+                text = COMPLETE.replace("Closing the month costs a day of manual downloads.", slot)
+                self.assertTrue(any("placeholder" in m for m in messages(text)))
+
+
+class TitleTests(unittest.TestCase):
+    """S4-13: the H1 rules had no test."""
+
+    def test_no_h1_is_an_error(self):
+        text = COMPLETE.replace("\n# ", "\n## ", 1)
+        self.assertTrue(any(f.level == "error" and "no H1" in f.message
+                            for f in lint_text(text, "F009-bulk-invoice-export.md")))
+
+    def test_an_h1_without_the_id_is_a_gap(self):
+        import re as _re
+        text = _re.sub(r"(?m)^# .*$", "# Bulk invoice export", COMPLETE, count=1)
+        found = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertTrue(any(f.level == "gap" and "does not carry the id" in f.message for f in found))
+
+
+class WriteIndexTests(unittest.TestCase):
+    """S4-13: the --write-index branch of main() — the one that writes to disk — had no test."""
+
+    def test_writes_the_index_then_reports_it_current(self):
+        import feature_lint
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "features"))
+            with open(os.path.join(tmp, "features", "F009-bulk-invoice-export.md"), "w", encoding="utf-8") as fh:
+                fh.write(COMPLETE)
+            old = os.getcwd()
+            os.chdir(tmp)
+            try:
+                self.assertEqual(feature_lint.main(["--write-index"]), 0)
+                with open(os.path.join("features", "README.md"), encoding="utf-8") as fh:
+                    self.assertIn("F009", fh.read())
+                self.assertEqual(feature_lint.main(["--write-index"]), 0)
+                self.assertEqual(feature_lint.main([]), 0, "the index it wrote is one the linter accepts")
+            finally:
+                os.chdir(old)
+
+
 if __name__ == "__main__":
     unittest.main()

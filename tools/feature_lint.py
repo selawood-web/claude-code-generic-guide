@@ -70,11 +70,28 @@ SUMMARY_WORD_CAP = 60
 
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9]*-?\d+$")
 PLACEHOLDER_RE = re.compile(
-    r"\bTBD\b|\bTODO\b|\bFIXME\b|\bXXX\b|\?\?\?|<[a-z][a-z0-9 _/-]*>|lorem ipsum",
+    # `(?<!\w)<`: a template slot stands apart; `List<int>` is a type (finding S4-11).
+    r"\bTBD\b|\bTODO\b|\bFIXME\b|\bXXX\b|\?\?\?|(?<!\w)<[a-z][a-z0-9 _/-]*>|lorem ipsum",
     re.I,
 )
 # "at least one number with a unit" — 40%, 2 seconds, 500 users, 3x, $10k.
 MEASURABLE_RE = re.compile(r"\d+\s*(%|x\b|[a-z$€£]+)|[$€£]\s*\d", re.I)
+# A number that names a version is not a measure: "version 2b", "v2", "1.2.3".
+VERSION_CONTEXT_RE = re.compile(r"(?:\bversion\s+|\bv)$|\d\.\d+\.$", re.I)
+# Whole words, in order: "forgiven whenever … then" is not Given/When/Then (S4-6).
+GIVEN_WHEN_THEN_RE = re.compile(r"\bgiven\b.*\bwhen\b.*\bthen\b", re.I | re.S)
+
+
+def measurable(text: str) -> bool:
+    """At least one number with a unit that is not part of a version (finding S4-11)."""
+    for match in MEASURABLE_RE.finditer(text):
+        start = match.start()
+        if text[start] in "$€£":
+            return True
+        if VERSION_CONTEXT_RE.search(text[:start]) or re.match(r"\d+\.\d+\.\d", text[start:]):
+            continue
+        return True
+    return False
 BLOCKS_RE = re.compile(r"\bblocks:\s*(yes|no)\b", re.I)
 EMPTY_ANSWER_RE = re.compile(r"^(none|none yet|n/a|nothing)\.?$", re.I)
 
@@ -226,7 +243,7 @@ def lint_text(text: str, filename: str = "") -> list[Finding]:
 
     if "outcome" in sections:
         no, body = sections["outcome"]
-        if not MEASURABLE_RE.search(prose(body)):
+        if not measurable(prose(body)):
             findings.append(
                 Finding("gap", no, "outcome states no measurable target (a number with a unit)")
             )
@@ -240,7 +257,7 @@ def lint_text(text: str, filename: str = "") -> list[Finding]:
         no, body = sections["acceptance criteria"]
         testable = [
             item for item in bullets(body)
-            if all(word in item.lower() for word in ("given", "when", "then"))
+            if GIVEN_WHEN_THEN_RE.search(item)
         ]
         if len(testable) < 2:
             findings.append(

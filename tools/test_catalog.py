@@ -192,6 +192,39 @@ class ProjectSkillTests(unittest.TestCase):
         self.assertIn("bytes", names)
 
 
+class CountPlanTests(unittest.TestCase):
+    """S4-10: AGENTS.md is planned table-only, but its prose counts were rewritten too."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(prefix="ccgg-counts-")
+        self.addCleanup(shutil.rmtree, self.root, True)
+        _skill(self.root, "alpha")
+
+    def _write(self, name, text):
+        with open(os.path.join(self.root, name), "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    def _read(self, name):
+        with open(os.path.join(self.root, name), encoding="utf-8") as fh:
+            return fh.read()
+
+    def _run_write(self):
+        with mock.patch.object(catalog, "ROOT", self.root), mock.patch.object(sys, "argv", ["catalog.py", "--write"]):
+            return catalog.main()
+
+    def test_agents_prose_that_names_a_count_is_left_alone(self):
+        self._write("AGENTS.md", f"This repo once documented 5 skills in prose.\n\n{catalog.START}\n{catalog.END}\n")
+        self._run_write()
+        body = self._read("AGENTS.md")
+        self.assertIn("documented 5 skills in prose", body)
+        self.assertIn("| `/alpha` |", body, "the table itself is still regenerated")
+
+    def test_a_count_bearing_file_is_still_rewritten(self):
+        self._write("README.md", f"All 5 skills are here.\n\n{catalog.START}\n{catalog.END}\n")
+        self._run_write()
+        self.assertIn("All 1 skills are here.", self._read("README.md"))
+
+
 class FirstSentenceTests(unittest.TestCase):
     def test_cuts_at_the_first_sentence_end(self):
         self.assertEqual(catalog.first_sentence("Review code. Use when asked."), "Review code.")
