@@ -321,6 +321,13 @@ def hook_commands(settings: dict) -> list[tuple[str, str]]:
     return out
 
 
+# Files under .claude/hooks/ that a hook reads rather than runs. The verifier guard's
+# project allow-list sits beside the guard so it carries the guard's trust; it is
+# data, and asking settings.json to register it would make every project that
+# names a script of its own fail this stage.
+HOOK_DATA_FILES = frozenset(("audit-verifier-guard.local",))
+
+
 def hook_registration(settings: dict, hook_files: list[str], vocab: dict, facts: Facts,
                       registered_elsewhere: set[str] | None = None) -> None:
     """Both directions: registered → present, present → registered; and known event names.
@@ -336,7 +343,7 @@ def hook_registration(settings: dict, hook_files: list[str], vocab: dict, facts:
                       f"hook registered for unknown event '{event}'", "class: dead-mechanism; the hook never fires")
         for name in HOOK_PATH_RE.findall(command):
             referenced.add(name)
-    present = {os.path.basename(p) for p in hook_files}
+    present = {os.path.basename(p) for p in hook_files} - HOOK_DATA_FILES
     for name in sorted(referenced - present):
         facts.add("hook-registration", "finding", f".claude/hooks/{name}",
                   "registered in settings.json but the file does not exist", "class: dead-mechanism")
