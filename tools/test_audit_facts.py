@@ -184,6 +184,20 @@ class HookRegistrationTests(unittest.TestCase):
         hook_registration({"hooks": {}}, [".claude/hooks/a.sh"], VOCAB, facts)
         self.assertTrue(any("no settings.json hook references" in f.evidence for f in findings(facts)))
 
+    def test_the_guard_allow_list_file_is_data_not_a_hook(self):
+        """Every project that named a script of its own failed CI on it (2026-09-30)."""
+        facts = Facts()
+        hook_registration(SETTINGS, [".claude/hooks/a.sh", ".claude/hooks/b.sh",
+                                     ".claude/hooks/audit-verifier-guard.local"], VOCAB, facts)
+        self.assertEqual(findings(facts), [])
+        self.assertTrue(any(f.status == "ok" for f in facts.items))
+
+    def test_only_that_one_name_is_data(self):
+        facts = Facts()
+        hook_registration(SETTINGS, [".claude/hooks/a.sh", ".claude/hooks/b.sh",
+                                     ".claude/hooks/other.local"], VOCAB, facts)
+        self.assertTrue(any("other.local" in f.location for f in findings(facts)))
+
     def test_scoped_registration_counts(self):
         facts = Facts()
         hook_registration({"hooks": {}}, [".claude/hooks/guard.sh"], VOCAB, facts, {"guard.sh"})
