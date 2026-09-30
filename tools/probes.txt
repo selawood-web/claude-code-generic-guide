@@ -101,6 +101,8 @@ guard canary removed from the verifier brief | caught | python3 -c "p='.claude/a
 python script added without naming it in the guard's allow-list | caught | test -f install.sh || exit 3; printf 'print(1)\n' > tools/test_added.py
 shell script added without naming it in the guard's allow-list | caught | test -f install.sh || exit 3; printf 'echo hi\n' > deploy.sh
 guard's script allow-list keeps a name whose file is gone | caught | test -f install.sh || exit 3; git rm -q tools/audit_pr_comment.py
+project allow-list file shipped by the guide, to be copied over every project's | caught | test -f install.sh || exit 3; printf 'install.sh\n' > .claude/hooks/audit-verifier-guard.local
+project allow-list entry kept after its file went | caught:validate-tests | sed -i 's/if entry not in tracked_py and entry not in sh_tree:/if False:/' tools/validate.py
 deterministic fact checks dropped from CI | caught | test -f install.sh || exit 3; sed -i '/audit_facts/d' .github/workflows/validate.yml
 unit test step dropped from CI | caught | test -f install.sh || exit 3; sed -i '/unittest discover/d' .github/workflows/validate.yml
 soft hyphen planted in a skill body | caught | python3 -c "open('.claude/skills/debug/SKILL.md','a').write('a soft\u00adhyphen here\n')"
@@ -119,6 +121,8 @@ unnamed git global option skipped instead of refused | caught:guard | sed -i 's/
 git -C allowed to leave the worktree | caught:guard | sed -i 's|path.startswith("/")|False|' .claude/hooks/audit-verifier-guard.sh
 python script allow-list matched by prefix again | caught:guard | sed -i 's/if name in PY_SCRIPTS:/if name.startswith("test_") or name in PY_SCRIPTS:/' .claude/hooks/audit-verifier-guard.sh
 shell script allow-list matched by suffix again | caught:guard | sed -i 's/if norm in SH_SCRIPTS:/if norm.endswith(".sh"):/' .claude/hooks/audit-verifier-guard.sh
+project allow-list line of any shape accepted | caught:guard | sed -i 's/        elif LOCAL_SH_RE.fullmatch(entry):/        elif True:/' .claude/hooks/audit-verifier-guard.sh
+project allow-list read from the working directory, not beside the guard | caught:guard | sed -i 's|"${BASH_SOURCE\[0\]%.sh}.local"|audit-verifier-guard.local|' .claude/hooks/audit-verifier-guard.sh
 environment prefix before a command accepted again | caught:guard | sed -i 's/if name not in ENV_PREFIX_ALLOWED:/if False:/' .claude/hooks/audit-verifier-guard.sh
 sed -i allowed to edit the worktree | caught:guard | sed -i 's/refuse("sed -i")/pass/' .claude/hooks/audit-verifier-guard.sh
 find -exec and -delete allowed | caught:guard | sed -i 's/refuse(f"find {a}")/pass/' .claude/hooks/audit-verifier-guard.sh

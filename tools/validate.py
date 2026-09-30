@@ -1906,7 +1906,7 @@ def guard_allow_list_problems(lists: dict, py_tree: set, sh_tree: set,
             if authored_here or missing in owned:
                 problems.append(message)
             else:
-                cautions.append(message)
+                cautions.append(f"{message}; to allow it, name it in {GUARD_LOCAL_PATH}")
         if not authored_here:
             continue
         for stale in sorted(listed - tree):
@@ -1916,6 +1916,40 @@ def guard_allow_list_problems(lists: dict, py_tree: set, sh_tree: set,
     return problems, cautions
 
 
+GUARD_LOCAL_PATH = ".claude/hooks/audit-verifier-guard.local"
+# The same two shapes read_local_lists in the guard accepts; tools/test_validate.py
+# holds the two readers to one verdict on the same lines.
+GUARD_LOCAL_PY_RE = re.compile(r"tools/([A-Za-z0-9_]+\.py)")
+GUARD_LOCAL_SH_RE = re.compile(r"[A-Za-z0-9._-][A-Za-z0-9._/-]*\.sh")
+
+
+def guard_local_lists(text: str) -> tuple[dict, list[str]]:
+    """({"PY_SCRIPTS": names, "SH_SCRIPTS": paths, "entries": lines}, bad lines).
+
+    The project's own additions to the guard's allow-lists. A line the guard would
+    ignore is reported, because an entry that silently allows nothing is a script
+    the owner believes they allowed.
+    """
+    py, sh, entries, bad = set(), set(), set(), []
+    for number, line in enumerate(text.splitlines(), 1):
+        entry = line.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        norm = posixpath.normpath(entry)
+        match = GUARD_LOCAL_PY_RE.fullmatch(entry)
+        if norm != entry or norm.startswith("../") or "/../" in norm:
+            bad.append(f"line {number}: {entry}")
+        elif match:
+            py.add(match.group(1))
+            entries.add(entry)
+        elif GUARD_LOCAL_SH_RE.fullmatch(entry):
+            sh.add(entry)
+            entries.add(entry)
+        else:
+            bad.append(f"line {number}: {entry}")
+    return {"PY_SCRIPTS": py, "SH_SCRIPTS": sh, "entries": entries}, bad
+
+
 def check_guard_allow_lists() -> None:
     if not tracked(GUARD_PATH):
         return                      # a project without the audit verifier
@@ -1923,9 +1957,28 @@ def check_guard_allow_lists() -> None:
                if os.path.basename(p) != "__init__.py"}
     hooks = set(tracked(".claude/hooks/*.sh"))
     sh_tree = hooks | set(tracked("*.sh"))
+    authored_here = bool(tracked("install.sh"))
+    lists = guard_allow_lists()
+    if tracked(GUARD_LOCAL_PATH):
+        if authored_here:
+            # update.sh copies every file under .claude/hooks/, so a guide copy of
+            # this file would overwrite every project's own list on the next sync.
+            fail(f"{GUARD_LOCAL_PATH}: the guide must not ship a project's own allow-list — "
+                 f"update.sh would copy it over every installed project's list")
+        with open(os.path.join(ROOT, GUARD_LOCAL_PATH), encoding="utf-8", errors="replace") as fh:
+            local, bad = guard_local_lists(fh.read())
+        for line in bad:
+            fail(f"{GUARD_LOCAL_PATH}: {line} is neither tools/<name>.py nor a relative "
+                 f"<path>.sh, so the guard allows nothing for it")
+        tracked_py = set(tracked("tools/*.py"))
+        for entry in sorted(local["entries"]):
+            if entry not in tracked_py and entry not in sh_tree:
+                fail(f"{GUARD_LOCAL_PATH}: allows {entry}, which the repository does not ship — "
+                     f"a name kept after its file went is a name a branch can reintroduce")
+        for name in GUARD_LIST_NAMES:
+            lists[name] = set(lists.get(name) or ()) | local[name]
     problems, cautions_found = guard_allow_list_problems(
-        guard_allow_lists(), py_tree, sh_tree,
-        authored_here=bool(tracked("install.sh")), ccgg_owned=hooks)
+        lists, py_tree, sh_tree, authored_here=authored_here, ccgg_owned=hooks)
     for problem in problems:
         fail(problem)
     for caution in cautions_found:

@@ -339,6 +339,79 @@ def guard_stdout(command: str, tool: str = "Bash") -> str:
     return subprocess.run([BASH, HOOK], input=payload, capture_output=True, text=True).stdout
 
 
+class ProjectAllowListFileTests(unittest.TestCase):
+    """audit-verifier-guard.local, beside the guard, names the project's own scripts.
+
+    The table is shared with validate.guard_local_lists: a line the validator
+    accepts is one the guard allows, and a line it rejects allows nothing here.
+    """
+
+    # (line in the .local file, command it should unlock)
+    GOOD = [
+        ("docker/entrypoint.sh", "bash docker/entrypoint.sh"),
+        ("backup.sh", "bash backup.sh"),
+        ("tools/their_tool.py", "python3 tools/their_tool.py"),
+        ("tools/test_theirs.py", "python3 -m unittest test_theirs"),
+    ]
+    BAD = [
+        ("/abs/run.sh", "bash /abs/run.sh"),
+        ("../up.sh", "bash ../up.sh"),
+        ("a/../run.sh", "bash run.sh"),
+        ("scripts/x.py", "python3 scripts/x.py"),
+        ("./run.sh", "bash run.sh"),
+        ("run", "bash run"),
+    ]
+
+    def run_with(self, local, command, beside=True):
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+        with tempfile.TemporaryDirectory() as tmp:
+            # Not beside: the guard one directory down, the file in the working
+            # directory — where a guard reading a relative path would find it.
+            hooks = tmp if beside else os.path.join(tmp, "hooks")
+            os.makedirs(hooks, exist_ok=True)
+            hook = os.path.join(hooks, "audit-verifier-guard.sh")
+            shutil.copyfile(HOOK, hook)
+            if local is not None:
+                with open(os.path.join(tmp, "audit-verifier-guard.local"), "w",
+                          encoding="utf-8") as fh:
+                    fh.write(local)
+            proc = subprocess.run([BASH, hook], input=payload, capture_output=True,
+                                  text=True, cwd=tmp)
+        return proc.returncode
+
+    def test_a_named_script_runs(self):
+        for line, command in self.GOOD:
+            with self.subTest(line=line):
+                self.assertEqual(self.run_with(line + "  # why\n", command), 0)
+
+    def test_without_the_file_it_is_refused(self):
+        for _, command in self.GOOD:
+            with self.subTest(command=command):
+                self.assertEqual(self.run_with(None, command), 2)
+
+    def test_a_file_anywhere_but_beside_the_guard_is_not_read(self):
+        self.assertEqual(self.run_with("backup.sh\n", "bash backup.sh", beside=False), 2)
+
+    def test_a_malformed_line_allows_nothing(self):
+        for line, command in self.BAD:
+            with self.subTest(line=line):
+                self.assertEqual(self.run_with(line + "\n", command), 2)
+
+    def test_an_entry_allows_only_itself(self):
+        self.assertEqual(self.run_with("backup.sh\n", "bash other.sh"), 2)
+        self.assertEqual(self.run_with("tools/their_tool.py\n", "python3 tools/evil.py"), 2)
+
+    def test_the_validator_reads_the_lines_the_same_way(self):
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import validate
+        for line, _ in self.GOOD:
+            with self.subTest(line=line):
+                self.assertEqual(validate.guard_local_lists(line + "\n")[1], [])
+        for line, _ in self.BAD:
+            with self.subTest(line=line):
+                self.assertNotEqual(validate.guard_local_lists(line + "\n")[1], [])
+
+
 class AllowListTests(unittest.TestCase):
     def test_allowed_rows_run(self):
         for cmd in ALLOWED:
