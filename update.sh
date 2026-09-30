@@ -86,10 +86,16 @@ fi
 
 changed=0
 NEW_HOOKS=() # hook files this run delivered for the first time
+# Every file this script delivers is LF in the guide's history, but a clone made
+# with core.autocrlf=true (the Git for Windows default) has CRLF in its working
+# tree, and copying that tree byte for byte put CRLF into projects (finding W-2).
+# So the copy is written LF, and the comparison ignores line endings: a project
+# checked out with CRLF holds the same content and is not rewritten every session.
+lf() { sed 's/\r$//' "$1"; }
 sync_file() { # $1 = path under SRC; $2 = path under TARGET (defaults to $1)
   src_rel="$1"
   dst_rel="${2:-$1}"
-  if ! cmp -s "$SRC/$src_rel" "$TARGET/$dst_rel" 2>/dev/null; then
+  if [ ! -e "$TARGET/$dst_rel" ] || ! cmp -s <(lf "$SRC/$src_rel") <(lf "$TARGET/$dst_rel"); then
     case "$dst_rel" in
       .claude/hooks/*.sh) [ -e "$TARGET/$dst_rel" ] || NEW_HOOKS+=("$dst_rel") ;;
     esac
@@ -97,7 +103,7 @@ sync_file() { # $1 = path under SRC; $2 = path under TARGET (defaults to $1)
     # Atomic rename, never in-place cp: this may replace the very hook that is
     # running us, and truncating a running script's inode corrupts its execution.
     tmp="$TARGET/$dst_rel.ccgg-tmp.$$"
-    cp "$SRC/$src_rel" "$tmp" && mv -f "$tmp" "$TARGET/$dst_rel"
+    lf "$SRC/$src_rel" > "$tmp" && mv -f "$tmp" "$TARGET/$dst_rel"
     changed=$((changed+1))
     if [ "$QUIET" -eq 0 ]; then echo "  ~ $dst_rel"; fi
   fi
@@ -145,7 +151,7 @@ if [ "$USER_MODE" -eq 0 ]; then
   # (MemoMe audit 2026-09-19, R-003). Installed once, when absent.
   for f in tools/probes.txt tools/redteam_probes.txt; do
     if [ -f "$SRC/$f" ] && [ ! -e "$TARGET/$f" ]; then
-      cp "$SRC/$f" "$TARGET/$f"
+      lf "$SRC/$f" > "$TARGET/$f"
       changed=$((changed+1))
       if [ "$QUIET" -eq 0 ]; then echo "  + $f (installed once; yours from now on)"; fi
     fi

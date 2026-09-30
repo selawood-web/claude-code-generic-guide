@@ -11,6 +11,7 @@ fresh-install criterion, previously stated and never tested.
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -405,6 +406,76 @@ class InstallTouchesOnlyItsOwnFilesTests(unittest.TestCase):
             with open(os.path.join(target, ".gitattributes"), "w", encoding="utf-8") as fh:
                 fh.write("*.png binary\n")
             self.assertIn("without a *.sh rule", _install(target, env))
+
+
+class UpdateWritesLfTests(unittest.TestCase):
+    """W-2: a guide clone with CRLF in its working tree must not put CRLF into projects.
+
+    Found twice on 2026-09-30: a guide clone checked out under core.autocrlf=true
+    delivered 842 CRLF lines of audit_facts.py into every project it synced.
+    """
+
+    REL = ".claude/references/dialogue.md"
+
+    def _setup(self, tmp):
+        guide = os.path.join(tmp, "guide")
+        shutil.copytree(guide_copy(), guide)
+        target = os.path.join(tmp, "project")
+        os.makedirs(os.path.join(target, ".claude", "references"))
+        env = dict(os.environ, HOME=os.path.join(tmp, "home"), GIT_CONFIG_NOSYSTEM="1")
+        os.makedirs(env["HOME"])
+        subprocess.run(["git", "init", "-q"], cwd=target, env=env, check=True)
+        return guide, target, env
+
+    def _update(self, guide, target, env):
+        proc = subprocess.run([BASH, os.path.join(guide, "update.sh"), target], env=env,
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return proc.stdout + proc.stderr
+
+    def test_a_crlf_guide_file_arrives_lf(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-lf-") as tmp:
+            guide, target, env = self._setup(tmp)
+            with open(os.path.join(guide, self.REL), "wb") as fh:
+                fh.write(b"# one\r\ntwo\r\n")
+            self._update(guide, target, env)
+            with open(os.path.join(target, self.REL), "rb") as fh:
+                self.assertEqual(fh.read(), b"# one\ntwo\n")
+
+    def test_a_crlf_probe_contract_arrives_lf(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-lf-") as tmp:
+            guide, target, env = self._setup(tmp)
+            with open(os.path.join(guide, "tools", "probes.txt"), "wb") as fh:
+                fh.write(b"# probes\r\n")
+            self._update(guide, target, env)
+            with open(os.path.join(target, "tools", "probes.txt"), "rb") as fh:
+                self.assertEqual(fh.read(), b"# probes\n")
+
+    def test_a_crlf_checkout_of_the_same_content_is_left_alone(self):
+        """A project cloned with autocrlf=true holds the same file; rewriting it every
+        session start would report a change that is not one."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-lf-") as tmp:
+            guide, target, env = self._setup(tmp)
+            with open(os.path.join(guide, self.REL), "wb") as fh:
+                fh.write(b"# one\ntwo\n")
+            with open(os.path.join(target, self.REL), "wb") as fh:
+                fh.write(b"# one\r\ntwo\r\n")
+            out = self._update(guide, target, env)
+            self.assertNotIn(self.REL, out)
+            with open(os.path.join(target, self.REL), "rb") as fh:
+                self.assertEqual(fh.read(), b"# one\r\ntwo\r\n")
+
+    def test_a_real_change_still_lands(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-lf-") as tmp:
+            guide, target, env = self._setup(tmp)
+            with open(os.path.join(guide, self.REL), "wb") as fh:
+                fh.write(b"# one\ntwo changed\n")
+            with open(os.path.join(target, self.REL), "wb") as fh:
+                fh.write(b"# one\r\ntwo\r\n")
+            out = self._update(guide, target, env)
+            self.assertIn(self.REL, out)
+            with open(os.path.join(target, self.REL), "rb") as fh:
+                self.assertEqual(fh.read(), b"# one\ntwo changed\n")
 
 
 class UpdateRegistersNewHooksTests(unittest.TestCase):
