@@ -215,7 +215,43 @@ SH_SCRIPTS = frozenset((
     "install.sh",
     "update.sh",
 ))
-_ADDR = r"(?:\d+|\$|/(?:[^/\\]|\\.)*/)?(?:,(?:\d+|\$|/(?:[^/\\]|\\.)*/))?"
+# The project's own scripts live in a second list the guide never ships:
+# audit-verifier-guard.local, beside this file. They used to be added to the two
+# sets above, and update.sh overwrites this file on every session start, so each
+# sync silently took them out again. The .local file is read from the guard's own
+# directory, so it carries exactly the trust of the guard itself; a trusted copy
+# of the guard somewhere else has none beside it and allows no project extras,
+# which fails closed. One repository path per line, `#` starts a comment; a line
+# that is not `tools/<name>.py` or a relative `<path>.sh` allows nothing.
+LOCAL_PY_RE = re.compile(r"tools/([A-Za-z0-9_]+\.py)")
+LOCAL_SH_RE = re.compile(r"[A-Za-z0-9._-][A-Za-z0-9._/-]*\.sh")
+
+
+def read_local_lists(path):
+    """(python script names, shell script paths) from a .local allow-list file."""
+    py, sh = set(), set()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().splitlines()
+    except (OSError, UnicodeDecodeError):
+        return frozenset(), frozenset()
+    for line in lines:
+        entry = line.split("#", 1)[0].strip()
+        norm = posixpath.normpath(entry) if entry else ""
+        if not entry or norm != entry or norm.startswith("../") or "/../" in norm:
+            continue
+        match = LOCAL_PY_RE.fullmatch(entry)
+        if match:
+            py.add(match.group(1))
+        elif LOCAL_SH_RE.fullmatch(entry):
+            sh.add(entry)
+    return frozenset(py), frozenset(sh)
+
+
+LOCAL_PY_SCRIPTS, LOCAL_SH_SCRIPTS = (
+    read_local_lists(sys.argv[1]) if len(sys.argv) > 1 else (frozenset(), frozenset()))
+LOCAL_PY_TEST_MODULES = frozenset(n[:-3] for n in LOCAL_PY_SCRIPTS if n.startswith("test_"))
+_ADDR =r"(?:\d+|\$|/(?:[^/\\]|\\.)*/)?(?:,(?:\d+|\$|/(?:[^/\\]|\\.)*/))?"
 SED_WRITE_RE = re.compile(r"(?:^|[;\n{])\s*" + _ADDR + r"\s*[wWe]\b")
 SED_SUBST_WRITE_RE = re.compile(
     r"(?:^|[;\n{])\s*" + _ADDR + r"\s*s(?P<d>.)(?:\\.|(?!(?P=d)).)*(?P=d)(?:\\.|(?!(?P=d)).)*(?P=d)[gpImM0-9]*[we]")
@@ -326,6 +362,8 @@ def check_py_script(path):
         refuse("python script outside tools/")
     if name in PY_SCRIPTS:
         return
+    if name in LOCAL_PY_SCRIPTS:
+        return
     refuse(f"{name} is not one of the gate's own scripts")
 
 
@@ -335,6 +373,8 @@ def check_sh_script(path):
     if posixpath.isabs(norm) or norm == ".." or norm.startswith("../"):
         refuse("shell script outside the worktree")
     if norm in SH_SCRIPTS:
+        return
+    if norm in LOCAL_SH_SCRIPTS:
         return
     refuse(f"{norm} is not one of the repository's own shell scripts")
 
@@ -349,7 +389,7 @@ def check_py_module(module, rest):
             if posixpath.normpath(where) not in UNITTEST_DISCOVER_DIRS:
                 refuse(f"unittest discover outside {'/'.join(sorted(UNITTEST_DISCOVER_DIRS))}/")
             return
-        if target and target.split(".")[0] not in PY_TEST_MODULES:
+        if target and target.split(".")[0] not in PY_TEST_MODULES | LOCAL_PY_TEST_MODULES:
             refuse(f"unittest target '{target}' is not one of the gate's own test modules")
         return
     if module == "doctest":
@@ -722,7 +762,8 @@ if [ -z "${GUARD:-}" ]; then
   exit 2
 fi
 
-printf '%s' "$INPUT" | python3 -c "$GUARD"
+# The project's own allow-list, beside this file (see read_local_lists).
+printf '%s' "$INPUT" | python3 -c "$GUARD" "${BASH_SOURCE[0]%.sh}.local"
 STATUS=$?
 # Only two statuses are the guard's answer: 0 allow, 2 refuse. Anything else
 # means it never got to decide — an uncaught exception, a signal, an interpreter

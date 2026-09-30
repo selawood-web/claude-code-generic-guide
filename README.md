@@ -120,6 +120,9 @@ files (skills, hooks, validator) in the project. Rules files you customized
 touched. Skill updates apply mid-session on the next invocation; behavior-rule
 updates load at the next session start. Customized a CCGG skill in place?
 Rename its directory (it becomes yours) or leave `CCGG_HOME` unset.
+Your own scripts the audit verifier may run go in
+`.claude/hooks/audit-verifier-guard.local`, one path per line — the guard itself is
+CCGG-owned and overwritten, that file is yours and never is.
 
 ### Skills everywhere, without a project (personal install)
 Skills can also live in your personal Claude directory, where they load in every

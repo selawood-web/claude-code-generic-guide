@@ -1287,6 +1287,74 @@ class GuardAllowListTests(unittest.TestCase):
         self.assertNotIn("test_pwn.py", lists["PY_SCRIPTS"])
 
 
+class GuardLocalAllowListTests(unittest.TestCase):
+    """A project's own scripts go in audit-verifier-guard.local, which no sync touches.
+
+    They used to be added to the guard's own lists, and update.sh overwrites the
+    guard on every session start, so the entries vanished on the next sync — found
+    in three installed projects on 2026-09-30.
+    """
+
+    GUARD_SRC = os.path.join(validate.ROOT, validate.GUARD_PATH)
+
+    def check(self, files, local=None, guide=False):
+        with tempfile.TemporaryDirectory() as tmp:
+            guard = os.path.join(tmp, validate.GUARD_PATH)
+            os.makedirs(os.path.dirname(guard))
+            shutil.copyfile(self.GUARD_SRC, guard)
+            if local is not None:
+                files = {**files, validate.GUARD_LOCAL_PATH: local}
+            if guide:
+                files = {**files, "install.sh": "#!/usr/bin/env bash\n"}
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            del validate.findings[:]
+            del validate.cautions[:]
+            try:
+                validate.check_guard_allow_lists()
+                return list(validate.findings), list(validate.cautions)
+            finally:
+                validate.ROOT = old_root
+                del validate.findings[:]
+                del validate.cautions[:]
+
+    def test_an_unnamed_project_script_cautions_and_says_where_to_name_it(self):
+        findings, cautions = self.check({"docker/entrypoint.sh": "#!/bin/sh\n"})
+        self.assertEqual(findings, [])
+        self.assertTrue(any("docker/entrypoint.sh" in c and validate.GUARD_LOCAL_PATH in c
+                            for c in cautions), cautions)
+
+    def test_a_script_named_in_the_local_file_is_allowed(self):
+        findings, cautions = self.check(
+            {"docker/entrypoint.sh": "#!/bin/sh\n", "tools/their_tool.py": "\n"},
+            local="# ours\ndocker/entrypoint.sh\ntools/their_tool.py  # the seed script\n")
+        self.assertEqual(findings, [])
+        self.assertFalse(any("entrypoint" in c or "their_tool" in c for c in cautions), cautions)
+
+    def test_a_local_entry_whose_file_is_gone_fails(self):
+        findings, _ = self.check({}, local="scripts/gone.sh\n")
+        self.assertTrue(any("scripts/gone.sh" in f for f in findings), findings)
+
+    def test_a_line_the_guard_would_ignore_fails(self):
+        for line in ("/abs/run.sh", "../up.sh", "a/../b.sh", "scripts/x.py", "run", "./run.sh"):
+            with self.subTest(line=line):
+                findings, _ = self.check({"run.sh": "\n"}, local=line + "\n")
+                self.assertTrue(any("allows nothing" in f for f in findings), findings)
+
+    def test_the_guide_must_not_ship_the_local_file(self):
+        """update.sh copies every file under .claude/hooks/ over the project's."""
+        findings, _ = self.check({}, local="# nothing\n", guide=True)
+        self.assertTrue(any("must not ship" in f for f in findings), findings)
+
+    def test_the_guide_does_not_ship_one(self):
+        self.assertFalse(os.path.exists(os.path.join(validate.ROOT, validate.GUARD_LOCAL_PATH)))
+
+
 class GuardCanaryWiringTests(unittest.TestCase):
     """R-008: a run stops measuring the guard the moment the canary leaves the brief."""
 
