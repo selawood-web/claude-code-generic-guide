@@ -72,6 +72,17 @@ DEFAULT_PROBES = os.path.join("tools", "probes.txt")
 EXPECTATIONS = ("caught", "missed")
 RESULTS = ("caught", "missed", "skipped", "error")
 SKIP_EXIT = 3  # a mutation exits 3 to say "not applicable in this repository"
+# unittest exits 5 for "NO TESTS RAN". Every gate above but the default is a
+# discovery pattern, and a pattern that matches no module in the tree exits 5
+# without running anything — which the verdict below used to read as a catch,
+# because it reads any non-zero gate exit as one. Five of the seven gates name a
+# test module that update.sh deliberately does not ship, so in a wired project 13
+# probe rows reported a 100% catch rate having tested nothing, and no regression
+# on them could ever fire (clinicpsy audit 2026-10-01, H-001). This is the same
+# bug class as finding S0-2, where `bash` resolved to the WSL launcher and every
+# gate failed for a reason that had nothing to do with the mutation: a gate that
+# cannot run is an error, never evidence about the gate.
+NO_TESTS_EXIT = 5
 
 
 @dataclass(frozen=True)
@@ -207,8 +218,39 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
     return dest, env
 
 
+def baseline_gates(gates: dict[str, list[str]], names: set[str], scratch_repo: str,
+                   env: dict[str, str]) -> dict[str, str]:
+    """Run each named gate once on the unmutated tree; report the ones that are not green.
+
+    A gate that already fails here cannot say anything about a mutation: its
+    non-zero exit is about itself. Returns {gate name: why it is unusable} for
+    every gate that did not exit 0, so each probe on it records `error` instead
+    of the catch that a bare non-zero exit used to be read as.
+    """
+    unusable = {}
+    for name in sorted(names):
+        gate = gates.get(name)
+        if not gate:
+            continue
+        for cmd in (["git", "reset", "-q", "--hard", "HEAD"], ["git", "clean", "-fdq"]):
+            _run(cmd, scratch_repo, env)
+        proc = _run(gate, scratch_repo, env)
+        if proc.returncode == 0:
+            continue
+        why = f"exit {proc.returncode}"
+        if proc.returncode == NO_TESTS_EXIT:
+            why += ", ran no tests — its test module is absent from this repository"
+        else:
+            first = next((ln.strip() for ln in (proc.stderr + "\n" + proc.stdout).splitlines()
+                          if ln.strip() and not ln.startswith("-")), "")
+            if first:
+                why += f": {first[:120]}"
+        unusable[name] = why
+    return unusable
+
+
 def run_probe(probe: Probe, scratch_repo: str, gates: dict[str, list[str]],
-              env: dict[str, str]) -> ProbeResult:
+              env: dict[str, str], unusable: str = "") -> ProbeResult:
     """Reset, mutate, stage, run the probe's gate. Never raises on a bad mutation — it records `error`."""
     def result(verdict: str, detail: str) -> ProbeResult:
         # detail is the gate's own output, which quotes file content back.
@@ -239,6 +281,9 @@ def run_probe(probe: Probe, scratch_repo: str, gates: dict[str, list[str]],
     gated = _run(gate, scratch_repo, env)
     if gated.returncode == 0:
         return result("missed", "gate exited 0")
+    if unusable:
+        return result("error", f"gate '{probe.gate}' is not green on the unmutated tree "
+                               f"({unusable}) — its verdict is not evidence about this mutation")
     # The validator prints its findings indented; a test runner prints to stderr.
     # Either way the detail is the first line that says something.
     first = next((ln.strip() for ln in gated.stdout.splitlines() if ln.startswith("  ")), "")
@@ -312,7 +357,12 @@ def main(argv: list[str]) -> int:
     started = time.time()
     with tempfile.TemporaryDirectory(prefix="ccgg-probes-") as scratch:
         scratch_repo, env = make_scratch_copy(repo, scratch)
-        results = [run_probe(p, scratch_repo, gates, env) for p in probes]
+        unusable = baseline_gates(gates, {p.gate for p in probes}, scratch_repo, env)
+        for name, why in unusable.items():
+            print(f"audit-probes: gate '{name}' is not green on the unmutated tree ({why}) — "
+                  f"every probe naming it is an error, not a catch")
+        results = [run_probe(p, scratch_repo, gates, env, unusable.get(p.gate, ""))
+                   for p in probes]
     summary = summarize(results)
     summary["gate"] = args.gate
     summary["gate_commands"] = {name: " ".join(cmd) for name, cmd in gates.items()
