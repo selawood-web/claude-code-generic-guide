@@ -1366,6 +1366,27 @@ class GuardCanaryWiringTests(unittest.TestCase):
         finally:
             del validate.findings[:]
 
+    # The test above passes just as happily when the check does nothing at all, which is
+    # what it did on every Windows host: VERIFIER_BRIEF was built with os.path.join, so it
+    # read ".claude\agents\audit-verifier.md" while tracked() returns git's forward-slash
+    # path, and `VERIFIER_BRIEF not in tracked(VERIFIER_BRIEF)` sent both guard checks home
+    # before they looked at anything. Deleting the canary, unscoping the registration, or
+    # moving it to an event that never sees Bash all passed the validator — three of the
+    # four regressions in clinicpsy's first honest probe run (2026-10-01). These two assert
+    # the wiring rather than the verdict, so an inert check cannot satisfy them.
+    def test_the_paths_compared_against_tracked_output_are_git_paths(self):
+        for name in ("VERIFIER_BRIEF", "GUARD_PATH"):
+            value = getattr(validate, name)
+            with self.subTest(constant=name):
+                self.assertNotIn("\\", value, f"{name} must be a git path, not an os.path.join one")
+                self.assertEqual(value, value.replace(os.sep, "/"))
+
+    def test_neither_guard_check_is_inert_on_the_shipped_tree(self):
+        self.assertIn(validate.VERIFIER_BRIEF, validate.tracked(validate.VERIFIER_BRIEF),
+                      "check_guard_canary returns early, so the canary is unguarded")
+        self.assertTrue(validate.tracked(validate.GUARD_PATH),
+                        "check_guard_settings_registration returns early, so the registration is unguarded")
+
     def test_a_brief_without_the_canary_is_reported(self):
         problems = validate.guard_canary_problems(
             ".claude/agents/audit-verifier.md",
