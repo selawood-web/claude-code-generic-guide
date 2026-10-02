@@ -59,6 +59,17 @@ ALLOWED = (
     "APPDATA",
     "USERPROFILE",
 )
+# LOCALAPPDATA is where the Windows Python install manager keeps its runtimes,
+# so it is the one of the five that is inherited rather than redirected. Pointed
+# at an empty private directory it finds no runtime and either re-downloads a
+# whole CPython per run — 400s before the first probe — or fails outright with
+# "No runtimes are installed", which the baseline check then correctly reports as
+# a gate that cannot run, aborting the audit. Inheriting it keeps the audited
+# tree just as clean (measured: the working directory gains nothing either way)
+# because the fallback to the current directory only happens when the variable is
+# absent. HOME, USERPROFILE and APPDATA stay private, so the isolation that
+# matters — a probe writing to ~/.claude or ~/.gitconfig — is unchanged.
+INHERITED_ON_WINDOWS = ("LOCALAPPDATA",)
 DEFAULT_PATH = "/usr/bin:/bin"
 
 
@@ -161,6 +172,9 @@ def sandbox_env(home: str, actor: str = "ccgg-audit",
         # writes without mkdir does not fail and retry in the repository.
         for name, leaf in (("TEMP", "tmp"), ("TMP", "tmp"), ("LOCALAPPDATA", "local"),
                            ("APPDATA", "roaming"), ("USERPROFILE", "")):
+            if name in INHERITED_ON_WINDOWS and os.environ.get(name):
+                env[name] = os.environ[name]
+                continue
             path = os.path.join(home, leaf) if leaf else home
             os.makedirs(path, exist_ok=True)
             env[name] = path
