@@ -211,10 +211,31 @@ def make_scratch_copy(repo: str, scratch: str) -> tuple[str, dict[str, str]]:
     )
     audit_env.unpack_tar(archive.stdout, dest)
     env = probe_env(scratch)
-    for cmd in (["git", "init", "-q"], ["git", "add", "-A"], ["git", "commit", "-q", "-m", "baseline"]):
+    for cmd in (["git", "init", "-q"], ["git", "add", "-A"]):
         proc = _run(cmd, dest, env)
         if proc.returncode != 0:
             raise RuntimeError(f"scratch setup failed at {' '.join(cmd)}: {proc.stderr.strip()}")
+    # Carry the executable bit across by hand. A filesystem without one — every
+    # Windows host — loses it in the unpack, so `git add -A` stages the hooks at
+    # 100644 and the validator opens with "not executable in the git index" for
+    # all five of them, before any mutation. The default gate was therefore red
+    # on the unmutated tree on every Windows run: 72 of this project's 112 probe
+    # rows could not be measured, and until the baseline check they were all
+    # scored as catches. One probe row plants exactly this defect, so it was
+    # "caught" by a condition the harness had already created
+    # (clinicpsy audit 2026-10-01, the full-size form of H-001).
+    executable = [line.split("\t", 1)[1]
+                  for line in (_run(["git", "ls-files", "-s"], repo, env).stdout or "").splitlines()
+                  if line.startswith("100755 ")]
+    if executable:
+        for i in range(0, len(executable), 100):
+            proc = _run(["git", "update-index", "--chmod=+x", *executable[i:i + 100]], dest, env)
+            if proc.returncode != 0:
+                raise RuntimeError(f"scratch setup could not restore the executable bit: "
+                                   f"{proc.stderr.strip()}")
+    proc = _run(["git", "commit", "-q", "-m", "baseline"], dest, env)
+    if proc.returncode != 0:
+        raise RuntimeError(f"scratch setup failed at git commit: {proc.stderr.strip()}")
     return dest, env
 
 
@@ -239,12 +260,17 @@ def baseline_gates(gates: dict[str, list[str]], names: set[str], scratch_repo: s
             continue
         why = f"exit {proc.returncode}"
         if proc.returncode == NO_TESTS_EXIT:
-            why += ", ran no tests — its test module is absent from this repository"
+            why += ", ran no tests - its test module is absent from this repository"
         else:
             first = next((ln.strip() for ln in (proc.stderr + "\n" + proc.stdout).splitlines()
                           if ln.strip() and not ln.startswith("-")), "")
             if first:
-                why += f": {first[:120]}"
+                # The gate's own output, captured with errors="replace", so it can
+                # carry U+FFFD — and printing that to a Windows console (cp1255
+                # here) raised UnicodeEncodeError and killed the whole run before
+                # the first probe. Tree-controlled text reaching a terminal is
+                # ASCII, bounded and on one line.
+                why += ": " + audit_env.quote(first[:120]).encode("ascii", "replace").decode("ascii")
         unusable[name] = why
     return unusable
 
@@ -359,8 +385,8 @@ def main(argv: list[str]) -> int:
         scratch_repo, env = make_scratch_copy(repo, scratch)
         unusable = baseline_gates(gates, {p.gate for p in probes}, scratch_repo, env)
         for name, why in unusable.items():
-            print(f"audit-probes: gate '{name}' is not green on the unmutated tree ({why}) — "
-                  f"every probe naming it is an error, not a catch")
+            print(f"audit-probes: gate '{name}' is not green on the unmutated tree "
+                  f"({why}) - every probe naming it is an error, not a catch")
         results = [run_probe(p, scratch_repo, gates, env, unusable.get(p.gate, ""))
                    for p in probes]
     summary = summarize(results)

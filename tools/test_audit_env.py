@@ -174,26 +174,63 @@ class WindowsScratchDirTests(unittest.TestCase):
     """
 
     NAMES = ("TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "USERPROFILE")
+    # LOCALAPPDATA is inherited when the host sets it, so it has its own two
+    # cases below; these four are redirected unconditionally.
+    REDIRECTED = ("TEMP", "TMP", "APPDATA", "USERPROFILE")
 
-    def test_every_windows_scratch_dir_points_inside_the_private_home(self):
+    def test_every_windows_scratch_dir_is_set_so_nothing_falls_back_to_the_cwd(self):
         with tempfile.TemporaryDirectory() as home:
             with mock.patch.object(audit_env.os, "name", "nt"):
                 env = sandbox_env(home)
             for name in self.NAMES:
                 self.assertIn(name, env, f"{name} unset — a tool falls back to the CWD")
+                self.assertTrue(os.path.isdir(env[name]), f"{name} does not exist on disk")
+            for name in self.REDIRECTED:
                 self.assertTrue(os.path.realpath(env[name]).startswith(os.path.realpath(home)),
                                 f"{name}={env[name]} is outside the private home {home}")
-                self.assertTrue(os.path.isdir(env[name]), f"{name} does not exist on disk")
 
     def test_they_are_not_the_operators_own_directories(self):
         """The point is redirection; inheriting the real ones writes to the operator."""
         with tempfile.TemporaryDirectory() as home:
             with mock.patch.object(audit_env.os, "name", "nt"), \
-                    mock.patch.dict(os.environ, {"LOCALAPPDATA": r"C:\Users\real\AppData\Local",
-                                                 "TEMP": r"C:\Users\real\AppData\Local\Temp"}):
+                    mock.patch.dict(os.environ, {"TEMP": r"C:\Users\real\AppData\Local\Temp",
+                                                 "APPDATA": r"C:\Users\real\AppData\Roaming",
+                                                 "USERPROFILE": r"C:\Users\real"}):
                 env = sandbox_env(home)
-            self.assertNotEqual(env["LOCALAPPDATA"], r"C:\Users\real\AppData\Local")
-            self.assertNotEqual(env["TEMP"], r"C:\Users\real\AppData\Local\Temp")
+            for name in ("TEMP", "TMP", "APPDATA", "USERPROFILE"):
+                self.assertTrue(os.path.realpath(env[name]).startswith(os.path.realpath(home)),
+                                f"{name} must not be the operator's own directory")
+
+    def test_localappdata_is_inherited_so_the_interpreter_is_still_findable(self):
+        """Redirecting this one cost more than it bought.
+
+        It is where the Windows Python install manager keeps its runtimes.
+        Pointed at an empty private directory it re-downloaded a whole CPython
+        per run, or failed with "No runtimes are installed" — which the probe
+        harness's baseline check then reported as a gate that cannot run,
+        aborting the audit. The audited tree stays clean either way, because the
+        fallback to the current directory only happens when it is unset.
+        """
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.object(audit_env.os, "name", "nt"), \
+                    mock.patch.dict(os.environ, {"LOCALAPPDATA": r"C:\Users\real\AppData\Local"}):
+                env = sandbox_env(home)
+            self.assertEqual(env["LOCALAPPDATA"], r"C:\Users\real\AppData\Local")
+            # The isolation that matters is untouched: a probe writing to
+            # ~/.claude or ~/.gitconfig still lands in the throwaway home.
+            self.assertEqual(env["HOME"], home)
+            self.assertTrue(os.path.realpath(env["USERPROFILE"]).startswith(
+                os.path.realpath(home)))
+
+    def test_localappdata_falls_back_to_the_private_home_when_the_host_has_none(self):
+        """Unset is the case that caused the write into the audited tree."""
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.object(audit_env.os, "name", "nt"), \
+                    mock.patch.dict(os.environ, {}, clear=True):
+                env = sandbox_env(home)
+            self.assertTrue(os.path.realpath(env["LOCALAPPDATA"]).startswith(
+                os.path.realpath(home)))
+            self.assertTrue(os.path.isdir(env["LOCALAPPDATA"]))
 
     def test_other_hosts_do_not_get_them(self):
         with mock.patch.object(audit_env.os, "name", "posix"):
