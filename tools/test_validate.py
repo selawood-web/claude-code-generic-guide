@@ -406,6 +406,44 @@ class HiddenCharacterTests(unittest.TestCase):
             validate.hidden_characters(None)
 
 
+class UndecodableByteTests(unittest.TestCase):
+    """The hole under the hidden-character scan: bytes that never become characters.
+
+    Every reader in validate.py decodes with errors="replace", so a byte that is not
+    valid UTF-8 arrives as U+FFFD, which HIDDEN_PATTERN does not list and nothing else
+    reports. On Windows the soft-hyphen probe's `open(path, 'a')` encodes U+00AD with the
+    locale code page and writes the raw byte 0xAD, so the defect landed in the file and
+    the scan saw a replacement character — the fourth regression in clinicpsy's first
+    honest probe run (2026-10-01).
+    """
+
+    def test_a_lone_high_byte_is_reported_with_its_line(self):
+        problem = validate.undecodable_byte("x.md", b"fine\nalso fine\na soft\xadhyphen\n")
+        self.assertIsNotNone(problem)
+        self.assertIn("x.md:3", problem)
+        self.assertIn("0xad", problem)
+
+    def test_valid_utf8_including_hidden_characters_is_not_reported(self):
+        # A real U+00AD is well-formed UTF-8; catching it is the hidden-character scan's
+        # job, not this one. The two checks must not be each other's substitute.
+        self.assertIsNone(validate.undecodable_byte("x.md", "a soft­hyphen\n".encode()))
+        self.assertIsNone(validate.undecodable_byte("x.md", "שלום עולם\n".encode()))
+        self.assertIsNone(validate.undecodable_byte("x.md", b""))
+
+    def test_the_replacement_character_is_what_a_lenient_reader_would_have_seen(self):
+        """Why the scan could not catch it: the byte is gone by the time it is text."""
+        raw = b"a soft\xadhyphen\n"
+        self.assertEqual(raw.decode("utf-8", errors="replace"), "a soft�hyphen\n")
+        self.assertEqual(validate.hidden_characters(raw.decode("utf-8", errors="replace")), [])
+
+    def test_the_shipped_instruction_files_all_decode(self):
+        for path in validate.instruction_files():
+            with open(os.path.join(validate.ROOT, path), "rb") as fh:
+                raw = fh.read()
+            with self.subTest(path=path):
+                self.assertIsNone(validate.undecodable_byte(path, raw))
+
+
 class HookReferenceTests(unittest.TestCase):
     SETTINGS = '{"hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "\\"$CLAUDE_PROJECT_DIR\\"/.claude/hooks/session-start.sh"}]}]}}'
     AGENT = "---\nname: audit-verifier\nhooks:\n  PreToolUse:\n    - hooks:\n        - command: \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/audit-verifier-guard.sh\n---\nbody mentions .claude/hooks/never.sh\n"

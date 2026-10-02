@@ -105,7 +105,8 @@ project allow-list file shipped by the guide, to be copied over every project's 
 project allow-list entry kept after its file went | caught:validate-tests | sed -i 's/if entry not in tracked_py and entry not in sh_tree:/if False:/' tools/validate.py
 deterministic fact checks dropped from CI | caught | test -f install.sh || exit 3; sed -i '/audit_facts/d' .github/workflows/validate.yml
 unit test step dropped from CI | caught | test -f install.sh || exit 3; sed -i '/unittest discover/d' .github/workflows/validate.yml
-soft hyphen planted in a skill body | caught | python3 -c "open('.claude/skills/debug/SKILL.md','a').write('a soft\u00adhyphen here\n')"
+soft hyphen planted in a skill body | caught | python3 -c "import io;io.open('.claude/skills/debug/SKILL.md','a',encoding='utf-8').write('a soft\u00adhyphen here\n')"
+byte that is not valid UTF-8 in a skill body | caught | python3 -c "open('.claude/skills/debug/SKILL.md','ab').write(b'a soft\xadhyphen here\n')"
 vertical tab planted in a reference | caught | python3 -c "open('.claude/references/code-gate.md','a').write('a vertical\x0btab here\n')"
 Unicode tag character planted in an agent brief | caught | python3 -c "open('.claude/agents/audit-spec.md','a').write('a tag\U000e0041character here\n')"
 grant target dropped from the workflow's base-ref rescue | caught | test -f .github/workflows/audit.yml || exit 3; sed -i '/fetch "tools\/audit_report.py"/d' .github/workflows/audit.yml
