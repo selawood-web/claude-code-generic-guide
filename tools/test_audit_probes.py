@@ -272,6 +272,49 @@ class RunProbeTests(unittest.TestCase):
         self.assertEqual(r.result, "error")
         self.assertIn("exited 7", r.detail)
 
+    def test_the_scratch_copy_keeps_the_executable_bit_of_every_mode_755_file(self):
+        """Without this the scratch copy carries a defect the probes then "catch".
+
+        A filesystem with no executable bit loses it in the unpack, `git add -A`
+        stages the file at 100644, and the validator's "not executable in the git
+        index" check fires on the unmutated tree — so the default gate was red
+        before any mutation on every Windows run, and 72 of clinicpsy's 112 rows
+        were scored as catches without being measured.
+        """
+        with tempfile.TemporaryDirectory(prefix="ccgg-exec-") as tmp:
+            repo = _tiny_repo(tmp)
+            script = os.path.join(repo, "hook.sh")
+            with open(script, "w", encoding="utf-8") as fh:
+                fh.write("#!/bin/sh\nexit 0\n")
+            env = audit_probes.probe_env(tmp)
+            audit_probes._run(["git", "add", "-A"], repo, env)
+            audit_probes._run(["git", "update-index", "--chmod=+x", "hook.sh"], repo, env)
+            audit_probes._run(["git", "commit", "-q", "-m", "add hook"], repo, env)
+            self.assertIn("100755 ", audit_probes._run(
+                ["git", "ls-files", "-s", "hook.sh"], repo, env).stdout)
+
+            with tempfile.TemporaryDirectory(prefix="ccgg-exec-copy-") as scratch:
+                copy, copy_env = audit_probes.make_scratch_copy(repo, scratch)
+                staged = audit_probes._run(["git", "ls-files", "-s", "hook.sh"], copy, copy_env).stdout
+                self.assertIn("100755 ", staged,
+                              f"the scratch copy lost the executable bit: {staged!r}")
+
+    def test_an_unusable_gates_reason_survives_a_narrow_console_encoding(self):
+        """The reason carries the gate's own output, captured with errors="replace".
+
+        A U+FFFD in it raised UnicodeEncodeError from the print in main() under a
+        cp1255 console and killed the run before the first probe — the harness
+        crashing on the very condition it was added to report.
+        """
+        name = audit_probes.DEFAULT_GATE_NAME
+        noisy = {name: ["python3", "-c",
+                        "import sys; sys.stderr.write('FAIL \\ufffd 5 finding(s)\\n');"
+                        " raise SystemExit(1)"]}
+        why = audit_probes.baseline_gates(noisy, {name}, self.copy, self.env)[name]
+        why.encode("cp1255")  # raises UnicodeEncodeError if the reason is not narrow-safe
+        self.assertEqual(why, why.encode("ascii", "replace").decode("ascii"))
+        self.assertIn("exit 1", why)
+
     def test_a_gate_that_is_red_before_the_mutation_is_an_error_not_a_catch(self):
         """A gate's non-zero exit is evidence only if the gate is green unmutated.
 
