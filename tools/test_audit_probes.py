@@ -272,6 +272,36 @@ class RunProbeTests(unittest.TestCase):
         self.assertEqual(r.result, "error")
         self.assertIn("exited 7", r.detail)
 
+    def test_a_gate_that_is_red_before_the_mutation_is_an_error_not_a_catch(self):
+        """A gate's non-zero exit is evidence only if the gate is green unmutated.
+
+        Five of the seven gates name a test module update.sh does not ship; a
+        discovery pattern matching nothing exits 5 without running a test, which
+        the verdict read as a catch — 13 rows in a wired project scored a 100%
+        catch rate having tested nothing (clinicpsy audit 2026-10-01, H-001), the
+        same bug class as finding S0-2's WSL launcher.
+        """
+        name = audit_probes.DEFAULT_GATE_NAME
+        absent = {name: ["python3", "-m", "unittest", "discover", "-s", "tools", "-t", "tools",
+                         "-p", "test_nothing_ships_this.py", "-q"]}
+        unusable = audit_probes.baseline_gates(absent, {name}, self.copy, self.env)
+        # The reason is whatever the gate did — exit 5 "ran no tests" where the
+        # discovery root exists, a plain non-zero where it does not. Both are
+        # unusable, which is why this checks the verdict and not the wording.
+        self.assertIn(name, unusable)
+        self.assertIn("exit", unusable[name])
+        r = run_probe(Probe("p", "caught", "touch BROKEN", 1), self.copy, absent,
+                      self.env, unusable[name])
+        self.assertEqual(r.result, "error", r.detail)
+
+        # The control: a gate that is green unmutated and fails on the mutation is
+        # still a catch, so the check cannot swallow the harness's whole purpose.
+        real = {name: ["python3", "-c",
+                       "import os,sys; sys.exit(1) if os.path.exists('BROKEN') else sys.exit(0)"]}
+        self.assertEqual(audit_probes.baseline_gates(real, {name}, self.copy, self.env), {})
+        self.assertEqual(run_probe(Probe("p", "caught", "touch BROKEN", 1), self.copy, real,
+                                   self.env, "").result, "caught")
+
 
 class MainIntegrationTests(unittest.TestCase):
     def test_end_to_end_writes_probes_json_and_reports_regressions(self):

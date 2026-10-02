@@ -45,6 +45,19 @@ ALLOWED = (
     "GIT_COMMITTER_NAME",
     "GIT_COMMITTER_EMAIL",
     "SYSTEMROOT",           # Windows only: without it winsock and the C runtime refuse to start
+    # Windows only, and all five pointed inside the private HOME. Omitting them
+    # did not deny a tool a writable directory, it only moved the one it chose:
+    # with no LOCALAPPDATA the `python3` shim installs a CPython distribution
+    # into the current working directory, which for every audit stage is the
+    # audited repository. A local audit of clinicpsy left 2255 untracked files
+    # (Python/pythoncore-3.14-64) and an installer log in the repository root,
+    # under a skill whose first boundary is that it never changes the audited
+    # tree (clinicpsy audit 2026-10-01, P-001).
+    "TEMP",
+    "TMP",
+    "LOCALAPPDATA",
+    "APPDATA",
+    "USERPROFILE",
 )
 DEFAULT_PATH = "/usr/bin:/bin"
 
@@ -142,6 +155,15 @@ def sandbox_env(home: str, actor: str = "ccgg-audit",
     }
     if os.name == "nt":
         env["SYSTEMROOT"] = os.environ.get("SYSTEMROOT") or os.environ.get("SystemRoot") or r"C:\Windows"
+        # A Windows tool that bootstraps itself writes to one of these; with none
+        # of them set it falls back to the current directory, which is the tree
+        # under audit. Give it the private HOME instead, created so a tool that
+        # writes without mkdir does not fail and retry in the repository.
+        for name, leaf in (("TEMP", "tmp"), ("TMP", "tmp"), ("LOCALAPPDATA", "local"),
+                           ("APPDATA", "roaming"), ("USERPROFILE", "")):
+            path = os.path.join(home, leaf) if leaf else home
+            os.makedirs(path, exist_ok=True)
+            env[name] = path
     if extra:
         env.update(extra)
     return env

@@ -164,6 +164,50 @@ class SystemRootTests(unittest.TestCase):
         self.assertIn("SYSTEMROOT", ALLOWED)
 
 
+class WindowsScratchDirTests(unittest.TestCase):
+    """P-001: with no TEMP or LOCALAPPDATA, a self-bootstrapping tool writes to the CWD.
+
+    The CWD of every audit stage is the audited repository, and `python3 --version`
+    under this environment downloads and extracts a CPython distribution — 2255
+    untracked files in clinicpsy's root, from the skill whose first boundary is
+    that it never changes the audited tree (clinicpsy audit 2026-10-01).
+    """
+
+    NAMES = ("TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "USERPROFILE")
+
+    def test_every_windows_scratch_dir_points_inside_the_private_home(self):
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.object(audit_env.os, "name", "nt"):
+                env = sandbox_env(home)
+            for name in self.NAMES:
+                self.assertIn(name, env, f"{name} unset — a tool falls back to the CWD")
+                self.assertTrue(os.path.realpath(env[name]).startswith(os.path.realpath(home)),
+                                f"{name}={env[name]} is outside the private home {home}")
+                self.assertTrue(os.path.isdir(env[name]), f"{name} does not exist on disk")
+
+    def test_they_are_not_the_operators_own_directories(self):
+        """The point is redirection; inheriting the real ones writes to the operator."""
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.object(audit_env.os, "name", "nt"), \
+                    mock.patch.dict(os.environ, {"LOCALAPPDATA": r"C:\Users\real\AppData\Local",
+                                                 "TEMP": r"C:\Users\real\AppData\Local\Temp"}):
+                env = sandbox_env(home)
+            self.assertNotEqual(env["LOCALAPPDATA"], r"C:\Users\real\AppData\Local")
+            self.assertNotEqual(env["TEMP"], r"C:\Users\real\AppData\Local\Temp")
+
+    def test_other_hosts_do_not_get_them(self):
+        with mock.patch.object(audit_env.os, "name", "posix"):
+            env = sandbox_env("/tmp/h")
+        for name in self.NAMES:
+            self.assertNotIn(name, env)
+
+    def test_they_are_on_the_allow_list_so_they_are_not_reported_as_leaks(self):
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.object(audit_env.os, "name", "nt"):
+                env = sandbox_env(home)
+        self.assertEqual(audit_env.leaked_names(env), [])
+
+
 class BashPathTests(unittest.TestCase):
     """S0-2: a bare "bash" on Windows is the WSL launcher, whatever PATH says."""
 
