@@ -1749,7 +1749,16 @@ def check_hook_stdout_docs() -> None:
 # Kept identical to tools/audit_report.py's GUARD_CANARY; a test compares them.
 GUARD_CANARY = "uname -a"
 GUARD_CANARY_MARKER = "GUARD-CANARY"
-VERIFIER_BRIEF = os.path.join(".claude", "agents", "audit-verifier.md")
+# A git path, with forward slashes, because it is compared against what tracked() returns
+# and not only handed to open(). os.path.join made it ".claude\agents\audit-verifier.md" on
+# Windows, so `VERIFIER_BRIEF not in tracked(VERIFIER_BRIEF)` was always true and both guard
+# checks below returned before looking at anything: on every Windows host the validator did
+# not notice the canary being deleted from the verifier's brief, the guard's registration
+# losing its --only-agent scope, or that registration moving to an event that never sees a
+# Bash call. Three of the four regressions in the clinicpsy audit's first honest probe run,
+# all of them ways to switch off the audit's own safety guard unnoticed (2026-10-01).
+# GUARD_PATH below was always spelled this way; this one was the odd case out.
+VERIFIER_BRIEF = ".claude/agents/audit-verifier.md"
 
 
 def guard_canary_problems(path: str, text: str) -> list[str]:
