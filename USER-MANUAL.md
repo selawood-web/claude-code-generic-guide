@@ -802,7 +802,7 @@ what's the next step
 **What it does:**
 1. Splits the last reply (or one item of it, or your steps) into the things you act on or decide
 2. Orders them the way you should act — blocking first, optional last
-3. Writes one card each: **What**, **Why**, **You do**, **Done when** — everyday words, no term left to look up
+3. Writes one card each: **What**, **Why**, **Watch out** (any hazard, before the action), **You do**, **Done when** — everyday words, no term left to look up
 4. Gives steps you carry out one per turn when they can fail: reply `done` for the next, `stuck` to fix this one
 5. Ends with a coded pick-list or a single next step, so you answer with `ok`, `go`, or codes like `1B`
 

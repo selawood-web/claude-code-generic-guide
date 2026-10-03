@@ -25,8 +25,8 @@ on request.
    that was mentioned. Items that are mine to do become one card saying so, or are
    dropped if the owner does not need to know.
 3. **Order them** the way the owner should act: blocking first, optional last.
-4. **Write one card per item** — title with `N of M`, **What**, **Why**, **You do**,
-   **Done when** — in the plain-words rules of *Reply layout*. No term survives that
+4. **Write one card per item** — title with `N of M`, **What**, **Why**, **Watch out**
+   when there is a hazard, **You do**, **Done when** — in the plain-words rules of *Reply layout*. No term survives that
    the owner would have to look up.
 5. **Owner steps go one by one** when *One by one* says so: step 1 only, ending in
    `done` / `stuck`; the next step comes on `done`, the same step is fixed on `stuck`.
