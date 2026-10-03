@@ -859,9 +859,39 @@ def hidden_characters(text: str) -> list[tuple[int, str]]:
     return found
 
 
+def undecodable_byte(path: str, raw: bytes) -> str | None:
+    """The first byte of `raw` that is not valid UTF-8, as a finding, or None.
+
+    The hidden-character scan reads with errors="replace", as all 42 readers in this
+    file do, so a byte that is not valid UTF-8 arrives as U+FFFD — which is not in
+    HIDDEN_PATTERN and is therefore reported by nothing. That is not hypothetical: on
+    Windows the soft-hyphen probe's `open(path, 'a')` encodes U+00AD with the locale
+    code page and writes the raw byte 0xAD, so the planted defect reached the file, the
+    scan saw a replacement character, and the probe read `missed` — the fourth
+    regression in clinicpsy's first honest probe run (2026-10-01).
+
+    The defect it leaves behind is the one rule 15 exists for: a file read as
+    instructions whose bytes no two readers agree on. A reviewer's editor shows one
+    thing, the model's decoder another, and the diff shows neither.
+    """
+    try:
+        raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        line = raw[:exc.start].count(b"\n") + 1
+        return (f"{path}:{line}: byte 0x{raw[exc.start]:02x} is not valid UTF-8 — "
+                f"a file read as instructions whose bytes decode differently for every "
+                f"reader, so the reviewer and the model do not see the same text")
+    return None
+
+
 def check_hidden_characters() -> None:
     for path in instruction_files():
-        text = open(os.path.join(ROOT, path), encoding="utf-8", errors="replace").read()
+        with open(os.path.join(ROOT, path), "rb") as fh:
+            raw = fh.read()
+        problem = undecodable_byte(path, raw)
+        if problem:
+            fail(problem)
+        text = raw.decode("utf-8", errors="replace")
         for line, code in hidden_characters(text)[:5]:
             fail(f"{path}:{line}: hidden character {code} — invisible to a reviewer, read by the model")
 
