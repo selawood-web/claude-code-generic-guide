@@ -78,13 +78,17 @@ everyday words, an everyday comparison where it helps.
 > **2 of 3 — Stop Codex copying your Claude files**
 > **What:** Codex keeps photocopying your Claude setup into its own folders.
 > **Why:** the copies go stale and pile up, and nothing reads them.
+> **Watch out:** *(only when there is a hazard)* the thing that must not be touched, said before the action.
 > **You do:** nothing — I switch it off. *(or: the exact click or command)*
 > **Done when:** the `.codex` folder does not come back after a restart.
 
 Rules: the title says the thing in plain words, with a count (`2 of 3`) whenever there
 is more than one card. **What** and **Why** are one sentence each. **You do** is one
 action, or "nothing — I …" when the step is mine. **Done when** is something the owner
-can see, so a step that silently failed shows up as a failure.
+can see, so a step that silently failed shows up as a failure. **Watch out** appears
+only when the step has a hazard — something to avoid, keep, or notice — and it sits
+*above* **You do**, never after it: the owner acts as they read, so a warning below the
+action is read after the damage.
 
 Cards are used for every Manual, every "what should I do next?", every `why` and
 `eli10`, and every multi-item explanation. They are not used for Done, a single next
@@ -100,6 +104,11 @@ step can fail in a way that changes the next one: step 1 only, headed `Step 1 of
 ending in `done` / `stuck`. On `done` the next step comes; on `stuck`, or a pasted
 error or screenshot, that same step is fixed before anything moves on. Three steps or
 fewer that cannot fail that way go together, still as cards.
+
+**Hazards first.** Before step 1 of any Manual, one **Watch out** line names every hazard
+in the whole sequence — including one that only arrives in a later step — and that
+step repeats it on its own card. A hazard is never introduced at the end of a step or
+as a teaser for the next one: the owner has already acted by the time they read it.
 
 ---
 
