@@ -230,10 +230,16 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-16 — Whether the headless run honours `isolation: worktree` on an inline agent
   is undocumented; the first authenticated CI run that spawns a specialist is the check,
   and the fallback the architecture record names (one `claude -p` per specialist) still
-  stands — [open]
+  stands — [in] measured 2026-11-03 on CLI 2.1.317: a headless run with
+  `--setting-sources user` spawned an inline `--agents` agent declaring
+  `isolation: worktree`, and every command it ran had its cwd under
+  `.claude/worktrees/agent-…`, removed afterwards. CI pins 2.1.273, unmeasured
 - 2026-09-16 — Whether a `hooks` block inside an inline `--agents` definition fires is
   also unproven, and it is the verifier's guard: until a run shows the guard refusing a
-  command, treat headless verification as unguarded — [open]
+  command, treat headless verification as unguarded — [in] measured the same run: the
+  inline agent's PreToolUse hook fired on all three Bash calls (payload `agent_type`
+  set to the agent) and its exit 2 refused the marked one. The run's own guard canary
+  stays the authority for each run, on whatever version CI pins
 - 2026-09-17 — Answered, in the negative and wider than the question asked. A run
   measured it from inside an interactive verifier: the guard script refuses `uname -a`
   with exit 2 when piped the hook input directly, and the same command issued as a Bash
@@ -273,7 +279,8 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   (`git`, `grep`, `sed`, a worktree) have nothing to approve them, and an interactive run
   never noticed because a human answers the prompt there. Widening the Bash grant is only
   safe if the inline agent's guard hook actually fires — the open question above — so the
-  next step is a cent-scale probe of both, not another 10 USD run — [open]
+  next step is a cent-scale probe of both, not another 10 USD run — [in] the probe ran
+  (one Haiku `claude -p`, cents) and answered both entries above: yes and yes
 - 2026-09-17 — `--probe-verifier`: a few turns and about a dollar, asking the orchestrator
   to spawn the verifier once and run two commands — one the guard allows, one it must
   refuse. Bash is deliberately wide in this probe so a refusal can only be the guard, and
@@ -306,7 +313,9 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `complete=true`, 3 findings, 0 blockers, report rendered, gate green. The launcher itself
   exited non-zero on that run and the report still landed, which is the gate behaving as
   designed — it judges what the model stage left behind, not the launcher's exit status.
-  The remaining acceptance evidence for F002 is a run that is green end to end — [open]
+  The remaining acceptance evidence for F002 is a run that is green end to end —
+  [deferred] until the owner authorises the spend of an authenticated CI run, now that
+  the guard and worktree questions are answered
 - 2026-09-16 — `--probe-tools`: one turn, half a dollar, asking the run to name every
   tool it has, with every flag that shapes the tool set kept identical to the real run.
   Cheaper than inferring from a failed audit, and the tests pin the two commands

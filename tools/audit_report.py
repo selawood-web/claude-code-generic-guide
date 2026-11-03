@@ -109,7 +109,10 @@ def render(findings: list[dict], facts: dict | None, probes: dict | None, revisi
                f"{counts['suggestion']} suggestion — {unverified} unverified."
                + ("  ⚠ Incomplete run: nothing was audited." if incomplete else ""))
     out.append("")
-    if probes:
+    if probes and (probes.get("summary") or {}).get("not_applicable"):
+        out.append(f"**Gate catch rate:** not measured — {probes['summary']['not_applicable']}.")
+        out.append("")
+    elif probes:
         s = probes.get("summary", {})
         out.append(f"**Gate catch rate:** {s.get('caught', '?')}/{s.get('total', '?')} probes"
                    + (f" — {len(s['regressions'])} regression(s)" if s.get("regressions") else "")

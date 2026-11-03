@@ -1,3 +1,5 @@
+# describes: guide
+#
 # Mutation probes against the repository's gate — the living contract of what the
 # gate is known to catch. Run by tools/audit_probes.py; read by CI on every push.
 #
@@ -18,6 +20,11 @@
 # mutation that leaves the tree unchanged is an `error`, not a miss: a probe that
 # plants nothing measures nothing, and reads exactly like a hole that is not there.
 # The first list is the 2026-09-16 audit's table; keep it sorted by kind, not by date.
+#
+# `# describes: guide` above marks this list as the guide's own: in a repository
+# without install.sh, tools/audit_probes.py reports it not applicable instead of
+# running mutations of files that repository does not have. A project writing its
+# own list leaves that line out.
 
 # --- links, catalogs, always-loaded files ---------------------------------------
 broken relative link in a skill | caught | sed -i 's|(strategy.md)|(strategyy.md)|' .claude/skills/testing/SKILL.md

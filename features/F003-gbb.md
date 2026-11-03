@@ -152,7 +152,7 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-18 — Real user sessions replacing agent-timed stranger tests — [deferred]
   until three reruns on one product show which rungs the agent's timing gets wrong
 - 2026-09-18 — A visual diff of screenshots between runs as regression evidence —
-  [open]
+  [deferred] until GBB has run on three products and shows which rungs regress
 - 2026-09-18 — Owner's philosophy: nothing is built with no intended direction. Added
   the intent half — `--intent` writes the intent file under `design/` before building, in a
   designer's order of thought (who, where, feeling, references, language) and verified
@@ -234,7 +234,11 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   its deterministic stage, where the guide's list is equally meaningless: it reports a
   catch rate against mutations of files that project does not have. A probe list that
   declares which repository it describes would settle it, as would a per-project list —
-  [open]
+  [in] `tools/probes.txt` opens with `# describes: guide`; in a repository without
+  install.sh, `tools/audit_probes.py` reports the list not applicable and runs nothing,
+  and the report reads "not measured" instead of a catch rate. A project's own list
+  leaves the line out. Measured before: 330 s, 98/99, 1 regression and 14 errors in a
+  fresh install, all about the guide's files
 - 2026-09-19 — Owner set the adoption posture for wiring: when CCGG meets tooling a
   project already has, assume that process is not good enough and, specifically, that it
   does not run in the right order; then test the assumption rather than asserting it —

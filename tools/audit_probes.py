@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -106,6 +107,35 @@ class ProbeResult:
 
 class ProbeFileError(ValueError):
     """A probes file line that cannot be run; the line number is in the message."""
+
+
+# A probe list can say whose gate it describes. The guide's list mutates the
+# guide's own files — install.sh, update.sh, decisions/, its CI steps — so in a
+# project that installed CCGG it reported a catch rate, regressions and errors
+# about files that project does not have (F003 ledger, 2026-09-19). The marker
+# for "this is the guide" is install.sh, the one tools/validate.py already uses.
+DESCRIBES_RE = re.compile(r"^#\s*describes:\s*(\S+)\s*$")
+GUIDE_LIST = "guide"
+
+
+def list_describes(text: str) -> str | None:
+    """The `# describes: <name>` directive of a probes file, or None."""
+    if not isinstance(text, str):
+        raise TypeError("probes text must be a string")
+    for raw in text.splitlines():
+        match = DESCRIBES_RE.match(raw.strip())
+        if match:
+            return match.group(1)
+    return None
+
+
+def not_applicable_reason(describes: str | None, repo: str) -> str:
+    """Why this list cannot measure this repository's gate, or '' when it can."""
+    if describes == GUIDE_LIST and not os.path.isfile(os.path.join(repo, "install.sh")):
+        return ("this probe list describes the CCGG guide's own gate, and this repository "
+                "is not the guide; write tools/probes.txt for this repository's gate, "
+                "without the describes line, to measure it")
+    return ""
 
 
 def parse_probes(text: str) -> list[Probe]:
@@ -370,13 +400,29 @@ def main(argv: list[str]) -> int:
         return 1
     try:
         with open(probes_path, encoding="utf-8") as fh:
-            probes = parse_probes(fh.read())
+            text = fh.read()
+        probes = parse_probes(text)
     except ProbeFileError as exc:
         print(f"audit-probes: {args.probes}: {exc}")
         return 1
     if not probes:
         print(f"audit-probes: {args.probes} lists no probes — the gate's contract is unmeasured")
         return 1
+
+    reason = not_applicable_reason(list_describes(text), repo)
+    if reason:
+        # Measured nothing, and says so: a report that reads "not measured" with the
+        # reason, never a catch rate. Exit 0 — the stage ran and its answer is clear.
+        print(f"audit-probes: not applicable — {reason}")
+        if args.out:
+            os.makedirs(args.out, exist_ok=True)
+            summary = {"total": 0, "caught": 0, "missed": 0, "skipped": 0, "errors": 0,
+                       "catch_rate": None, "regressions": [], "promotions": [],
+                       "error_labels": [], "gates": [], "not_applicable": reason}
+            with open(os.path.join(args.out, "probes.json"), "w", encoding="utf-8") as fh:
+                json.dump({"summary": summary, "probes": []}, fh, indent=2)
+                fh.write("\n")
+        return 0
 
     gates = {name: shlex.split(cmd) for name, cmd in GATES.items()}
     gates[DEFAULT_GATE_NAME] = shlex.split(args.gate)

@@ -97,6 +97,23 @@ class RenderTests(unittest.TestCase):
         self.assertIn("2 fact(s), 1 flagged", text)
         self.assertIn("- H-001: hook-stdout fact", text)
 
+    def test_a_list_that_does_not_apply_reads_not_measured_never_a_rate(self):
+        probes = {"summary": {"total": 0, "caught": 0, "regressions": [], "promotions": [],
+                              "not_applicable": "this probe list describes the CCGG guide's own gate"}}
+        text = render([], None, probes, None)
+        self.assertIn("**Gate catch rate:** not measured — this probe list describes", text)
+        self.assertNotIn("0/0 probes", text)
+
+    def test_a_not_applicable_probe_stage_counts_as_run_without_errors(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "facts.json"), "w") as fh:
+                json.dump({"scope": "process", "facts": []}, fh)
+            with open(os.path.join(d, "probes.json"), "w") as fh:
+                json.dump({"summary": {"total": 0, "errors": 0, "not_applicable": "x"}, "probes": []}, fh)
+            stages = audit_report.deterministic_stages(d)
+        self.assertEqual(stages["stages_missing"], [])
+        self.assertEqual(stages["stages_with_errors"], {})
+
     def test_no_findings(self):
         text = render([], None, None, None)
         self.assertIn("_None verified._", text)
