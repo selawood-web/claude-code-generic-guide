@@ -369,3 +369,8 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   worktree subagent on the local feature branch (2/2 runs) and `"local"` on `main` (2/2), the
   same as unset. The earlier entry followed the settings reference without measuring; the
   setting is `"head"` again and the decision record carries the method — [in]
+- 2026-11-03 — CI's CLI pin moved from 2.1.273 to 2.1.317, the current npm release, after
+  the launcher's own probes ran on it with the audit's real flags and grants: --probe-tools
+  listed Agent, Bash, Glob, Grep, Read, Write; --probe-verifier spawned the verifier, whose
+  guard let `git status --porcelain` run and refused a redirect to a file, and the report
+  directory took a write. Under 1 cent each, Haiku as orchestrator — [in]

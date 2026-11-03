@@ -39,12 +39,14 @@ permissions:
 env:
   # Pinned, not `latest`: this job installs the CLI into a runner that later holds
   # ANTHROPIC_API_KEY, so an unpinned install is an unreviewed dependency with a
-  # secret in scope. 2.1.273 is the version this design was measured against — the
-  # flag behaviour recorded in features/F002-audit-skill.md and
+  # secret in scope. The design was first measured against 2.1.273 — the flag
+  # behaviour recorded in features/F002-audit-skill.md and
   # decisions/2026-09-16-ccgg-audit-architecture.md ("measured against the installed
-  # CLI (2.1.273)"). npm's `latest` moves; what the corrections were written against
-  # does not. Bump this deliberately, re-measuring those flags, never incidentally.
-  CLAUDE_CODE_VERSION: "2.1.273"
+  # CLI (2.1.273)") — and re-measured on 2.1.317 before this pin moved (F002 ledger,
+  # 2026-11-03: --probe-tools and --probe-verifier, the audit's own flags and grants).
+  # npm's `latest` moves; what the corrections were written against does not. Bump
+  # this deliberately, re-running those two probes, never incidentally.
+  CLAUDE_CODE_VERSION: "2.1.317"
 
 concurrency:
   group: audit-${{ github.event.pull_request.number || github.ref }}
