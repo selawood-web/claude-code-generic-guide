@@ -143,7 +143,7 @@ if [ "$USER_MODE" -eq 0 ]; then
   # decisions/, workflow layout) and fail in any other — 33 failures on
   # MemoMe's CI the first time they were shipped.
   for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py            tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py            tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py \
-           tools/test_context_guard.py tools/test_flush_guard.py; do
+           tools/test_context_guard.py tools/test_flush_guard.py tools/test_skill_usage.py; do
     [ -f "$SRC/$f" ] && sync_file "$f"
   done
   # The probe contracts are the project's own once it has them, so they are

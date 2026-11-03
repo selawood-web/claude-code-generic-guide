@@ -155,7 +155,7 @@ one line of explanation.
 
 ---
 
-## The automation: five hooks that run by themselves
+## The automation: six hooks that run by themselves
 
 A hook is a small script the system runs automatically at fixed moments — no one
 has to remember anything.
@@ -167,8 +167,9 @@ has to remember anything.
 | **Session end** | The session closes | Leaves a timestamped marker, per project, that the next session's start hook reads back |
 | **Context guard** | Every prompt, and every typed command | Stops a heavy command (`/ccgg-audit`, `/gbb`, `/product-brief`, `/dream`) once when the session is already over 100k tokens and names the cheaper path — `/flush`, `/clear`, run it again; past 300k it warns once per 100k. Typing the command again runs it anyway |
 | **Flush guard** | Each time a reply ends | Once per session, past 150k tokens with no session log from today, sends the reply back to run `/flush` first — so a long session saves itself instead of waiting for someone to remember |
+| **Skill usage** | Each time a skill runs, typed or called by the AI | Appends the skill's name to a local log; `/flush` copies the tally into the session log, and `/efficiency` uses it to name skills that never run. Prints nothing |
 
-A sixth hook script, the audit verifier's guard, is not registered here: it is scoped to
+A seventh hook script, the audit verifier's guard, is not registered here: it is scoped to
 one subagent by its own definition and refuses write-shaped commands only while that
 agent runs.
 
@@ -222,7 +223,7 @@ twice by a human becomes a check run forever by the machine**.
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks all its questions at once as coded pick-lists, explains in plain-words cards, escalates instead of proceeding on anything destructive |
 | **The 29 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
-| **The 5 hooks** | Run automatically at session start, before compaction, at session end, on every prompt (the context guard), and as each reply ends (the flush guard) — the part of the system that needs no one to remember it |
+| **The 6 hooks** | Run automatically at session start, before compaction, at session end, on every prompt (the context guard), as each reply ends (the flush guard), and whenever a skill runs (the usage log) — the part of the system that needs no one to remember it |
 | **The validator + CI** | Check every proposed change against every check in `tools/validate.py` and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |
 

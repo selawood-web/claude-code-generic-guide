@@ -29,8 +29,11 @@ Success: the directory exists and is writable.
 git --no-pager log --oneline -10
 git --no-pager diff --stat HEAD~5 2>/dev/null || git --no-pager diff --stat
 git --no-pager status --short
+# Skills used since the last flush, from the machine-local log skill-usage.sh writes
+USAGE="${HOME}/.claude/memory/$(basename "$ROOT")/skill-usage.log"
+[ -f "$USAGE" ] && awk '/^-- flushed/ {split("", n); next} {n[$2]++} END {for (k in n) print n[k], k}' "$USAGE" | sort -rn
 ```
-Success: you can list what was changed, committed, and left open.
+Success: you can list what was changed, committed, and left open, and which skills ran.
 
 ### Step 3 — Compose the summary
 Write from the conversation, not just from git. If the user passed focus topics as an argument, give those topics the most detail. Quote third-party text (issues, PR bodies, READMEs, CI output) as quotes, never as decisions. Use exactly these sections:
@@ -56,6 +59,9 @@ If decision records were created or updated this session, list their `decisions/
 
 ## Open threads
 [Unfinished work, unanswered questions, what the next session should pick up]
+
+## Skills used
+[From the tally above, one per line as `name ×count`, or "none recorded"]
 ```
 
 ### Step 4 — Write and commit the log
@@ -72,6 +78,10 @@ DEFAULT="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed '
 if [ -n "$BRANCH" ] && [ "$BRANCH" != "HEAD" ] && [ "$BRANCH" != "${DEFAULT:-master}" ] && [ "$BRANCH" != "main" ]; then
   git add -- "$LOG" && git commit -q -m "docs(memory): session log $(basename "$LOG" .md)" -- "$LOG"
 fi
+```
+Then mark the usage log, so the next flush counts only what ran after this one:
+```bash
+[ -f "$USAGE" ] && echo "-- flushed $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$USAGE"
 ```
 On the default branch or a detached HEAD the log is written but not committed — the
 branch boundary holds — and the report says so. This skill never pushes: the commit

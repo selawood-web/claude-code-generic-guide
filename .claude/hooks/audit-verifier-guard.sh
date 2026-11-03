@@ -180,7 +180,7 @@ PY_SCRIPTS = frozenset((
     "test_audit_headless.py", "test_audit_pr_comment.py", "test_audit_probes.py",
     "test_audit_redteam.py", "test_audit_report.py", "test_catalog.py", "test_context_guard.py", "test_feature_lint.py",
     "test_flush_guard.py", "test_gbb.py",
-    "test_install.py", "test_session_start_hook.py", "test_validate.py",
+    "test_install.py", "test_session_start_hook.py", "test_skill_usage.py", "test_validate.py",
     "test_verifier_guard.py",
 ))
 PY_TEST_MODULES = frozenset(n[:-3] for n in PY_SCRIPTS if n.startswith("test_"))
@@ -213,6 +213,7 @@ SH_SCRIPTS = frozenset((
     ".claude/hooks/pre-compact.sh",
     ".claude/hooks/session-end.sh",
     ".claude/hooks/session-start.sh",
+    ".claude/hooks/skill-usage.sh",
     "install.sh",
     "update.sh",
 ))
