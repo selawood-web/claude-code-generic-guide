@@ -62,7 +62,8 @@ If decision records were created or updated this session, list their `decisions/
 Write the summary to `$LOG` — one file per flush, named by its UTC stamp, so two sessions
 on two branches never edit the same file. The log is committed and readable by everyone
 with access to the repository: no secret, credential, token or personal data goes in it
-(AGENTS.md, *Code Quality Standards*).
+(AGENTS.md, *Code Quality Standards*). `tools/validate.py` fails a tree whose `memory/`
+holds a credential-shaped string; personal data it cannot see, so that part stays yours.
 
 Then commit that file alone, on the session's own branch:
 ```bash

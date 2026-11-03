@@ -35,6 +35,10 @@ the tree is printed into the prompt by a hook.
   stop hook. No hook input carries the context token count, so it is read from the
   transcript. Source: code.claude.com/docs/en/hooks. Whether `Stop` fires under
   `claude -p` was not confirmed.
+- 2026-11-03, later: measured on CLI 2.1.317 with a probe hook — `Stop` fires under
+  `claude -p`, exit 2 continues the run, and the next firing carries
+  `stop_hook_active: true`. The headless audit is unaffected: it passes
+  `--setting-sources user`, which loads no project hook.
 
 ## Options considered
 

@@ -2535,5 +2535,80 @@ class GuardSettingsRegistrationTests(unittest.TestCase):
                 self.assertIn("not registered", problems[0])
 
 
+class MemorySecretTests(unittest.TestCase):
+    """Check 36: committed memory carries no credential. The samples are assembled
+    at run time so this file holds nothing a secret scanner would stop a push on."""
+
+    SAMPLES = {
+        "AWS access key": "AKIA" + "Q" * 16,
+        "GitHub token": "gh" + "p_" + "a1" * 18,
+        "Anthropic API key": "sk-" + "ant-" + "x9" * 12,
+        "OpenAI-style API key": "sk-" + "proj-" + "Z7" * 20,
+        "Slack token": "xo" + "xb-" + "12345-abcde",
+        "Google API key": "AI" + "za" + "b" * 35,
+        "private key block": "-----BEGIN " + "RSA PRIVATE KEY-----",
+        "JSON web token": "ey" + "J" + "a" * 12 + ".ey" + "J" + "b" * 12 + "." + "c" * 12,
+        "credential assignment": "pass" + "word = " + "hunter2hunter2hunter2",
+    }
+
+    def test_each_kind_is_found_and_named_without_its_value(self):
+        for kind, value in self.SAMPLES.items():
+            with self.subTest(kind=kind):
+                problems = validate.secret_problems("memory/sessions/x.md", "intro\nhere: " + value + "\n")
+                self.assertEqual(len(problems), 1, problems)
+                self.assertIn("memory/sessions/x.md:2:", problems[0])
+                self.assertIn(kind, problems[0])
+                self.assertNotIn(value, problems[0], "a finding must never repeat the secret")
+
+    def test_prose_about_tokens_and_secrets_is_not_a_finding(self):
+        text = ("The guard fired at ~179k tokens.\n"
+                "token: the context size, read from the transcript\n"
+                "Never put a secret or an api_key in a log.\n"
+                "password = see the vault\n"
+                "sk-short and AKIA alone are not keys\n"
+                "commit e4625de66061c9be16045243962abf862fc4c537\n")
+        self.assertEqual(validate.secret_problems("memory/a.md", text), [])
+
+    def test_empty_text_and_one_finding_per_line(self):
+        self.assertEqual(validate.secret_problems("memory/a.md", ""), [])
+        two = self.SAMPLES["AWS access key"] + " " + self.SAMPLES["GitHub token"]
+        self.assertEqual(len(validate.secret_problems("memory/a.md", two)), 1)
+
+    def test_wrong_type_is_refused(self):
+        with self.assertRaises(TypeError):
+            validate.secret_problems("memory/a.md", None)
+
+    def _check(self, files):
+        with tempfile.TemporaryDirectory() as tmp:
+            for name, text in files.items():
+                path = os.path.join(tmp, name)
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            subprocess.run(["git", "init", "-q", tmp], check=True)
+            subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            old_cwd = os.getcwd()
+            del validate.findings[:]
+            try:
+                os.chdir(tmp)
+                validate.check_memory_secrets()
+                return list(validate.findings)
+            finally:
+                os.chdir(old_cwd)
+                validate.ROOT = old_root
+                del validate.findings[:]
+
+    def test_the_whole_memory_tree_is_scanned_archive_included(self):
+        key = self.SAMPLES["AWS access key"]
+        findings = self._check({"memory/sessions/archive/2026-01-01-000000.md": key + "\n",
+                                "memory/PROJECT-MEMORY.md": "clean\n"})
+        self.assertEqual(len(findings), 1, findings)
+        self.assertIn("memory/sessions/archive/2026-01-01-000000.md:1:", findings[0])
+
+    def test_files_outside_memory_are_not_this_checks_business(self):
+        self.assertEqual(self._check({"docs/x.md": self.SAMPLES["AWS access key"] + "\n"}), [])
+
+
 if __name__ == "__main__":
     unittest.main()
