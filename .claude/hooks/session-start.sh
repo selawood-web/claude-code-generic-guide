@@ -182,21 +182,34 @@ if [ -f "${CLAUDE_PROJECT_DIR:-.}/tools/validate.py" ] && command -v python3 >/d
   fi
 fi
 
-# Memory pointers: surface where the last session left off. The log name is
-# the date /flush wrote it under; anything else in that directory is not named.
+# Memory pointers: surface where the last session left off. Project memory lives
+# in the repository under memory/, so it survives a container that is thrown
+# away (decisions/2026-11-03-repo-tracked-memory.md). A log name is the UTC
+# stamp /flush wrote it under — digits only; anything else there is not named.
 PROJECT_SLUG=$(basename "${CLAUDE_PROJECT_DIR:-$(pwd)}")
-SESSIONS_DIR="${HOME}/.claude/memory/${PROJECT_SLUG}/sessions"
-if [ -d "$SESSIONS_DIR" ]; then
-  LATEST=$(ls -1 "$SESSIONS_DIR" 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$' | sort | tail -1)
-  if [ -n "${LATEST:-}" ]; then
-    echo "-- last session log: ${LATEST} in ~/.claude/memory/<project>/sessions/ (read it to pick up open threads) --"
+MEM_DIR="${CLAUDE_PROJECT_DIR:-.}/memory"
+if [ -d "$MEM_DIR/sessions" ]; then
+  LOGS="$(ls -1 "$MEM_DIR/sessions" 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{6}\.md$' | sort)"
+  if [ -n "$LOGS" ]; then
+    COUNT=$(printf '%s\n' "$LOGS" | wc -l | tr -d ' ')
+    echo "-- last session log: memory/sessions/${LOGS##*$'\n'} (read it to pick up open threads) --"
+    # The dream skill's cadence, counted so nobody has to: logs pile up unread
+    # when consolidation waits on someone remembering it.
+    if [ "$COUNT" -ge 5 ]; then
+      echo "-- ${COUNT} session logs not yet consolidated: run /dream --"
+    fi
   fi
 fi
 # /dream consolidates the logs into this file and archives them, so after a dream
 # the pointer above goes quiet. Nothing named it, and the consolidated knowledge sat
 # where no session looked (finding S3-2). A fixed string: its content is not forwarded.
-if [ -s "${HOME}/.claude/memory/${PROJECT_SLUG}/MEMORY.md" ]; then
-  echo "-- consolidated memory: ~/.claude/memory/<project>/MEMORY.md (read it before re-deciding anything) --"
+if [ -s "$MEM_DIR/PROJECT-MEMORY.md" ]; then
+  echo "-- consolidated memory: memory/PROJECT-MEMORY.md (read it before re-deciding anything) --"
+fi
+# Memory written before it moved into the repository. Counted, never named.
+LEGACY="${HOME}/.claude/memory/${PROJECT_SLUG}"
+if [ -s "$LEGACY/MEMORY.md" ] || ls -1 "$LEGACY/sessions" 2>/dev/null | grep -qE '^[0-9]{4}-[0-9]{2}-[0-9]{2}\.md$'; then
+  echo "-- memory at the old location ~/.claude/memory/<project>/: /dream moves it into memory/ --"
 fi
 MARKERS="${HOME}/.claude/memory/${PROJECT_SLUG}/session-markers.log"
 if [ -f "$MARKERS" ]; then
@@ -237,6 +250,22 @@ if [ -d "$DECISIONS_DIR" ] && command -v git >/dev/null 2>&1; then
   # worth knowing about, and the count carries no text from the tree.
   if [ "$SKIPPED" -gt 0 ]; then
     echo "-- ${SKIPPED} decision record(s) skipped: name is not a date-prefixed slug --"
+  fi
+fi
+
+# Open ideas: a feature ledger line still tagged [open] blocks that feature from
+# shipping, and nothing surfaced them — F002's sat open for weeks. Tracked files
+# only, and only the count reaches the prompt.
+FEATURES_DIR="${CLAUDE_PROJECT_DIR:-.}/features"
+if [ -d "$FEATURES_DIR" ] && command -v git >/dev/null 2>&1; then
+  IDEAS=0
+  while IFS= read -r def; do
+    [ -n "$def" ] || continue
+    n=$(grep -cE '\[open\][[:space:]]*$' "${CLAUDE_PROJECT_DIR:-.}/$def" 2>/dev/null) || n=0
+    IDEAS=$((IDEAS + n))
+  done < <(git -C "${CLAUDE_PROJECT_DIR:-.}" ls-files -- 'features/*.md' 2>/dev/null)
+  if [ "$IDEAS" -gt 0 ]; then
+    echo "-- ${IDEAS} open idea(s) in feature ledgers: grep -n '\\[open\\]\$' features/*.md --"
   fi
 fi
 

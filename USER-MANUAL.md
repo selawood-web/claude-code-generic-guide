@@ -71,7 +71,7 @@ What you get:
 
 2. **Skills layer (`.claude/skills/`)** — Executable workflows. When you say "review this code" or "commit my changes," the AI follows a professional, step-by-step procedure instead of improvising.
 
-3. **Memory layer (`~/.claude/memory/`)** — Persistent knowledge. Decisions, patterns, and findings are saved between sessions. Each session builds on the last.
+3. **Memory layer (`memory/` in the repository)** — Persistent knowledge, committed with the code so it survives a throwaway cloud container. Decisions, patterns, and findings are saved between sessions. Each session builds on the last.
 
 ---
 
@@ -545,10 +545,11 @@ write code for this
 **Use when:** A productive session is ending, or before `/compact`.
 
 **What it does:**
-1. Resolves the project's session-log directory under `~/.claude/memory/`
+1. Resolves the project's session-log directory, `memory/sessions/` in the repository
 2. Gathers the session's facts from git and the conversation
 3. Writes a structured summary: goal, what happened, decisions with rationale, files changed, open threads
-4. Prompts you to promote durable findings via `/learn`
+4. Commits that one file on the session's own branch (never the default branch)
+5. Prompts you to promote durable findings via `/learn`
 
 **Examples:**
 ```
@@ -822,18 +823,26 @@ Memory is the most powerful feature of this infrastructure. It is what makes ses
 ### Where memory lives
 
 ```
-~/.claude/memory/
-  MEMORY.md                          ← Global (all projects)
-  <project-slug>-<hash>/
-    MEMORY.md                        ← This project only
-    sessions/
-      2026-07-15.md                  ← Session summaries
-      2026-07-14.md
+<your repo>/memory/
+  PROJECT-MEMORY.md                  ← This project, consolidated by /dream
+  sessions/
+    2026-07-15-142233.md             ← Session summaries, one per /flush (UTC stamp)
+    archive/                         ← Logs /dream has consolidated
+~/.claude/CLAUDE.md                  ← Global (all projects)
 ```
+Project memory is committed, so it travels with the code: a cloud session's container
+can be thrown away without losing it, and anyone with the repository reads it. Keep
+secrets out of it. Memory from before this layout, under `~/.claude/memory/<project>/`,
+is migrated by the next `/dream`.
+
+**The flush guard.** Once per session, when a reply ends with the context past ~150k
+tokens and nothing logged today, `.claude/hooks/flush-guard.sh` sends the reply back
+to run `/flush` first. `CCGG_FLUSH_GUARD=off` disables it; `CCGG_FLUSH_MIN_TOKENS`
+moves the threshold.
 
 ### Saving to memory
 
-**Automatic:** At the end of each session, a metadata summary is saved automatically (message counts, topics, files touched).
+**Automatic:** the session-end hook records only a timestamp. What makes a long session save itself is the flush guard above, which asks for `/flush` once the session is large enough to be worth it.
 
 **Semi-automatic (recommended):** Run `/flush` before ending a session or before compaction. This generates a rich LLM-written summary of decisions, patterns, and findings — indexed and searchable.
 
@@ -1290,7 +1299,7 @@ Verify you are:
 Check what's in memory:
 ```bash
 ls ~/.claude/projects/*/memory/           # auto memory — Claude's own notes
-ls ~/.claude/memory/*/sessions/           # session logs written by /flush
+ls memory/sessions/                       # session logs written by /flush
 ```
 
 ---

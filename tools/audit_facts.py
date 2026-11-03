@@ -104,6 +104,8 @@ INSTRUCTION_GLOBS = (
     "decisions/*.md",
     "features/*.md",
     "knowledge-base/*.md",
+    "memory/*.md",
+    "memory/sessions/*.md",
 )
 # Kinds whose `finding` status is a defect a gate should stop for. Every kind the
 # stage emits is in exactly one of the two tuples below, and a test holds that

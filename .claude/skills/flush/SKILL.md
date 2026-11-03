@@ -14,10 +14,13 @@ Persist what happened in this session before it is lost to compaction or session
 ## Steps
 
 ### Step 1 — Resolve the memory location
+Project memory lives in the repository, so it survives a container that is thrown away
+and reaches every clone through ordinary git.
 ```bash
-PROJECT_SLUG=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
-MEMORY_DIR="${HOME}/.claude/memory/${PROJECT_SLUG}/sessions"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+MEMORY_DIR="${ROOT}/memory/sessions"
 mkdir -p "$MEMORY_DIR"
+LOG="${MEMORY_DIR}/$(date -u +%Y-%m-%d-%H%M%S).md"
 ```
 Success: the directory exists and is writable.
 
@@ -55,15 +58,33 @@ If decision records were created or updated this session, list their `decisions/
 [Unfinished work, unanswered questions, what the next session should pick up]
 ```
 
-### Step 4 — Write the log
-Append to `${MEMORY_DIR}/$(date +%Y-%m-%d).md`. If the file already has an entry from earlier today, add a new `# Session — YYYY-MM-DD (2)` heading rather than overwriting.
+### Step 4 — Write and commit the log
+Write the summary to `$LOG` — one file per flush, named by its UTC stamp, so two sessions
+on two branches never edit the same file. The log is committed and readable by everyone
+with access to the repository: no secret, credential, token or personal data goes in it
+(AGENTS.md, *Code Quality Standards*).
 
-Success: the file exists and contains today's summary. Read it back to confirm.
+Then commit that file alone, on the session's own branch:
+```bash
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+DEFAULT="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+if [ -n "$BRANCH" ] && [ "$BRANCH" != "HEAD" ] && [ "$BRANCH" != "${DEFAULT:-master}" ] && [ "$BRANCH" != "main" ]; then
+  git add -- "$LOG" && git commit -q -m "docs(memory): session log $(basename "$LOG" .md)" -- "$LOG"
+fi
+```
+On the default branch or a detached HEAD the log is written but not committed — the
+branch boundary holds — and the report says so. This skill never pushes: the commit
+travels with the branch's next push, which in a cloud session has to happen before the
+container ends.
+
+Success: the file exists, contains this session's summary, and `git log -1 -- "$LOG"`
+shows it committed (or the report says why not). Read it back to confirm.
 
 ### Step 5 — Promote durable knowledge
-For each item under "Worth remembering", ask: is this a reusable principle or a one-off fact? Reusable principles go to `MEMORY.md` via the `learn` skill now — session logs get archived, `MEMORY.md` is what future sessions read first.
+For each item under "Worth remembering", ask: is this a reusable principle or a one-off fact? Reusable principles go to memory via the `learn` skill now — session logs get archived by `/dream`, and the consolidated `memory/PROJECT-MEMORY.md` is what future sessions read first.
 
 ## When to run
 - Before `/compact` — the pre-compact hook can only shape the summary, not run this skill; flush first, then compact
+- When the flush guard stops a reply in a long session with nothing logged today (`.claude/hooks/flush-guard.sh`)
 - At the end of any session that made decisions or discoveries
 - Skip for trivial sessions — an empty summary is noise, not memory

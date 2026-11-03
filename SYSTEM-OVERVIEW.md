@@ -155,19 +155,20 @@ one line of explanation.
 
 ---
 
-## The automation: four hooks that run by themselves
+## The automation: five hooks that run by themselves
 
 A hook is a small script the system runs automatically at fixed moments — no one
 has to remember anything.
 
 | Hook | When it runs | What it does |
 |------|-------------|--------------|
-| **Session start** | The moment a session opens | Syncs CCGG-owned files from the guide clone when `CCGG_HOME`, `CCGG_REPO` and `CCGG_REF` are all set (so merged guide PRs reach every session; any one of them missing and it runs nothing), runs the validator and shows the repo's health, points at the last session log, and surfaces open decision records. In a project without these tools, it stays silent |
+| **Session start** | The moment a session opens | Syncs CCGG-owned files from the guide clone when `CCGG_HOME`, `CCGG_REPO` and `CCGG_REF` are all set (so merged guide PRs reach every session; any one of them missing and it runs nothing), runs the validator and shows the repo's health, points at the last session log in `memory/sessions/` and asks for `/dream` once five pile up, and counts open decision records and open feature-ledger ideas. In a project without these tools, it stays silent |
 | **Before compaction** | Just before the AI compresses its conversation history | Tells the compaction model what the summary must keep — boundary, decisions, gate state, open threads — so the facts whose loss causes re-work survive the compression |
 | **Session end** | The session closes | Leaves a timestamped marker, per project, that the next session's start hook reads back |
 | **Context guard** | Every prompt, and every typed command | Stops a heavy command (`/ccgg-audit`, `/gbb`, `/product-brief`, `/dream`) once when the session is already over 100k tokens and names the cheaper path — `/flush`, `/clear`, run it again; past 300k it warns once per 100k. Typing the command again runs it anyway |
+| **Flush guard** | Each time a reply ends | Once per session, past 150k tokens with no session log from today, sends the reply back to run `/flush` first — so a long session saves itself instead of waiting for someone to remember |
 
-A fifth hook script, the audit verifier's guard, is not registered here: it is scoped to
+A sixth hook script, the audit verifier's guard, is not registered here: it is scoped to
 one subagent by its own definition and refuses write-shaped commands only while that
 agent runs.
 
@@ -178,18 +179,19 @@ agent runs.
 ```mermaid
 flowchart LR
     S["This session<br/><i>works, decides, discovers</i>"] -- "learn:<br/>durable principles" --> KB["<b>Knowledge base</b><br/><i>knowledge-base/entries/<br/>in the repo, permanent</i>"]
-    S -- "flush:<br/>session summary" --> SL["<b>Session logs</b><br/><i>what happened, day by day</i>"]
+    S -- "flush:<br/>session summary" --> SL["<b>Session logs</b><br/><i>memory/sessions/ in the repo,<br/>committed by flush</i>"]
     S -- "automatic" --> AM["<b>Auto memory</b><br/><i>notes Claude writes by itself</i>"]
-    SL -- "dream" --> MM["<b>MEMORY.md</b><br/><i>organized reference</i>"]
+    SL -- "dream" --> MM["<b>PROJECT-MEMORY.md</b><br/><i>memory/ in the repo,<br/>organized reference</i>"]
     KB -.-> N["The next session<br/>reads all of it back"]
     MM -.-> N
     AM -.-> N
 ```
 
-> **One honest caveat:** when the AI runs in a temporary cloud computer, its local
-> memory folder dies with the machine. That is why the most important knowledge goes
-> into the repository itself — the knowledge base, the documents, the commit
-> messages. The repo is the memory that cannot be lost.
+> **One honest caveat:** when the AI runs in a temporary cloud computer, everything
+> outside the repository dies with the machine — auto memory included. That is why
+> session logs and consolidated memory are committed under `memory/`, beside the
+> knowledge base, the documents and the commit messages. The repo is the memory that
+> cannot be lost, once the branch carrying it is pushed.
 
 ---
 
@@ -220,7 +222,7 @@ twice by a human becomes a check run forever by the machine**.
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks all its questions at once as coded pick-lists, explains in plain-words cards, escalates instead of proceeding on anything destructive |
 | **The 29 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
-| **The 4 hooks** | Run automatically at session start, before compaction, at session end, and on every prompt (the context guard) — the part of the system that needs no one to remember it |
+| **The 5 hooks** | Run automatically at session start, before compaction, at session end, on every prompt (the context guard), and as each reply ends (the flush guard) — the part of the system that needs no one to remember it |
 | **The validator + CI** | Check every proposed change against every check in `tools/validate.py` and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |
 
