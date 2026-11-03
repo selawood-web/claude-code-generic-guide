@@ -166,7 +166,7 @@ has to remember anything.
 | **Before compaction** | Just before the AI compresses its conversation history | Tells the compaction model what the summary must keep — boundary, decisions, gate state, open threads — so the facts whose loss causes re-work survive the compression |
 | **Session end** | The session closes | Leaves a timestamped marker, per project, that the next session's start hook reads back |
 | **Context guard** | Every prompt, and every typed command | Stops a heavy command (`/ccgg-audit`, `/gbb`, `/product-brief`, `/dream`) once when the session is already over 100k tokens and names the cheaper path — `/flush`, `/clear`, run it again; past 300k it warns once per 100k. Typing the command again runs it anyway |
-| **Flush guard** | Each time a reply ends | Once per session, past 150k tokens with no session log from today, sends the reply back to run `/flush` first — so a long session saves itself instead of waiting for someone to remember |
+| **Flush guard** | Each time a reply ends | Whenever the session has grown ~150k tokens since it was last saved (or since it last asked), sends the reply back to run `/flush` first — so a long session saves itself instead of waiting for someone to remember |
 | **Skill usage** | Each time a skill runs, typed or called by the AI | Appends the skill's name to a local log; `/flush` copies the tally into the session log, and `/efficiency` uses it to name skills that never run. Prints nothing |
 
 A seventh hook script, the audit verifier's guard, is not registered here: it is scoped to

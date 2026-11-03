@@ -10,14 +10,22 @@
 # that is SubagentStop), under `claude -p` too — measured on CLI 2.1.317, where
 # exit 2 continued the run and the next firing carried stop_hook_active true.
 # The headless audit loads user settings only (tools/audit_headless.py,
-# ISOLATION), so this hook never runs inside an audit. Once per session, when the context has grown past
-# CCGG_FLUSH_MIN_TOKENS (default 150000) and memory/sessions/ holds no log
-# dated today (UTC), it exits 2: the product hands the fixed text on stderr to
-# Claude as its reason to continue, so the turn goes on to run /flush. Every
-# other case exits 0 silently, and so does anything missing or unreadable — the
-# guard never blocks on a guess. stop_hook_active (already continuing because
-# of a stop hook) always passes, so it cannot loop. CCGG_FLUSH_GUARD=off
-# disables it entirely.
+# ISOLATION), so this hook never runs inside an audit.
+#
+# The rule: ask whenever the context has grown CCGG_FLUSH_MIN_TOKENS (default
+# 150000) past the last point where this session was saved or asked. That point
+# is kept per session in a state file holding a token count:
+#   - no state yet: the point is 0, unless memory/sessions/ already holds a log
+#     dated today (UTC), which counts as saved now;
+#   - a session log written after the state file moves the point to now;
+#   - a context smaller than the point (compaction shrank it) moves it to now.
+# Asking means exit 2: the product hands the fixed text on stderr to Claude as
+# its reason to continue, so the turn goes on to run /flush. The first version
+# asked once per day at most, and a session that flushed at 06:00 worked on until
+# evening with nothing more saved. Every other case exits 0 silently, and so
+# does anything missing or unreadable — the guard never blocks on a guess.
+# stop_hook_active (already continuing because of a stop hook) always passes,
+# so it cannot loop. CCGG_FLUSH_GUARD=off disables it entirely.
 #
 # Nothing from the transcript or the tree reaches stderr: the message is a
 # fixed string plus a number this script computed.
@@ -78,22 +86,40 @@ json_str session_id; session="${REPLY//[^A-Za-z0-9-]/}"
 context_tokens "$transcript"
 [ -n "$tokens" ] || exit 0
 num_or "${CCGG_FLUSH_MIN_TOKENS:-}" 150000; min=$REPLY
-[ "$tokens" -gt "$min" ] || exit 0
-
-# A log from today means this session, or one just before it, already flushed.
-SESSIONS="${CLAUDE_PROJECT_DIR:-.}/memory/sessions"
-TODAY="$(date -u +%Y-%m-%d)"
-for f in "$SESSIONS/$TODAY"-*.md; do
-  [ -e "$f" ] && exit 0
-done
 
 state="${TMPDIR:-/tmp}/ccgg-context-guard-${UID:-user}"
 [ -d "$state" ] || mkdir -p "$state" 2>/dev/null || exit 0
 marker="$state/$session.flush"
-[ -e "$marker" ] && exit 0
-: > "$marker" 2>/dev/null || exit 0
+SESSIONS="${CLAUDE_PROJECT_DIR:-.}/memory/sessions"
+
+save_point() { printf '%s\n' "$tokens" > "$marker" 2>/dev/null; }
+
+if [ -f "$marker" ]; then
+  base=""; read -r base < "$marker" 2>/dev/null || true
+  case "$base" in ''|*[!0-9]*) base=0 ;; esac
+  # A log written since the point was recorded: this session saved itself.
+  for f in "$SESSIONS"/*.md; do
+    if [ -f "$f" ] && [ "$f" -nt "$marker" ]; then
+      # Take the log's own time, so the same log moves the point once: a log
+      # dated ahead of this clock would otherwise read as new on every reply.
+      save_point && { [ "$f" -nt "$marker" ] && touch -r "$f" "$marker" 2>/dev/null; }
+      exit 0
+    fi
+  done
+  # Compaction shrank the context below the point: measure from here.
+  if [ "$tokens" -lt "$base" ]; then save_point; exit 0; fi
+else
+  base=0
+  # A log from today, before this session's first check, counts as saved now.
+  for f in "$SESSIONS/$(date -u +%Y-%m-%d)"-*.md; do
+    if [ -e "$f" ]; then save_point; exit 0; fi
+  done
+fi
+
+[ $((tokens - base)) -gt "$min" ] || exit 0
+save_point || exit 0
 
 cat >&2 <<EOF
-Flush guard: this session holds ~$((tokens / 1000))k tokens and nothing from it is in memory/sessions/ yet. Before ending this reply, run /flush so the session's decisions and open threads survive it, then finish. This check fires once per session; CCGG_FLUSH_GUARD=off disables it.
+Flush guard: this session holds ~$((tokens / 1000))k tokens, ~$(((tokens - base) / 1000))k of them since it was last saved to memory/sessions/. Before ending this reply, run /flush so the session's decisions and open threads survive it, then finish. It asks again only after another ~$((min / 1000))k; CCGG_FLUSH_GUARD=off disables it.
 EOF
 exit 2

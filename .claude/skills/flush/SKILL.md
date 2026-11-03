@@ -96,6 +96,6 @@ For each item under "Worth remembering", ask: is this a reusable principle or a 
 
 ## When to run
 - Before `/compact` — the pre-compact hook can only shape the summary, not run this skill; flush first, then compact
-- When the flush guard stops a reply in a long session with nothing logged today (`.claude/hooks/flush-guard.sh`)
+- When the flush guard stops a reply because the session grew ~150k tokens since it was last saved (`.claude/hooks/flush-guard.sh`)
 - At the end of any session that made decisions or discoveries
 - Skip for trivial sessions — an empty summary is noise, not memory
