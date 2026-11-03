@@ -408,5 +408,77 @@ class QuotedFieldTests(unittest.TestCase):
                     self.assertLessEqual(len(probe.label), audit_probes.audit_env.FIELD_MAX)
 
 
+class DescribesTests(unittest.TestCase):
+    """F003 ledger: the guide's probe list measured the guide's files in every
+    installed project. A list that describes the guide is not applicable elsewhere."""
+
+    GUIDE_LIST = "# describes: guide\nplant | caught | touch BROKEN\n"
+
+    def test_the_directive_is_read(self):
+        self.assertEqual(audit_probes.list_describes("# x\n#describes: guide\n"), "guide")
+        self.assertEqual(audit_probes.list_describes("  #  describes:  mine  \n"), "mine")
+
+    def test_no_directive_and_empty_text(self):
+        self.assertIsNone(audit_probes.list_describes("plant | caught | x\n"))
+        self.assertIsNone(audit_probes.list_describes(""))
+        self.assertIsNone(audit_probes.list_describes("# describes:\n"), "a name is required")
+
+    def test_a_directive_inside_a_probe_line_is_not_one(self):
+        self.assertIsNone(audit_probes.list_describes("plant | caught | echo '# describes: guide'\n"))
+
+    def test_wrong_type_is_refused(self):
+        with self.assertRaises(TypeError):
+            audit_probes.list_describes(None)
+
+    def test_the_shipped_list_describes_the_guide(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "probes.txt"), encoding="utf-8") as fh:
+            self.assertEqual(audit_probes.list_describes(fh.read()), "guide")
+
+    def _run(self, text, with_install=False):
+        tmp = tempfile.TemporaryDirectory(prefix="ccgg-probe-describes-")
+        self.addCleanup(tmp.cleanup)
+        repo = _tiny_repo(tmp.name)
+        if with_install:
+            open(os.path.join(repo, "install.sh"), "w").close()
+            subprocess.run(["git", "add", "install.sh"], cwd=repo, check=True)
+            subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@l", "commit", "-qm", "i"],
+                           cwd=repo, check=True)
+        with open(os.path.join(repo, "probes.txt"), "w") as fh:
+            fh.write(text)
+        out = os.path.join(tmp.name, "out")
+        # A gate that fails on everything: if a mutation runs at all, a `caught`
+        # probe still reads caught, so the regressing probe below is the tell.
+        rc = _quiet_main(["--repo", repo, "--probes", "probes.txt",
+                          "--gate", "bash -c 'test ! -e BROKEN'", "--out", out])
+        with open(os.path.join(out, "probes.json")) as fh:
+            return rc, json.load(fh)
+
+    def test_the_guide_list_in_another_repository_runs_nothing(self):
+        rc, data = self._run(self.GUIDE_LIST + "regressed | caught | echo y >> README.md\n")
+        self.assertEqual(rc, 0)
+        self.assertEqual(data["probes"], [])
+        self.assertEqual(data["summary"]["total"], 0)
+        self.assertIsNone(data["summary"]["catch_rate"])
+        self.assertIn("not the guide", data["summary"]["not_applicable"])
+
+    def test_the_guide_list_in_the_guide_still_runs(self):
+        rc, data = self._run(self.GUIDE_LIST + "regressed | caught | echo y >> README.md\n", with_install=True)
+        self.assertEqual(rc, 1, "the regression must still fail on the guide")
+        self.assertEqual(data["summary"]["regressions"], ["regressed"])
+        self.assertNotIn("not_applicable", data["summary"])
+
+    def test_a_projects_own_list_runs(self):
+        rc, data = self._run("# describes: myapp\nplant | caught | touch BROKEN\n")
+        self.assertEqual((rc, data["summary"]["caught"]), (0, 1))
+
+    def test_a_malformed_list_still_fails_before_the_directive_is_weighed(self):
+        tmp = tempfile.TemporaryDirectory(prefix="ccgg-probe-describes-")
+        self.addCleanup(tmp.cleanup)
+        repo = _tiny_repo(tmp.name)
+        with open(os.path.join(repo, "probes.txt"), "w") as fh:
+            fh.write("# describes: guide\nnot a probe line\n")
+        self.assertEqual(_quiet_main(["--repo", repo, "--probes", "probes.txt"]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
