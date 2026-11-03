@@ -156,7 +156,8 @@ done
 # test_install.py (install.sh is not part of a wired project), and
 # test_validate.py and test_audit_facts.py, which assert against this
 # repository's own tree and fail in any other.
-for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py; do
+for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py \
+         tools/test_context_guard.py tools/test_flush_guard.py; do
   copy_file "$f"
 done
 

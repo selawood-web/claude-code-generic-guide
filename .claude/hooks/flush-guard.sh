@@ -7,7 +7,10 @@
 #          nothing was ever written (decisions/2026-11-03-repo-tracked-memory.md).
 #
 # Stop fires each time the main agent finishes a reply (never for a subagent:
-# that is SubagentStop). Once per session, when the context has grown past
+# that is SubagentStop), under `claude -p` too — measured on CLI 2.1.317, where
+# exit 2 continued the run and the next firing carried stop_hook_active true.
+# The headless audit loads user settings only (tools/audit_headless.py,
+# ISOLATION), so this hook never runs inside an audit. Once per session, when the context has grown past
 # CCGG_FLUSH_MIN_TOKENS (default 150000) and memory/sessions/ holds no log
 # dated today (UTC), it exits 2: the product hands the fixed text on stderr to
 # Claude as its reason to continue, so the turn goes on to run /flush. Every

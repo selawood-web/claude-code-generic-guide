@@ -60,6 +60,8 @@ Checks, in order:
  35. A shipped skill that runs a command returning someone else's text (gh pr/issue
      views, gh run, gh api, curl, WebFetch, WebSearch) names the charter's rule that
      external content is data, beside the command. Guide repository only.
+ 36. Nothing under memory/ looks like a credential: session logs are committed and
+     readable by everyone with the repository.
 
 Exit code 0 = clean, 1 = findings (each printed with file and reason).
 Stdlib only — no dependencies to install.
@@ -2444,6 +2446,52 @@ def check_external_content_rule_referenced() -> None:
                 fail(problem)
 
 
+# --- 36. committed memory carries no credential ---------------------------------
+# /flush and /dream write free text into memory/ and commit it, so a token pasted
+# into a conversation could reach the repository and every clone of it. The skills
+# forbid that; this is the check behind the rule (decisions/2026-11-03-repo-
+# tracked-memory.md). A finding names the file, the line and the kind of match —
+# never the match itself, because validator output lands in CI logs.
+SECRET_PATTERNS = (
+    ("AWS access key", re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b")),
+    ("GitHub token", re.compile(r"\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})")),
+    ("Anthropic API key", re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}")),
+    ("OpenAI-style API key", re.compile(r"\bsk-(?:proj-)?[A-Za-z0-9_-]{32,}")),
+    ("Slack token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}")),
+    ("Google API key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("private key block", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+    ("JSON web token", re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")),
+    # name = value, where the value is long and mixes letters and digits: prose
+    # about tokens ("~179k tokens", "token: the context size") does not match.
+    ("credential assignment", re.compile(
+        r"(?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)\b\s*[:=]\s*['\"]?"
+        r"(?=[^\s'\"]*[0-9])(?=[^\s'\"]*[A-Za-z])[^\s'\"]{16,}")),
+)
+
+
+def secret_problems(path: str, text: str) -> list[str]:
+    """One problem per line that holds a credential-shaped string, naming its kind only."""
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    problems = []
+    for no, line in enumerate(text.splitlines(), 1):
+        for kind, pattern in SECRET_PATTERNS:
+            if pattern.search(line):
+                problems.append(f"{path}:{no}: looks like a {kind} — memory is committed and read by "
+                                f"everyone with the repository; remove it and rotate the credential")
+                break
+    return problems
+
+
+def check_memory_secrets() -> None:
+    for path in tracked("memory/*"):
+        full = os.path.join(ROOT, path)
+        if not os.path.isfile(full):
+            continue
+        with open(full, encoding="utf-8", errors="replace") as fh:
+            for problem in secret_problems(path, fh.read()):
+                fail(problem)
+
 # --- the audit workflow's step scripts, for tests that run them ------------------
 def step_script(text: str, step_name: str) -> str:
     """The `run:` block of a named workflow step, dedented, or '' when absent."""
@@ -2514,6 +2562,7 @@ def main() -> int:
     check_hook_headers()
     check_currency_rule_home()
     check_external_content_rule_referenced()
+    check_memory_secrets()
     if findings:
         print(f"FAIL — {len(findings)} finding(s):")
         for f in findings:
