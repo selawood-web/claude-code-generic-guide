@@ -88,7 +88,7 @@ else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/hooks" "$TARGET/.claude/hooks"
   INSTALLED+=(".claude/hooks")
-  note_copied ".claude/hooks/ (6 hooks: 3 lifecycle, 1 context guard, 1 flush guard, 1 verifier guard)"
+  note_copied ".claude/hooks/ (7 hooks: 3 lifecycle, 1 context guard, 1 flush guard, 1 skill-usage log, 1 verifier guard)"
 fi
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 
@@ -157,7 +157,7 @@ done
 # test_validate.py and test_audit_facts.py, which assert against this
 # repository's own tree and fail in any other.
 for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py \
-         tools/test_context_guard.py tools/test_flush_guard.py; do
+         tools/test_context_guard.py tools/test_flush_guard.py tools/test_skill_usage.py; do
   copy_file "$f"
 done
 

@@ -19,7 +19,7 @@ The rules live in the charter; this skill is their on-demand companion — the
 detail, the rationale, and the executable checks. Do not restate the rules
 elsewhere (single-homed rules).
 
-## Why these four checks
+## Why these checks
 
 Auto-loaded context is re-sent with **every request of every session**, and
 providers bill a cached prefix at roughly a tenth of the normal input rate —
@@ -32,7 +32,7 @@ with sources: `knowledge-base/research/ai-efficiency-techniques-2026.md`
 
 ## The audit
 
-Run all four checks; collect findings; report at the end, worst first.
+Run all five checks; collect findings; report at the end, worst first.
 Zero findings → one line: "Efficiency audit clean — N checks passed." Nothing else.
 
 ### Check 1 — Cache stability of auto-loaded files
@@ -87,6 +87,26 @@ Read the *Project Conventions* section of the project's `AGENTS.md`.
   `# Models: small/fast tier for exploration and mechanical fan-out; escalate on failure.`
   The rule itself stays in the charter; the convention line only picks this
   project's tiers.
+
+### Check 5 — Every skill earns its place in the catalog
+
+Each skill's `description` and `when_to_use` load into every session, used or not.
+`.claude/hooks/skill-usage.sh` records each use, and `/flush` copies the tally into
+the committed session logs under `## Skills used`. Count across all of them:
+
+```bash
+cat memory/sessions/*.md memory/sessions/archive/*.md 2>/dev/null \
+  | awk '/^## /{on = ($0 == "## Skills used"); next} on && /×/ {split($0, a, " ×"); n[a[1]] += a[2]}
+         END {for (k in n) print n[k], k}' | sort -rn
+ls .claude/skills
+```
+
+- **Finding:** a skill with zero uses across at least five logged sessions, or the
+  whole catalog's description text above ~4 KB.
+- **Fix:** name the candidates — merge a never-used skill into the one it overlaps,
+  or drop it. Fewer than five logged sessions is too little evidence: report the
+  tally and say so instead. Removing a skill is the owner's call; this audit names
+  candidates, it never deletes.
 
 ## Report format
 
