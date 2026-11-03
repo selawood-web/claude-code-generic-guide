@@ -1,7 +1,7 @@
 ---
 name: flush
-description: Write a structured summary of the current session to the memory log so future sessions can recall it. Use when the user says "flush", "save this session", "write a session summary", before context compaction, or at the end of a productive session.
-when_to_use: flush, save session, session summary, before compact, end of session, preserve context
+description: "Write a structured session summary to the committed memory log."
+when_to_use: flush, save this session, session summary, before compact, end of session
 argument-hint: "[optional: topics to emphasize in the summary]"
 purpose: Structured session summary written to the memory log
 ---

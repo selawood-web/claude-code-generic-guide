@@ -1,8 +1,8 @@
 ---
 name: deploy-steward
 disable-model-invocation: true
-description: Provision a real deployment target — Railway by default — and enforce the execution obligation across the whole lifecycle, so every project runs deployed from its first milestone, not just at the end. Use when the user says "set up deployment", "deploy this", "railway", "make it run in the cloud", or when a project reaches a working milestone with no deploy target.
-when_to_use: set up deployment, railway, deploy target, run in the cloud, hosting, make it live, execution environment, deploy from the start
+description: "Provision a deploy target (Railway by default) and keep every project running deployed from its first milestone."
+when_to_use: set up deployment, deploy this, railway, run in the cloud, hosting, make it live, milestone with no deploy target
 argument-hint: "[optional: platform override, or environment to provision]"
 purpose: Provision Railway, enforce "done = executing deployed" at every milestone
 ---

@@ -1,7 +1,7 @@
 ---
 name: debug
-description: Systematically debug an issue, error, or unexpected behavior. Use when the user describes a bug, an error message, "this doesn't work", "something is wrong", or "why is this happening".
-when_to_use: debug, fix bug, error, exception, not working, broken, unexpected behavior
+description: "Systematic root-cause debugging of a bug, error or unexpected behavior."
+when_to_use: debug, fix bug, error, exception, this doesn't work, something is wrong, why is this happening
 argument-hint: "[error message or description of the problem]"
 purpose: Systematic root cause analysis
 ---

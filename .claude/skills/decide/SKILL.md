@@ -1,7 +1,7 @@
 ---
 name: decide
-description: Make a structured decision — tool selection, go/no-go, trade-off, or prioritization — with research, multi-perspective debate, and a durable record. Use when the user says "help me decide", "which should I use", "X vs Y", "should we", or asks to compare options.
-when_to_use: help me decide, which should I use, X vs Y, should we, compare options, trade-off, go or no-go, pick between
+description: "Structured decision — tool choice, go/no-go, trade-off or priority — with research, debate and a durable record."
+when_to_use: help me decide, which should I use, X vs Y, should we, compare options, pick between
 argument-hint: "[the decision to make]"
 purpose: "Structured decision: research, debate, durable record"
 ---

@@ -1,8 +1,8 @@
 ---
 name: pr
 disable-model-invocation: true
-description: Create a pull request for the current branch. Use when the user says "create PR", "open pull request", "submit for review", or "push PR".
-when_to_use: create PR, open pull request, submit PR, push PR
+description: "Create a pull request for the current branch with a structured description."
+when_to_use: create PR, open pull request, submit for review, push PR
 argument-hint: "[optional: PR title hint]"
 purpose: PR creation with structured description
 ---

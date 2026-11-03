@@ -1,7 +1,7 @@
 ---
 name: eli10
-description: "Re-explain the last reply, a list of items, or a set of steps in plain words — one ELI10 card per item, in the order to act, with one-step-per-turn Manuals. Use when the user says \"eli10\", \"explain like I'm 10\", \"simpler\", \"one by one\", \"I don't understand\", \"why 2\", or asks what to do next."
-when_to_use: eli10, explain like I'm 10, simpler, plain words, one by one, I don't understand, what does this mean, why 2, what to do next, step by step
+description: "Re-explain the last reply, items or steps in plain words — one ELI10 card each, one step per turn."
+when_to_use: eli10, explain like I'm 10, simpler, plain words, one by one, I don't understand, why 2, what to do next
 argument-hint: "[optional: the thing to explain, an item number, or \"steps\" for one-by-one instructions]"
 purpose: Plain-words explanation or instructions, one ELI10 card at a time
 ---

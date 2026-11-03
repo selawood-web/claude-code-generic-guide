@@ -1,8 +1,8 @@
 ---
 name: ship
 disable-model-invocation: true
-description: Run the whole finish line in one command — validate, commit, push, open the pull request, watch CI to green, and merge. Typing it is the owner's merge authorization. Use when the user says "ship", "ship it", "finish and merge", or wants the complete commit-to-merge cycle done automatically.
-when_to_use: ship, ship it, finish and merge, land it, commit push pr merge, run the whole cycle
+description: "Commit, push, open the PR, watch CI to green and merge in one command; typing it authorizes the merge."
+when_to_use: ship, ship it, finish and merge, land it
 argument-hint: "[optional: no-merge | commit message hint]"
 purpose: "The whole finish line in one command: commit, push, PR, green CI, merge"
 ---
