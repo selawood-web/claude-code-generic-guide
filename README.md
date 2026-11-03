@@ -56,7 +56,8 @@ Claude Code's auto memory is on by default: Claude keeps per-project notes at
 `~/.claude/projects/<project>/memory/` and loads the `MEMORY.md` index there at
 the start of every session. Curated instructions load from `CLAUDE.md` (which
 imports `AGENTS.md` here) and from `~/.claude/CLAUDE.md`. On top of that, this
-repo's `/flush` and `/dream` skills maintain the session-log layer. Nothing to
+repo's `/flush` and `/dream` skills maintain the session-log layer, committed under
+`memory/` in your repository so it survives throwaway cloud containers. Nothing to
 switch on.
 
 ### 4. Seed your global memory

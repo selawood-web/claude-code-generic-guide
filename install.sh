@@ -88,7 +88,7 @@ else
   mkdir -p "$TARGET/.claude"
   cp -r "$SRC/.claude/hooks" "$TARGET/.claude/hooks"
   INSTALLED+=(".claude/hooks")
-  note_copied ".claude/hooks/ (5 hooks: 3 lifecycle, 1 context guard, 1 verifier guard)"
+  note_copied ".claude/hooks/ (6 hooks: 3 lifecycle, 1 context guard, 1 flush guard, 1 verifier guard)"
 fi
 chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
 

@@ -9,6 +9,6 @@
 # it cannot ask the agent to run anything — a /flush before compaction has to be
 # the user's or the agent's own call, earlier. Verified against the installed
 # product by the 2026-09-16 audit (finding H-001).
-echo "Preserve in the summary, verbatim where short: the branch boundary and standing constraints; every decision made and its reason; the code gate's current stage and pass count; open threads and blockers; files touched; and the path of the last session log under ~/.claude/memory."
+echo "Preserve in the summary, verbatim where short: the branch boundary and standing constraints; every decision made and its reason; the code gate's current stage and pass count; open threads and blockers; files touched; and the path of the last session log under memory/sessions/."
 
 exit 0

@@ -138,7 +138,7 @@ On resume:
 For projects spanning many sessions:
 
 ### Project MEMORY.md
-Location: `~/.claude/memory/<project-slug>/MEMORY.md`
+Location: `memory/PROJECT-MEMORY.md` in the repository, written by `/dream`
 
 Maintain these sections:
 ```markdown
@@ -163,7 +163,7 @@ Maintain these sections:
 
 ### Session Log Structure
 Each `/flush` creates an entry in:
-`~/.claude/memory/<project>/sessions/YYYY-MM-DD.md`
+`memory/sessions/YYYY-MM-DD-HHMMSS.md` (UTC), committed on the session's branch
 
 These are searchable: `search memory for "authentication bug"`
 

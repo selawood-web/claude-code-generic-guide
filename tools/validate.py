@@ -647,6 +647,8 @@ INSTRUCTION_GLOBS = (
     "decisions/*.md",
     "features/*.md",
     "knowledge-base/*.md",
+    "memory/*.md",
+    "memory/sessions/*.md",
 )
 # Markdown, not everything: knowledge-base/ also holds research artifacts such as
 # a .pptx, whose compressed bytes are full of control characters and which no
