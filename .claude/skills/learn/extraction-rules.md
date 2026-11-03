@@ -45,7 +45,7 @@ Extract when ANY of these are true:
 | Target | What goes here |
 |--------|---------------|
 | `~/.claude/CLAUDE.md` | Universal principles applicable across all projects |
-| Auto memory (`remember: ...` in session) | Project-specific decisions, conventions, findings |
+| `memory/PROJECT-MEMORY.md`, under `## Learned` (`remember: ...`) | Project-specific decisions, conventions, findings — committed, so they survive a discarded container; `/dream` folds them into its sections |
 | Session logs (via `/flush`) | Full session context for future retrieval |
 
 ## Extraction Trigger Phrases
