@@ -57,7 +57,7 @@ Memory lives in four places; the first two load automatically every session.
 |----------|---------------|
 | `~/.claude/CLAUDE.md` | Global: your preferred patterns, universal engineering principles (seed from this repo's `MEMORY.md`) |
 | `~/.claude/projects/<project>/memory/` | Auto memory: notes Claude writes itself; the `MEMORY.md` index loads each session, topic files on demand |
-| `memory/` (in the repo) | Session logs in `sessions/`, written and committed by `/flush`; `/dream` consolidates them into `PROJECT-MEMORY.md`, which the session-start hook points at |
+| `memory/` (in the repo) | Session logs in `sessions/`, written and committed by `/flush`; `/learn` facts under `## Learned` in `PROJECT-MEMORY.md`, where `/dream` consolidates both and the session-start hook points |
 | `decisions/` (in the repo) | Durable decision records and product briefs written by `/decide` and `/product-brief` — recall before re-deciding |
 | `features/` (in the repo) | Feature definitions written by `/feature` — what is being built and when it is done, checked by `tools/feature_lint.py` |
 

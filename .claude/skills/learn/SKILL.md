@@ -50,6 +50,20 @@ Tags: technology names, domain areas (e.g., `#auth`, `#database`, `#typescript`,
 ```
 remember: [concise fact with context] — tags: #category #tech
 ```
+lands in the repository, not in Claude Code's auto memory: auto memory lives outside
+the repository and goes with a cloud container when it ends. Append the entry, in the
+format below, under `## Learned` in `memory/PROJECT-MEMORY.md` (create the file and the
+heading if absent), then commit that file alone on the session's own branch, as the
+flush skill's Step 4 does — never on the default branch:
+```bash
+ROOT="$(git rev-parse --show-toplevel)"; F="$ROOT/memory/PROJECT-MEMORY.md"
+mkdir -p "$ROOT/memory"; [ -f "$F" ] || printf '# Project memory\n\n## Learned\n' > "$F"
+grep -qx '## Learned' "$F" || printf '\n## Learned\n' >> "$F"
+# append the entry under the heading, then:
+git add -- "$F" && git commit -q -m "docs(memory): learn <topic>" -- "$F"
+```
+Committed means readable by everyone with the repository: no secret, credential or
+personal data (`tools/validate.py` fails a `memory/` file that holds a credential).
 
 **Global pattern (applies across projects):**
 ```

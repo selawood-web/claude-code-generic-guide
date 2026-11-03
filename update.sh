@@ -157,6 +157,26 @@ if [ "$USER_MODE" -eq 0 ]; then
       if [ "$QUIET" -eq 0 ]; then echo "  + $f (installed once; yours from now on)"; fi
     fi
   done
+  # One exception, and only for an unedited copy. A project wired before the
+  # guide's list said whose gate it describes kept that list, and its audit ran
+  # the guide's mutations against files the project does not have (F003 ledger).
+  # A list whose bytes match a guide version exactly — by git blob id, listed in
+  # tools/probes_guide_versions.txt, read here from the guide and never copied —
+  # was never the project's own, so it is replaced with the current list, which
+  # marks itself `# describes: guide`. A list the project changed matches nothing
+  # and is never touched.
+  versions="$SRC/tools/probes_guide_versions.txt"
+  if [ -f "$TARGET/tools/probes.txt" ] && [ -f "$versions" ] && [ ! -e "$TARGET/install.sh" ] \
+      && command -v git >/dev/null 2>&1 \
+      && ! grep -qE '^#[[:space:]]*describes:' "$TARGET/tools/probes.txt"; then
+    blob="$(lf "$TARGET/tools/probes.txt" | git hash-object --stdin 2>/dev/null)"
+    if [ -n "$blob" ] && grep -qxF "$blob" "$versions"; then
+      tmp="$TARGET/tools/probes.txt.ccgg-tmp.$$"
+      lf "$SRC/tools/probes.txt" > "$tmp" && mv -f "$tmp" "$TARGET/tools/probes.txt"
+      changed=$((changed+1))
+      if [ "$QUIET" -eq 0 ]; then echo "  ~ tools/probes.txt (an unedited copy of an older guide list; now marked as the guide's)"; fi
+    fi
+  fi
   chmod +x "$TARGET"/.claude/hooks/*.sh 2>/dev/null || true
   if [ "${#NEW_HOOKS[@]}" -gt 0 ]; then
     # The executable bit has to reach the index too: with core.filemode=false (every

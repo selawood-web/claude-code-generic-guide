@@ -73,7 +73,8 @@ def tool_files(script: str) -> set[str]:
 class InstallSetTests(unittest.TestCase):
     def test_update_syncs_only_what_install_copies(self):
         installed = tool_files("install.sh")
-        synced = tool_files("update.sh")
+        # Read from the guide clone to recognise an unedited probe list, never copied.
+        synced = tool_files("update.sh") - {"tools/probes_guide_versions.txt"}
         self.assertTrue(synced <= installed, f"update.sh syncs files install.sh never copies: {sorted(synced - installed)}")
         self.assertEqual(installed, synced,
                          "every tools file install.sh copies is also handled by update.sh "
@@ -588,6 +589,92 @@ class UpdateRegistersNewHooksTests(unittest.TestCase):
                 fh.write("SECRET=1\n")
             self._update(target, env)
             self.assertNotIn(".env.local", _git(target, env, "ls-files"))
+
+
+class UnmarkedGuideProbeListTests(unittest.TestCase):
+    """A project wired before the guide's probe list said whose gate it describes
+    kept a copy that ran the guide's mutations against its own tree (F003 ledger).
+    update.sh replaces that copy only while it is byte-for-byte a guide version."""
+
+    OLD = "# Mutation probes against the repository's gate\nplant | caught | touch BROKEN\n"
+
+    def _setup(self, tmp, listed=True):
+        guide = os.path.join(tmp, "guide")
+        shutil.copytree(guide_copy(), guide)
+        target = os.path.join(tmp, "project")
+        os.makedirs(os.path.join(target, "tools"))
+        env = dict(os.environ, HOME=os.path.join(tmp, "home"), GIT_CONFIG_NOSYSTEM="1")
+        os.makedirs(env["HOME"])
+        subprocess.run(["git", "init", "-q"], cwd=target, env=env, check=True)
+        with open(os.path.join(target, "tools", "probes.txt"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(self.OLD)
+        if listed:
+            blob = subprocess.run(["git", "hash-object", "--stdin"], input=self.OLD.encode(),
+                                  capture_output=True, check=True).stdout.decode().strip()
+            with open(os.path.join(guide, "tools", "probes_guide_versions.txt"), "a") as fh:
+                fh.write(blob + "\n")
+        return guide, target, env
+
+    def _update(self, guide, target, env):
+        proc = subprocess.run([BASH, os.path.join(guide, "update.sh"), target], env=env,
+                              capture_output=True, text=True)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        with open(os.path.join(target, "tools", "probes.txt"), "rb") as fh:
+            return proc.stdout + proc.stderr, fh.read()
+
+    def _current(self, guide):
+        with open(os.path.join(guide, "tools", "probes.txt"), "rb") as fh:
+            return fh.read().replace(b"\r\n", b"\n")
+
+    def test_an_unedited_old_copy_is_replaced_with_the_marked_list(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-probelist-") as tmp:
+            guide, target, env = self._setup(tmp)
+            out, body = self._update(guide, target, env)
+            self.assertEqual(body, self._current(guide))
+            self.assertIn(b"# describes: guide", body)
+            self.assertIn("now marked as the guide's", out)
+
+    def test_a_crlf_copy_of_an_old_version_still_matches(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-probelist-") as tmp:
+            guide, target, env = self._setup(tmp)
+            with open(os.path.join(target, "tools", "probes.txt"), "wb") as fh:
+                fh.write(self.OLD.replace("\n", "\r\n").encode())
+            _, body = self._update(guide, target, env)
+            self.assertIn(b"# describes: guide", body)
+
+    def test_an_edited_list_is_never_touched(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-probelist-") as tmp:
+            guide, target, env = self._setup(tmp, listed=False)
+            _, body = self._update(guide, target, env)
+            self.assertEqual(body, self.OLD.encode())
+
+    def test_a_list_that_already_says_whose_gate_it_is_stays(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-probelist-") as tmp:
+            guide, target, env = self._setup(tmp)
+            mine = "# describes: myapp\n" + self.OLD
+            with open(os.path.join(target, "tools", "probes.txt"), "w", newline="\n") as fh:
+                fh.write(mine)
+            _, body = self._update(guide, target, env)
+            self.assertEqual(body, mine.encode())
+
+    def test_the_guide_itself_is_never_rewritten(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-probelist-") as tmp:
+            guide, target, env = self._setup(tmp)
+            open(os.path.join(target, "install.sh"), "w").close()
+            _, body = self._update(guide, target, env)
+            self.assertEqual(body, self.OLD.encode())
+
+    def test_the_shipped_version_list_is_blob_ids_and_excludes_the_marked_list(self):
+        with open(os.path.join(ROOT, "tools", "probes_guide_versions.txt"), encoding="utf-8") as fh:
+            ids = [ln.strip() for ln in fh if ln.strip() and not ln.startswith("#")]
+        self.assertGreater(len(ids), 0)
+        self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", i) for i in ids), ids[:3])
+        self.assertEqual(len(ids), len(set(ids)))
+        with open(os.path.join(ROOT, "tools", "probes.txt"), "rb") as fh:
+            current = fh.read().replace(b"\r\n", b"\n")
+        blob = subprocess.run(["git", "hash-object", "--stdin"], input=current,
+                              capture_output=True, check=True).stdout.decode().strip()
+        self.assertNotIn(blob, ids, "the current list carries the line; listing it would be a no-op at best")
 
 
 if __name__ == "__main__":
