@@ -1,7 +1,7 @@
 ---
 name: standup
-description: Generate a concise standup report or session summary from recent work. Use when the user asks for a "standup", "daily summary", "what did we do", "session recap", or "progress report".
-when_to_use: standup, daily summary, session recap, what did we do, progress report, what happened
+description: "Concise standup or session recap from recent work."
+when_to_use: standup, daily summary, what did we do, session recap, progress report
 argument-hint: "[optional: time range or focus area]"
 purpose: Session summary / daily report
 ---

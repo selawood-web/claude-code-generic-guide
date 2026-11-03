@@ -1,8 +1,8 @@
 ---
 name: wire
 disable-model-invocation: true
-description: Roll CCGG into another repository in one command — clone it, run the guide's installer, add the live-sync env config, validate, and open the PR. Use when the user says "wire <repo>", "install ccgg into", "roll ccgg out to", or "set up ccgg in my other project".
-when_to_use: wire, install ccgg into, roll out ccgg, set up ccgg in, add ccgg to project, connect project to ccgg
+description: "Roll CCGG into another repository — install, live-sync config, validate, open the PR."
+when_to_use: wire, install ccgg into, roll ccgg out to, set up ccgg in my other project
 argument-hint: "[repo name or path to wire]"
 purpose: "Roll CCGG into another repo: install, live-sync config, validated PR"
 ---

@@ -1,7 +1,7 @@
 ---
 name: skillify
-description: Capture a workflow completed in this session as a new reusable skill in .claude/skills/. Use when the user says "skillify", "make this a skill", "capture this workflow", "save this as a skill", or after finishing a multi-step process the team will repeat.
-when_to_use: skillify, make this a skill, capture workflow, new skill, save procedure
+description: "Capture a workflow finished in this session as a new skill in .claude/skills/."
+when_to_use: skillify, make this a skill, capture this workflow, save this as a skill
 argument-hint: "[optional: name for the new skill]"
 purpose: Capture a completed workflow as a new skill
 ---

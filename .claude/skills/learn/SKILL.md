@@ -1,7 +1,7 @@
 ---
 name: learn
-description: Explicitly capture a reusable pattern, decision, or insight to memory so it persists across sessions. Use when the user says "learn!", "remember this", "save this pattern", "this is important", or after discovering something non-obvious.
-when_to_use: learn, remember, save pattern, keep this, important discovery, lesson learned
+description: "Capture a reusable pattern, decision or insight to project memory."
+when_to_use: learn, remember this, save this pattern, this is important, lesson learned
 argument-hint: "[what to learn/remember]"
 purpose: Explicit knowledge capture to memory
 ---

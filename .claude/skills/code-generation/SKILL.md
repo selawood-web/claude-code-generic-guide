@@ -1,7 +1,7 @@
 ---
 name: code-generation
-description: Generate production-ready code with explicit error handling, edge cases, and tests. Use when the user says "implement", "write code", "build this function/module", or "add this feature".
-when_to_use: implement, write code, generate code, build feature, add function
+description: "Production-ready code with explicit error handling, edge cases and tests."
+when_to_use: implement, write code, build this function, add this feature, generate code
 argument-hint: "[what to implement]"
 purpose: Production-ready implementation with critic pass
 ---

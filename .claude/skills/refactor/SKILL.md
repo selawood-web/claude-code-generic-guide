@@ -1,7 +1,7 @@
 ---
 name: refactor
-description: Refactor code to improve structure, readability, or performance without changing behavior. Use when the user says "refactor", "clean up", "improve code quality", "too complex", or "hard to read".
-when_to_use: refactor, clean up code, simplify, reduce complexity, improve quality
+description: "Refactor for structure, readability or performance without changing behavior."
+when_to_use: refactor, clean up code, too complex, hard to read, improve code quality
 argument-hint: "[file or module to refactor]"
 purpose: Safe refactoring with regression safety
 ---

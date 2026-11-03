@@ -1,7 +1,7 @@
 ---
 name: efficiency
-description: Audit a CCGG-equipped project against the charter's token-efficiency rules — cache-stable auto-loaded context, compaction retention, subagent isolation, model right-sizing — and report concrete fixes. Use when the user says "efficiency", "audit token usage", "why is this burning tokens", or "check the context budget".
-when_to_use: efficiency, token audit, context budget, cache stability, token usage, reduce AI cost
+description: "Audit a CCGG project's token use — cache-stable context, compaction, subagent isolation, model sizing, skill catalog — and report fixes."
+when_to_use: efficiency, audit token usage, why is this burning tokens, context budget, reduce AI cost
 argument-hint: "[optional: path to the project to audit; default is the current repo]"
 purpose: Audit the project against the charter's token-efficiency rules
 ---
@@ -102,7 +102,8 @@ ls .claude/skills
 ```
 
 - **Finding:** a skill with zero uses across at least five logged sessions, or the
-  whole catalog's description text above ~4 KB.
+  catalog's `description` plus `when_to_use` text averaging above ~200 bytes per skill —
+  the level a one-line purpose and a deduplicated trigger list reach.
 - **Fix:** name the candidates — merge a never-used skill into the one it overlaps,
   or drop it. Fewer than five logged sessions is too little evidence: report the
   tally and say so instead. Removing a skill is the owner's call; this audit names

@@ -1,7 +1,7 @@
 ---
 name: testing
-description: Generate comprehensive tests for code. Use when the user says "write tests", "add tests", "test coverage", "unit tests", "integration tests", or "test this function/module".
-when_to_use: write tests, add tests, test coverage, unit tests, integration tests, TDD
+description: "Generate unit, integration or E2E tests for code."
+when_to_use: write tests, add tests, test coverage, unit tests, test this function, TDD
 argument-hint: "[file, module, or function to test]"
 purpose: Test suite generation (unit/integration/E2E)
 ---

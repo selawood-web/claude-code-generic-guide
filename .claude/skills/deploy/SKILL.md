@@ -1,7 +1,7 @@
 ---
 name: deploy
 disable-model-invocation: true
-description: Execute a deployment workflow safely. Use when the user says "deploy", "release", "push to production", or "go live" — "ship" is the /ship skill, which merges.
+description: "Run a deployment safely with a pre-flight checklist; merging is /ship."
 when_to_use: deploy, release, push to production, go live, rollout
 argument-hint: "[environment: staging|production, or service name]"
 purpose: Deployment with pre-flight checklist
