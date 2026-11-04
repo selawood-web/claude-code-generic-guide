@@ -87,6 +87,61 @@ class FlushGuardTests(unittest.TestCase):
         self.assertEqual(self.run_hook(session="s-1").returncode, 2)
         self.assertEqual(self.run_hook(session="s-2").returncode, 2)
 
+    # --- asking again ---------------------------------------------------------
+
+    def state_file(self, session="s-1"):
+        uid = os.getuid() if hasattr(os, "getuid") else "user"
+        return os.path.join(self.env["TMPDIR"], f"ccgg-context-guard-{uid}", f"{session}.flush")
+
+    def test_it_asks_again_only_after_another_threshold_of_growth(self):
+        """The first version asked once a day: a session that flushed in the
+        morning worked until evening with nothing more saved."""
+        self.write(turn(200_000))
+        self.assertEqual(self.run_hook().returncode, 2)
+        self.write(turn(300_000))
+        self.assertEqual(self.run_hook().returncode, 0, "100k since the last ask")
+        self.write(turn(360_000))
+        second = self.run_hook()
+        self.assertEqual(second.returncode, 2, "160k since the last ask")
+        self.assertIn("~160k of them since it was last saved", second.stderr)
+
+    def test_a_log_written_after_the_ask_moves_the_point(self):
+        self.write(turn(200_000))
+        self.assertEqual(self.run_hook().returncode, 2)
+        self.log("2001-01-01-000000.md")
+        later = os.path.getmtime(self.state_file()) + 5
+        os.utime(os.path.join(self.sessions, "2001-01-01-000000.md"), (later, later))
+        self.write(turn(340_000))
+        self.assertEqual(self.run_hook().returncode, 0, "the flush happened at ~340k")
+        self.write(turn(450_000))
+        self.assertEqual(self.run_hook().returncode, 0, "110k since that flush")
+        self.write(turn(500_000))
+        self.assertEqual(self.run_hook().returncode, 2, "160k since that flush")
+
+    def test_a_log_older_than_the_point_does_not_move_it(self):
+        self.write(turn(200_000))
+        self.log("2001-01-01-000000.md")
+        os.utime(os.path.join(self.sessions, "2001-01-01-000000.md"), (1, 1))
+        self.assertEqual(self.run_hook().returncode, 2)
+        self.write(turn(360_000))
+        self.assertEqual(self.run_hook().returncode, 2)
+
+    def test_a_compaction_that_shrinks_the_context_resets_the_point(self):
+        self.write(turn(200_000))
+        self.assertEqual(self.run_hook().returncode, 2)
+        self.write(turn(50_000))
+        self.assertEqual(self.run_hook().returncode, 0)
+        self.write(turn(210_000))
+        self.assertEqual(self.run_hook().returncode, 2, "160k since the context was rebuilt")
+
+    def test_a_corrupt_state_file_counts_from_zero(self):
+        self.write(turn(200_000))
+        os.makedirs(os.path.dirname(self.state_file()), exist_ok=True)
+        with open(self.state_file(), "w") as fh:
+            fh.write("garbage\n")
+        os.utime(self.state_file(), None)
+        self.assertEqual(self.run_hook().returncode, 2)
+
     # --- every pass -----------------------------------------------------------
 
     def test_a_short_session_passes(self):

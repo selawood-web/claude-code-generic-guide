@@ -835,8 +835,9 @@ can be thrown away without losing it, and anyone with the repository reads it. K
 secrets out of it. Memory from before this layout, under `~/.claude/memory/<project>/`,
 is migrated by the next `/dream`.
 
-**The flush guard.** Once per session, when a reply ends with the context past ~150k
-tokens and nothing logged today, `.claude/hooks/flush-guard.sh` sends the reply back
+**The flush guard.** Whenever a reply ends with the session grown ~150k tokens since it
+was last saved to `memory/sessions/` (or since the guard last asked),
+`.claude/hooks/flush-guard.sh` sends the reply back
 to run `/flush` first. `CCGG_FLUSH_GUARD=off` disables it; `CCGG_FLUSH_MIN_TOKENS`
 moves the threshold.
 
