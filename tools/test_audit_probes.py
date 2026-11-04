@@ -21,6 +21,12 @@ BASH = audit_env.bash_path()
 import audit_probes
 
 
+# update.sh ships these tests to installed projects, where tools/probes.txt becomes
+# the project's own list. A check of the guide's list contents runs only in the guide;
+# install.sh is the marker audit_probes.py itself uses.
+IS_GUIDE = os.path.isfile(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "install.sh"))
+
+
 def _quiet_main(argv):
     with contextlib.redirect_stdout(io.StringIO()):
         return audit_probes.main(argv)
@@ -91,8 +97,9 @@ class ParseProbesTests(unittest.TestCase):
             probes = parse_probes(fh.read())
         self.assertTrue(probes)
         self.assertEqual({p.gate for p in probes} - set(audit_probes.GATES), set())
-        self.assertIn("guard", {p.gate for p in probes},
-                      "no probe measures the verifier guard; its allow-list would be unmeasured again")
+        if IS_GUIDE:   # a project's own list owes the guide's verifier guard nothing
+            self.assertIn("guard", {p.gate for p in probes},
+                          "no probe measures the verifier guard; its allow-list would be unmeasured again")
 
     def test_empty_text(self):
         self.assertEqual(parse_probes(""), [])
