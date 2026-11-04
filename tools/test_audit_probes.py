@@ -431,7 +431,12 @@ class DescribesTests(unittest.TestCase):
             audit_probes.list_describes(None)
 
     def test_the_shipped_list_describes_the_guide(self):
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "probes.txt"), encoding="utf-8") as fh:
+        # update.sh delivers this test to installed projects, whose probes.txt may be
+        # their own and is rightly unmarked. Only the guide's list has to say "guide".
+        tools = os.path.dirname(os.path.abspath(__file__))
+        if not os.path.isfile(os.path.join(tools, "..", "install.sh")):
+            self.skipTest("not the guide: this repository's probes.txt is its own")
+        with open(os.path.join(tools, "probes.txt"), encoding="utf-8") as fh:
             self.assertEqual(audit_probes.list_describes(fh.read()), "guide")
 
     def _run(self, text, with_install=False):
