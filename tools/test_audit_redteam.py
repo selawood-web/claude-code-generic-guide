@@ -31,6 +31,12 @@ from audit_redteam import (RedteamFileError, RedteamProbe, RedteamResult, format
                            make_scratch_copy, marker_for, parse_redteam_probes, run_probe, summarize)
 
 
+
+# update.sh ships these tests to installed projects, where tools/redteam_probes.txt
+# becomes the project's own list. A check of the guide's list contents runs only in
+# the guide; install.sh is the marker the audit tools use.
+IS_GUIDE = os.path.isfile(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "install.sh"))
+
 class ParseRedteamProbesTests(unittest.TestCase):
     def test_four_fields_parse(self):
         probes = parse_redteam_probes("ch | exec | echo plant | echo observe\n")
@@ -362,6 +368,7 @@ class PlantReachesItsOwnChannelTests(unittest.TestCase):
                               f"line {probe.line} writes {writes_repo} into the work tree but never "
                               f"stages it; the hook it observes enumerates tracked files only")
 
+    @unittest.skipUnless(IS_GUIDE, "not the guide: this repository's red-team list is its own")
     def test_at_least_one_exec_probe_does_reach(self):
         """A positive control for the harness itself: if no plant can ever land,
         every `contained` in the report means nothing."""
@@ -391,6 +398,7 @@ class ShippedProbesRunTests(unittest.TestCase):
         probe = parse_redteam_probes('open | exec | : | printf "%s" "$MARKER"\n')[0]
         self.assertEqual(run_probe(probe, self.repo, self.env).result, "reached")
 
+    @unittest.skipUnless(IS_GUIDE, "not the guide: this repository's red-team list is its own")
     def test_the_decision_record_plant_lands_and_only_its_date_comes_out(self):
         """The plant is tracked and proposed, so the hook sees it — and prints the
         date, never the slug the marker sits in. Both halves are asserted: a
@@ -405,6 +413,7 @@ class ShippedProbesRunTests(unittest.TestCase):
         self.assertIn("decisions/2026-01-01-*.md (1)", out)
         self.assertNotIn(marker, out)
 
+    @unittest.skipUnless(IS_GUIDE, "not the guide: this repository's red-team list is its own")
     def test_the_sentence_named_record_is_counted_not_named(self):
         probe = self.probes["session-start stdout via a decision record named as a sentence"]
         self.assertEqual(run_probe(probe, self.repo, self.env).result, "contained")

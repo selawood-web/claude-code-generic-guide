@@ -677,5 +677,41 @@ class UnmarkedGuideProbeListTests(unittest.TestCase):
         self.assertNotIn(blob, ids, "the current list carries the line; listing it would be a no-op at best")
 
 
+class ShippedSuiteWithOwnProbeListsTests(unittest.TestCase):
+    """The tests update.sh ships must pass in a project whose probe lists are its own.
+
+    Five shipped tests read tools/probes.txt or tools/redteam_probes.txt and asserted
+    the guide's contents — a guard probe, named red-team channels, a describes line —
+    so a project that wrote its own lists had a red CI step it could not fix without
+    editing a file the next sync overwrites (b6480cc found the first, in CabiCAD).
+    """
+
+    def test_the_shipped_suite_passes_beside_project_owned_lists(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-ownlists-") as tmp:
+            target = os.path.join(tmp, "project")
+            os.makedirs(target)
+            env = dict(os.environ, HOME=os.path.join(tmp, "home"), GIT_CONFIG_NOSYSTEM="1",
+                       GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@local",
+                       GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@local")
+            for key in ("CCGG_HOME", "CCGG_REPO", "CCGG_REF"):
+                env.pop(key, None)
+            os.makedirs(env["HOME"])
+            subprocess.run(["git", "init", "-q"], cwd=target, env=env, check=True)
+            install = subprocess.run([BASH, os.path.join(ROOT, "install.sh"), target], env=env,
+                                     capture_output=True, text=True)
+            self.assertEqual(install.returncode, 0, install.stdout + install.stderr)
+            self.assertFalse(os.path.exists(os.path.join(target, "install.sh")),
+                             "the project must not look like the guide, or nothing here is measured")
+            with open(os.path.join(target, "tools", "probes.txt"), "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("# this project's own gate\nplant | caught | touch BROKEN\n")
+            with open(os.path.join(target, "tools", "redteam_probes.txt"), "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("# this project's own channels\nchannel | exec | : | echo hello\n")
+            for cmd in (["git", "add", "-A"], ["git", "commit", "-q", "-m", "wired"]):
+                subprocess.run(cmd, cwd=target, env=env, check=True, capture_output=True)
+            run = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tools", "-p", "test_*.py"],
+                                 cwd=target, env=env, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stderr[-3000:])
+
+
 if __name__ == "__main__":
     unittest.main()
