@@ -214,6 +214,7 @@ SH_SCRIPTS = frozenset((
     ".claude/hooks/session-end.sh",
     ".claude/hooks/session-start.sh",
     ".claude/hooks/skill-usage.sh",
+    "cc-ui-ux/global-claude-setup/hooks/design-context-check.sh",
     "install.sh",
     "update.sh",
 ))
