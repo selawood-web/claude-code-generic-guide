@@ -4,7 +4,7 @@
 #
 #     ./install.sh /path/to/your-project
 #
-# Copies the behavior rules, their on-demand companions, the 29 skills, the
+# Copies the behavior rules, their on-demand companions, the 30 skills, the
 # lifecycle hooks, the validator, and the CI workflow. Never overwrites anything that already exists — existing
 # files are reported and left alone. Safe to run twice.
 #
@@ -76,7 +76,7 @@ for dir in "$SRC"/.claude/skills/*/; do
   fi
 done
 if [ "$skills_copied" -gt 0 ]; then
-  note_copied ".claude/skills/ ($skills_copied of 29 skills)"
+  note_copied ".claude/skills/ ($skills_copied of 30 skills)"
 fi
 if [ "$skills_kept" -gt 0 ]; then
   echo "  = .claude/skills/ ($skills_kept the project already has, left alone)"
@@ -143,6 +143,7 @@ fi
 # feature-definition linter it delegates to when a project has features/
 copy_file tools/validate.py
 copy_file tools/feature_lint.py
+copy_file tools/ui_contract_lint.py
 copy_file tools/catalog.py
 
 # The audit's deterministic stage, probe harness, renderer, vocabulary, and probe list
@@ -157,7 +158,7 @@ done
 # test_validate.py and test_audit_facts.py, which assert against this
 # repository's own tree and fail in any other.
 for f in tools/test_feature_lint.py tools/test_verifier_guard.py tools/test_session_start_hook.py          tools/test_audit_env.py tools/test_audit_probes.py tools/test_audit_redteam.py          tools/test_audit_report.py tools/test_audit_agents_json.py tools/test_audit_headless.py tools/test_audit_pr_comment.py \
-         tools/test_context_guard.py tools/test_flush_guard.py tools/test_skill_usage.py; do
+         tools/test_context_guard.py tools/test_flush_guard.py tools/test_skill_usage.py tools/test_ui_contract_lint.py; do
   copy_file "$f"
 done
 
@@ -260,7 +261,7 @@ echo "  3. Seed global memory ONCE per machine (skip if done before):"
 echo "       cat $SRC/MEMORY.md >> ~/.claude/CLAUDE.md"
 echo "  4. Verify: open a fresh session in the project, run /context —"
 echo "     CLAUDE.md must appear under Memory files. Then ask:"
-echo "     'what skills are available?' — expect twenty-nine."
+echo "     'what skills are available?' — expect thirty."
 echo "  5. Optional — live updates: in the project's .claude/settings.json env"
 echo "     block set all three of CCGG_HOME=$SRC, CCGG_REPO=<the guide's clone"
 echo "     URL> and CCGG_REF=<a 40-hex commit>, and list that URL in both"

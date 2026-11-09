@@ -646,6 +646,7 @@ INSTRUCTION_GLOBS = (
     ".claude/hooks/*",
     ".claude/references/*.md",
     ".claude/skills/*.md",
+    ".claude/skills/*.json",
     "decisions/*.md",
     "features/*.md",
     "knowledge-base/*.md",

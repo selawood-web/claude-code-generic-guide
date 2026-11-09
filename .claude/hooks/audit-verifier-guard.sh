@@ -175,12 +175,12 @@ PY_SCRIPT_DIRS = frozenset(("tools",))
 PY_SCRIPTS = frozenset((
     "audit_agents_json.py", "audit_env.py", "audit_facts.py", "audit_headless.py",
     "audit_pr_comment.py", "audit_probes.py", "audit_redteam.py", "audit_report.py",
-    "catalog.py", "feature_lint.py", "validate.py",
+    "catalog.py", "feature_lint.py", "ui_contract_lint.py", "validate.py",
     "test_audit_agents_json.py", "test_audit_env.py", "test_audit_facts.py",
     "test_audit_headless.py", "test_audit_pr_comment.py", "test_audit_probes.py",
     "test_audit_redteam.py", "test_audit_report.py", "test_catalog.py", "test_context_guard.py", "test_feature_lint.py",
     "test_flush_guard.py", "test_gbb.py",
-    "test_install.py", "test_session_start_hook.py", "test_skill_usage.py", "test_validate.py",
+    "test_install.py", "test_session_start_hook.py", "test_skill_usage.py", "test_ui_contract_lint.py", "test_validate.py",
     "test_verifier_guard.py",
 ))
 PY_TEST_MODULES = frozenset(n[:-3] for n in PY_SCRIPTS if n.startswith("test_"))

@@ -1,0 +1,133 @@
+{
+  "product": "CabiCAD (illustrative — replace every entry with the observed inventory)",
+  "policy": {
+    "off_context": "disabled",
+    "max_enabled_per_context": 12
+  },
+  "model": {
+    "layers": ["walls", "cabinets", "appliances", "fronts", "hardware", "annotations"],
+    "measurements": ["overall", "cabinet-widths", "heights", "part-sizes", "fixing-points"]
+  },
+  "boards": {
+    "design": {
+      "label": "Design",
+      "purpose": "Lay out the room and the cabinets with the client's intent.",
+      "profile": {
+        "output": "Layout plan and elevations for approval",
+        "layers": {"walls": "show", "cabinets": "show", "appliances": "show", "fronts": "show", "hardware": "hide", "annotations": "show"},
+        "measurements": {"overall": "show", "cabinet-widths": "show", "heights": "show", "part-sizes": "hide", "fixing-points": "hide"}
+      }
+    },
+    "manufacture": {
+      "label": "Manufacture",
+      "purpose": "Turn the approved design into parts the workshop can cut.",
+      "profile": {
+        "output": "Cut list, part drawings and machining files",
+        "layers": {"walls": "ghost", "cabinets": "show", "appliances": "hide", "fronts": "show", "hardware": "show", "annotations": "show"},
+        "measurements": {"overall": "hide", "cabinet-widths": "show", "heights": "show", "part-sizes": "show", "fixing-points": "hide"}
+      }
+    },
+    "presentation": {
+      "label": "Presentation",
+      "purpose": "Show the client what the kitchen will look like.",
+      "profile": {
+        "output": "Rendered views and a client PDF",
+        "layers": {"walls": "show", "cabinets": "show", "appliances": "show", "fronts": "show", "hardware": "show", "annotations": "hide"},
+        "measurements": {"overall": "show", "cabinet-widths": "hide", "heights": "hide", "part-sizes": "hide", "fixing-points": "hide"}
+      }
+    },
+    "installation": {
+      "label": "Installation",
+      "purpose": "Tell the installer where every unit goes and in what order.",
+      "profile": {
+        "output": "Installation plan with fixing points and sequence",
+        "layers": {"walls": "show", "cabinets": "show", "appliances": "ghost", "fronts": "hide", "hardware": "show", "annotations": "show"},
+        "measurements": {"overall": "show", "cabinet-widths": "show", "heights": "show", "part-sizes": "hide", "fixing-points": "show"}
+      }
+    }
+  },
+  "contexts": {
+    "design.idle": {"board": "design", "label": "Design board, nothing selected"},
+    "design.selection": {"board": "design", "label": "Design board, a cabinet selected"},
+    "manufacture.idle": {"board": "manufacture", "label": "Manufacture board"},
+    "presentation.idle": {"board": "presentation", "label": "Presentation board"},
+    "installation.idle": {"board": "installation", "label": "Installation board"}
+  },
+  "surfaces": {
+    "topbar.boards": {"label": "Board switcher", "contexts": ["*"]},
+    "toolbar.draw": {"label": "Draw toolbar", "contexts": ["*"]},
+    "toolbar.edit": {"label": "Edit toolbar", "contexts": ["design.*"]},
+    "panel.layers": {"label": "Layers panel", "contexts": ["*"]},
+    "panel.output": {"label": "Output panel", "contexts": ["*"]},
+    "menu.canvas": {"label": "Right-click menu on the canvas", "contexts": ["design.selection"]}
+  },
+  "commands": {
+    "board.switch": {
+      "label": "Switch board",
+      "does": "Changes the output lens over the same model; nothing in the model changes.",
+      "home": "topbar.boards",
+      "enabled": ["*"]
+    },
+    "draw.wall": {
+      "label": "Wall",
+      "shortcut": "W",
+      "does": "Draws a wall segment in the shared model.",
+      "home": "toolbar.draw",
+      "enabled": ["design.*"],
+      "disabled": {"manufacture.*": "Geometry is locked here — switch to Design to change walls"}
+    },
+    "place.cabinet": {
+      "label": "Place cabinet",
+      "shortcut": "C",
+      "does": "Adds a cabinet from the library to the shared model.",
+      "home": "toolbar.draw",
+      "enabled": ["design.*"]
+    },
+    "edit.move": {
+      "label": "Move",
+      "shortcut": "M",
+      "does": "Moves the selected items in the shared model.",
+      "home": "toolbar.edit",
+      "also": [{"surface": "menu.canvas", "why": "Acts on the item under the cursor without travelling to the toolbar"}],
+      "enabled": ["design.selection"],
+      "disabled": {"design.idle": "Select a cabinet first"}
+    },
+    "dimension.add": {
+      "label": "Dimension",
+      "shortcut": "D",
+      "does": "Measures between two points; the board's profile decides which measurements show and how.",
+      "home": "toolbar.draw",
+      "enabled": ["*"]
+    },
+    "layers.toggle": {
+      "label": "Show or hide layer",
+      "does": "Overrides the board profile's visibility for one layer in this view only.",
+      "home": "panel.layers",
+      "enabled": ["*"]
+    },
+    "output.export": {
+      "label": "Export",
+      "does": "Produces the current board's deliverable, as named by its profile.",
+      "home": "panel.output",
+      "enabled": ["*"]
+    },
+    "manufacture.cutlist": {
+      "label": "Cut list",
+      "does": "Lists every part with its finished size and material.",
+      "home": "panel.output",
+      "enabled": ["manufacture.*"]
+    },
+    "presentation.render": {
+      "label": "Render view",
+      "does": "Renders the current camera view with materials and lighting.",
+      "home": "panel.output",
+      "enabled": ["presentation.*"]
+    },
+    "installation.sequence": {
+      "label": "Installation order",
+      "does": "Numbers the units in the order they are fixed to the wall.",
+      "home": "panel.output",
+      "enabled": ["installation.*"]
+    }
+  }
+}

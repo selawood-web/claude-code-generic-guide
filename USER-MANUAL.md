@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 29 Skill workflows | Step-by-step procedures for every common dev task |
+| 30 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 29 skill workflows
+- All 30 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 29 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 30 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -732,6 +732,27 @@ handle git for me automatically
 /deploy-steward
 set up deployment on railway
 make this run in the cloud from day one
+```
+
+---
+
+### `/ui-contract` — One Map of What the User Can Do, Where, and Why
+
+**Use when:** The product is confusing rather than ugly: the same tool does different things on different boards, controls that do nothing here are still clickable, one action is reachable from three places and nobody can say why. These are architecture defects; a screenshot review cannot see them because each screen looks fine alone.
+
+**What it does:**
+1. `--observe`: walks the running product context by context — every board, every selection state — and writes every visible control, where it sits, and what it actually did into `design/ui-contract.observed.json`
+2. Lints that file with `tools/ui_contract_lint.py`: every finding is a located UX defect under one of four rules — same tool same meaning, one home per command, only what is relevant enabled (grey with a reason, or hidden), same model with boards as output lenses — and the counts are the baseline
+3. `--target`: fixes the contract on paper with the owner — split or merge commands, pick each command's home, choose disabled-with-reason or hidden for other boards' tools, set the per-context budget — until it lints clean under `--strict`
+4. `--wire`: makes the app read the contract as its command registry and adds one end-to-end test that compares the rendered controls with the contract in every context, so a new button edits the contract first or fails CI
+5. Hands each group of the observed-to-target diff to `/feature`, with the lint result and matrix row as acceptance criteria
+
+**Examples:**
+```
+/ui-contract --observe the CAD app at http://localhost:3000
+python3 tools/ui_contract_lint.py design/ui-contract.json --matrix
+/ui-contract --target
+/ui-contract --wire
 ```
 
 ---

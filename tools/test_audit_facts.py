@@ -82,7 +82,7 @@ class InstructionFileTests(unittest.TestCase):
                 self.assertEqual([p for p in paths if p not in self.scanned], [])
 
     def test_binary_research_artifacts_are_not_scanned(self):
-        self.assertEqual([p for p in self.scanned if not p.endswith((".md", ".sh"))], [])
+        self.assertEqual([p for p in self.scanned if not p.endswith((".md", ".sh", ".json"))], [])
 
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):

@@ -120,6 +120,7 @@ listed below — the three questions and the verdict live there, with the proced
 | `/skillify` | Capture a completed workflow as a new skill |
 | `/standup` | Session summary / daily report |
 | `/testing` | Test suite generation (unit/integration/E2E) |
+| `/ui-contract` | "Interaction contract: one home per command, state per context, boards as output lenses" |
 | `/wire` | "Roll CCGG into another repo: install, live-sync config, validated PR" |
 <!-- ccgg:skills:end -->
 
