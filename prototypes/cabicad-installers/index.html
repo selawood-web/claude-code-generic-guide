@@ -1,0 +1,1023 @@
+<title>CABICAD מתקינים</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&family=Rubik:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a phone (the installer app) beside a desk panel (manager board + CABICAD sync log), on a faint drafting grid. */
+:root{
+  --bg:#edf0f4; --grid:rgba(36,71,214,.06); --surface:#ffffff; --surface-2:#f5f7fa;
+  --ink:#141b26; --muted:#5b6676; --line:#d8dee6;
+  --accent:#2447d6; --accent-ink:#ffffff; --accent-soft:#e7ecfd;
+  --ok:#1d8656; --ok-soft:#e3f4ea; --warn:#a96c12; --warn-soft:#fbf0dc; --bad:#c2362f; --bad-soft:#fbe5e3;
+  --f-display:"Rubik","Heebo",system-ui,sans-serif; --f-body:"Heebo",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1219; --grid:rgba(125,151,255,.05); --surface:#151c27; --surface-2:#1b2431;
+  --ink:#e7ecf3; --muted:#97a3b5; --line:#2a3443;
+  --accent:#7d97ff; --accent-ink:#0d1219; --accent-soft:#1e2748;
+  --ok:#4cc38a; --ok-soft:#143326; --warn:#e2aa4c; --warn-soft:#352914; --bad:#f07067; --bad-soft:#3a1c1b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1219; --grid:rgba(125,151,255,.05); --surface:#151c27; --surface-2:#1b2431;
+  --ink:#e7ecf3; --muted:#97a3b5; --line:#2a3443;
+  --accent:#7d97ff; --accent-ink:#0d1219; --accent-soft:#1e2748;
+  --ok:#4cc38a; --ok-soft:#143326; --warn:#e2aa4c; --warn-soft:#352914; --bad:#f07067; --bad-soft:#3a1c1b; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{padding-block:24px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{max-width:1180px;margin:0 auto 20px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.top h1{font-family:var(--f-display);font-size:26px;margin:0;text-wrap:balance}
+.top h1 b{color:var(--accent)}
+.top p{margin:0;color:var(--muted);font-size:14px}
+.stage{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:minmax(0,410px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:900px){.stage{grid-template-columns:minmax(0,1fr)}}
+.mono{font-family:var(--f-mono);font-size:.86em;letter-spacing:0}
+.muted{color:var(--muted)}
+.lbl{font-size:12px;letter-spacing:.04em;color:var(--muted);font-weight:500}
+
+/* phone */
+.phone{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:28px;overflow:hidden;
+  box-shadow:0 1px 0 var(--line),0 18px 40px -24px rgba(20,27,38,.35);height:780px;display:flex;flex-direction:column}
+@media (max-width:900px){.phone{height:auto;min-height:640px;border-radius:20px}}
+.bar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);background:var(--surface)}
+.bar h2{font-family:var(--f-display);font-size:17px;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iconbtn{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;width:36px;height:36px;display:grid;place-items:center;font-size:18px;line-height:1}
+.sync{font-size:12px;display:flex;align-items:center;gap:6px;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.sync.busy .dot{background:var(--warn);animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.sync.busy .dot{animation:none}}
+.screen{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+@media (max-width:900px){.screen{overflow:visible}}
+.screen>*{flex-shrink:0}
+
+.card{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:8px;text-align:start;width:100%}
+button.card:hover{border-color:var(--accent)}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.row.between{justify-content:space-between}
+.pill{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:500;padding:2px 9px;border-radius:999px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.pill.scheduled{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.in_progress{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.blocked{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.pill.done{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.prog{height:6px;border-radius:6px;background:var(--surface-2);border:1px solid var(--line);overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);border-radius:6px}
+.prog.done i{background:var(--ok)}
+.title{font-family:var(--f-display);font-weight:700;font-size:16px}
+.btn{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 14px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.danger{background:var(--bad-soft);color:var(--bad);border-color:transparent}
+.btn.block{width:100%}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 -16px;padding:0 16px;overflow-x:auto}
+.tabs button{border:0;background:none;padding:10px 8px;font-weight:500;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--accent);border-color:var(--accent)}
+.count{font-size:11px;background:var(--surface-2);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-inline-start:4px}
+.check{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);text-align:start;width:100%}
+.check .box{flex:none;width:22px;height:22px;border-radius:6px;border:2px solid var(--line);display:grid;place-items:center;font-size:14px;color:var(--accent-ink)}
+.check[aria-pressed="true"] .box{background:var(--ok);border-color:var(--ok)}
+.check[aria-pressed="true"] .t{color:var(--muted);text-decoration:line-through}
+.check[disabled]{opacity:.55;cursor:not-allowed}
+.dims{font-family:var(--f-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+.photos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.photos figure{margin:0;position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--line);max-width:100%}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.photos figcaption{position:absolute;inset:auto 0 0 0;font-size:11px;padding:2px 6px;background:rgba(0,0,0,.55);color:#fff}
+.note{font-size:13px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);color:var(--ink)}
+.note.bad{background:var(--bad-soft)}
+.note.ok{background:var(--ok-soft)}
+.field{display:flex;flex-direction:column;gap:4px}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:10px 12px;width:100%}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.seg button{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 2px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.seg button.sev-3[aria-pressed="true"],.seg button.sev-4[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.stars{display:flex;gap:6px;direction:ltr;justify-content:flex-end}
+.stars button{border:0;background:none;font-size:28px;line-height:1;color:var(--line);padding:0}
+.stars button.on{color:var(--warn)}
+canvas.sig{width:100%;height:160px;border:1px dashed var(--muted);border-radius:10px;background:var(--surface-2);touch-action:none;display:block}
+.sheet-bg{position:absolute;inset:0;background:rgba(10,14,20,.45);display:flex;align-items:flex-end;z-index:5}
+@media (max-width:900px){.sheet-bg{position:fixed}}
+.sheet{background:var(--surface);width:100%;max-height:92%;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
+.sheet h3{font-family:var(--f-display);margin:0;font-size:18px}
+.rj{border-inline-start:4px solid var(--line)}
+.rj.P1{border-inline-start-color:var(--bad)}.rj.P2{border-inline-start-color:var(--warn)}.rj.P3{border-inline-start-color:var(--accent)}
+.pill.P1{background:var(--bad);color:#fff;border-color:transparent}.pill.P2{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.P3{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.r-open{background:var(--bad-soft);color:var(--bad);border-color:transparent}.pill.r-in_progress{background:var(--warn-soft);color:var(--warn);border-color:transparent}.pill.r-done{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.code{font-family:var(--f-mono);font-size:11px;background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.sla{font-size:12px;font-variant-numeric:tabular-nums}.sla.over{color:var(--bad);font-weight:700}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.seg.c2{grid-template-columns:repeat(2,1fr)}.seg.c3{grid-template-columns:repeat(3,1fr)}
+.seg button[data-g="priority"][data-k="P1"][aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.auto{font-size:11px;color:var(--ok);background:var(--ok-soft);border-radius:4px;padding:0 6px;margin-inline-start:6px}
+.chk{display:flex;gap:8px;align-items:center;font-weight:500}
+.chk input{width:18px;height:18px;accent-color:var(--bad)}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap}.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;border-inline-start:2px solid var(--line);padding-inline-start:12px}
+.hist li{font-size:13px}.hist time{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.filters{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.filters select{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:6px 8px;font-size:13px}
+.alertbar{background:var(--bad-soft);color:var(--bad);border-radius:10px;padding:8px 12px;font-weight:500;font-size:14px}
+.rlist{display:flex;flex-direction:column;gap:8px}
+.stepper{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--line);background:var(--surface)}
+.stepper button{border:0;background:none;padding:10px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--muted);border-bottom:2px solid transparent}
+.stepper b{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--line);font-size:12px}
+.stepper button[aria-current="step"]{color:var(--accent);border-color:var(--accent);font-weight:500}
+.stepper button[aria-current="step"] b{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.stepper button.past b{background:var(--ok);color:#fff;border-color:var(--ok)}
+.ch{margin:0;font-family:var(--f-display);font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ch small{font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted)}
+.tags{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tags li{display:grid;grid-template-columns:28px auto minmax(0,1fr);gap:8px;align-items:center;font-size:13px;padding:8px;border-radius:8px;background:var(--surface-2)}
+.tags .ic{font-size:18px;text-align:center}.tags .k{color:var(--muted);white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:7px 12px;font-size:13px}
+.chips button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.subnav{display:flex;gap:6px;overflow-x:auto;margin:0 -16px;padding:0 16px 2px}
+.subnav button{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.subnav button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.next{margin-top:4px}
+.choice{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.choice button{border:1px solid var(--line);background:var(--surface);border-radius:var(--r);padding:14px 12px;text-align:start;display:flex;flex-direction:column;gap:4px}
+.choice button b{font-family:var(--f-display);font-size:15px}.choice button span{font-size:12px;color:var(--muted)}
+.choice button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-soft)}
+.slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.slot{aspect-ratio:4/3;border:1.5px dashed var(--line);border-radius:10px;display:grid;place-items:center;text-align:center;font-size:13px;color:var(--muted);background:var(--surface-2);overflow:hidden;position:relative;cursor:pointer;max-width:100%}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slot.has{border-style:solid;border-color:var(--ok)}
+.slot .cap{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:2px 6px}
+.fsec{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:12px}
+.fsec>h4{margin:0;font-family:var(--f-display);font-size:15px}
+.stepq{display:flex;align-items:center;gap:8px}.stepq button{width:36px;height:36px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);font-size:18px}
+.stepq input{width:56px;text-align:center}
+.nums{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.nums input{direction:ltr;text-align:center}
+.plist{max-height:208px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);display:flex;flex-direction:column}
+.plist button{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:baseline;text-align:start;padding:9px 10px;border:0;border-bottom:1px solid var(--line);background:none}
+.plist button:last-child{border-bottom:0}
+.plist button .nm{font-weight:500;font-size:14px}
+.plist button .muted{grid-column:2/-1;font-size:11px}
+.plist button[aria-selected="true"]{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.plist button:hover{background:var(--accent-soft)}
+canvas.sk{height:200px;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:20px 20px}
+.thumbs button{padding:0;border:0;background:none;border-radius:6px}
+.lb{position:fixed;inset:0;z-index:50;background:rgba(8,11,16,.85);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.lb[hidden]{display:none}
+.lb img{max-width:100%;max-height:90vh;border-radius:10px}
+details.acc{border-top:1px solid var(--line);padding-top:8px}
+details.acc summary{cursor:pointer;font-weight:500;font-size:14px;display:flex;justify-content:space-between;gap:8px;align-items:center;list-style:none}
+details.acc summary::-webkit-details-marker{display:none}
+details.acc summary::after{content:"▾";color:var(--muted)}
+details.acc[open] summary::after{content:"▴"}
+.accgrid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;font-size:13px;margin-top:8px}
+.accgrid dt{color:var(--muted)}.accgrid dd{margin:0}
+.yes{color:var(--warn);font-weight:700}.no{color:var(--ok);font-weight:500}
+
+/* desk panel */
+.desk{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;min-width:0}
+.desk .tabs{margin:0;padding:0 16px}
+.desk-body{padding:16px;display:flex;flex-direction:column;gap:16px}
+.kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface-2)}
+.kpi b{display:block;font-family:var(--f-display);font-size:24px;font-variant-numeric:tabular-nums}
+.kpi.alert b{color:var(--bad)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:start;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-size:12px;color:var(--muted);font-weight:500;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td .prog{width:90px;display:inline-block;vertical-align:middle}
+.log{display:flex;flex-direction:column;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.log li{list-style:none;display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:4px 10px;padding:9px 12px;border-bottom:1px solid var(--line);align-items:baseline}
+.log li:last-child{border-bottom:0}
+.log ul{margin:0;padding:0}
+.m{font-family:var(--f-mono);font-size:11px;font-weight:500;padding:1px 6px;border-radius:4px;background:var(--accent-soft);color:var(--accent);direction:ltr}
+.m.POST{background:var(--ok-soft);color:var(--ok)}.m.PATCH{background:var(--warn-soft);color:var(--warn)}.m.EVT{background:var(--bad-soft);color:var(--bad)}
+.path{font-family:var(--f-mono);font-size:12px;direction:ltr;text-align:left;overflow-wrap:anywhere}
+.log .n{grid-column:1/-1;font-size:13px;color:var(--muted)}
+.log time{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.foot{max-width:1180px;margin:20px auto 0;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between;color:var(--muted);font-size:13px}
+.linkbtn{border:0;background:none;color:var(--accent);text-decoration:underline;padding:0}
+.sec{display:flex;flex-direction:column;gap:8px}
+.sec h4{margin:4px 0 0;font-family:var(--f-display);font-size:14px;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.sec h4 span{font-family:var(--f-body);font-weight:400;font-size:12px;color:var(--muted)}
+.docs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.doc{border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:0;overflow:hidden;text-align:start;display:flex;flex-direction:column}
+.doc:hover{border-color:var(--accent)}
+.doc .th{aspect-ratio:4/3;background:var(--surface-2);border-bottom:1px solid var(--line);display:grid;place-items:center;overflow:hidden;max-width:100%}
+.doc .th svg{width:100%;height:100%}
+.doc .meta{padding:8px 10px;display:flex;flex-direction:column;gap:2px;font-size:12px}
+.doc .meta b{font-size:13px;font-weight:500}
+.new{font-size:10px;font-weight:700;color:var(--accent-ink);background:var(--accent);border-radius:4px;padding:0 5px;margin-inline-start:4px}
+.kv{display:grid;grid-template-columns:auto minmax(0,1fr);gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;font-size:13px}
+.kv dt,.kv dd{margin:0;padding:8px 10px;border-bottom:1px solid var(--line)}
+.kv dt{color:var(--muted);background:var(--surface-2);white-space:nowrap}
+.kv dt:last-of-type,.kv dd:last-of-type{border-bottom:0}
+.viewer{overflow:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);max-height:52vh;direction:ltr}
+.viewer svg{display:block;width:100%;height:auto}
+.viewer.zoom svg{width:240%}
+.drw rect,.drw line,.drw path,.drw polyline{fill:none;stroke:var(--ink);stroke-width:1.3;vector-effect:non-scaling-stroke}
+.drw .dim{stroke:var(--accent);stroke-width:1}
+.drw .thin{stroke:var(--muted);stroke-dasharray:4 3}
+.drw .ct{fill:var(--line)}
+.drw text{fill:var(--ink);stroke:none;font-family:var(--f-mono)}
+.drw text.d{fill:var(--accent)}
+.drw text.m{fill:var(--muted)}
+.drw circle{fill:var(--bad);stroke:none}
+.drw circle.w{fill:var(--accent)}
+.drw text.pt{fill:#fff;font-weight:500}
+ol.pts{margin:0;padding-inline-start:20px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.login{display:flex;flex-direction:column;gap:14px;padding-top:24px}
+.logo{font-family:var(--f-display);font-size:28px;font-weight:700;letter-spacing:.02em}
+.logo span{color:var(--accent)}
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+  <header class="top">
+    <h1><b>CABICAD</b> · אפליקציית מתקינים</h1>
+    <p>דמו: אפליקציית שטח שמושכת התקנות מ-CABICAD ומחזירה אליו סטטוס, צילומים, תקלות וחתימות. כל הנתונים בדויים.</p>
+  </header>
+  <div class="stage">
+    <section class="phone" id="phone" aria-label="אפליקציית המתקין"></section>
+    <section class="desk" id="desk" aria-label="לוח מנהל ויומן סנכרון"></section>
+  </div>
+  <div class="foot">
+    <span>מחוברת ל-CABICAD דרך שכבת API מדומה. כל פעולה במסך המתקין מופיעה ביומן הסנכרון.</span>
+    <button class="linkbtn" data-a="reset">איפוס הדמו</button>
+  </div>
+</div>
+
+<div id="lb" class="lb" hidden data-a="lbclose" role="dialog" aria-label="תמונה מוגדלת"><img alt="תמונה מוגדלת"></div>
+<script>
+(function(){
+document.documentElement.lang='he';document.documentElement.dir='rtl';
+const KEY='cabicad-installers-demo-v4';
+const STEPS=['פריקה ובדיקת ארונות מול רשימת CABICAD','הרכבת ארונות תחתונים','פילוס, חיבור וקיבוע לקיר','התקנת ארונות עליונים','חזיתות וכיוון צירים','מגירות, ידיות ואביזרים','ניקיון ומסירה ללקוח'];
+/* reject model: same taxonomy, priorities and statuses as the reject tool */
+const REQ_TYPES=['ריגקט','החלפה','תוספת'];
+const FAULT_TYPES=['תקלת ייצור','תקלת התקנה','ספק חיצוני','אחר'];
+const TAX={
+ A1:['שריטות',{'A1.1':'שריטה שטחית (לכה)','A1.2':'שריטה עמוקה (חדירה לציפוי)','A1.3':'שריטה על קצה','A1.4':'שריטה על גריבואו/ידית','A1.5':'שריטות מרובות (בעיית אריזה)','A1.6':'שריטה ב-ABS/קצה'}],
+ A2:['שברים ופגמים מבניים',{'A2.1':'פגיעה בזווית/קורנר','A2.2':'שבר בלוח','A2.3':'התנפחות/בליטה','A2.4':'כיפוף/עיוות (Warping)','A2.5':'פגם בחיתוך','A2.6':'בועת לכה/גימור'}],
+ A3:['כתמים וצבע',{'A3.1':'כתם ייצור (שמן/דבק)','A3.2':'הבדל גוון (Off-Color)','A3.3':'פס/טפטוף צבע','A3.4':'כיסוי לא אחיד','A3.5':'כתם הובלה (עובש/מים)'}],
+ B1:['שגיאות מידה',{'B1.1':'גובה שגוי','B1.2':'רוחב שגוי','B1.3':'עומק שגוי','B1.4':'לא מרובע','B1.5':'צד שגוי (ימין/שמאל הפוך)','B1.6':'כמה ממדים שגויים'}],
+ B2:['שגיאות קידוח',{'B2.1':'קידוח ציר לא במיקום','B2.2':'קידוח חסר','B2.3':'קידוח כפול/מיותר','B2.4':'קידוח פרץ (Blow-Out)','B2.5':'גראוב/חריץ שגוי','B2.6':'קידוח ידית בגובה שגוי'}],
+ C1:['חלקי ארגז חסרים',{'C1.1':'לוח צד חסר','C1.2':'תחתית חסרה','C1.3':'גב חסר','C1.4':'מדף חסר','C1.5':'מחיצה חסרה'}],
+ C2:['דלתות/חזיתות חסרות',{'C2.1':'דלת חסרה לחלוטין','C2.2':'דלת בגודל שגוי','C2.3':'חזית מגירה חסרה'}],
+ C3:['אביזרים חסרים',{'C3.1':'ציר חסר','C3.2':'מנגנון משיכה חסר (Blum/Grass)','C3.3':'ברגים/הברגה חסרים','C3.4':'ידית חסרה','C3.5':'ספרינקלר/אביזר חסר','C3.6':'פס LED/תאורה חסר'}],
+ D1:['בעיות יישור והתקנה',{'D1.1':'ארגז לא מאוזן','D1.2':'ארגז לא מרובע לקיר','D1.3':'GAP לא שווה','D1.4':'דלת לא מיושרת','D1.5':'מגירה לא זזה'}],
+ D2:['בעיות ציר/מנגנון',{'D2.1':'ציר שבור','D2.2':'ציר לא מחזיק','D2.3':'ציר לא נסגר מלא','D2.4':'זווית ציר שגויה'}],
+ D3:['בעיות תשתית',{'D3.1':'גבס מפריע','D3.2':'צנרת/חשמל במיקום שגוי','D3.3':'רצפה לא ישרה','D3.4':'קיר עקום'}],
+ E:['ספק חיצוני',{'E1':'ציר Blum/Grass שבור','E2':'מסילת מגירה פגומה','E3':'מנגנון נעילה פגום','E4':'ברג/חומרה פגומה','E5':'ספרינקלר/אביזר פגום','E6':'זכוכית שבורה'}],
+ F:['אריזה ותיעוד',{'F1':'אריזה פגומה','F2':'תווית חסרה/לא קריאה','F3':'חלק ללא תיעוד','F4':'אריזה לא מוגנת'}]
+};
+const subLabel=c=>{if(!c)return '';const k=Object.keys(TAX).find(k=>c.startsWith(k));return k?TAX[k][1][c]||'':''};
+const PRI={P1:{label:'קריטי',full:'עוצר עבודה',sla:24},P2:{label:'גבוה',full:'פוגע בפונקציה',sla:48},P3:{label:'בינוני',full:'פגם מראה',sla:72},P4:{label:'נמוך',full:'פתרון בשטח',sla:168}};
+const RSTAT={open:'פתוח',in_progress:'בטיפול',done:'הושלם'};
+const SIDES=['ימין','שמאל','הזזה ימין','הזזה שמאל','מרים','דו-כנפי','לא רלוונטי'];
+const ASSIGNEES=['מחלקה טכנית','ייצור','רכש / ספק','מתקין בשטח'];
+function slaInfo(r){
+  if(r.status==='done')return {t:'נסגר '+hhmm(r.resolvedAt||r.at),over:false};
+  const h=Math.round((new Date(r.at).getTime()+PRI[r.priority].sla*36e5-Date.now())/36e5);
+  return h<0?{t:`חריגת SLA ב-${-h} ש׳`,over:true}:{t:`SLA: נותרו ${h} ש׳`,over:false};
+}
+const STATUS={scheduled:'מתוכנן',in_progress:'בביצוע',blocked:'עבודה נעצרה',done:'הושלם'};
+const KIND={before:'לפני',after:'אחרי',issue:'תקלה'};
+const ME='יוסי לוי';
+const pad=n=>String(n).padStart(2,'0');
+const hhmm=d=>{d=new Date(d);return pad(d.getHours())+':'+pad(d.getMinutes())};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ago=(m)=>{const d=new Date();d.setMinutes(d.getMinutes()-m);return d.toISOString()};
+const cab=(code,name,w,h,d,front)=>({code,name,w,h,d,front,done:false});
+
+/* ---------- project file from CABICAD (read-only, static demo data) ---------- */
+const PROJ={
+ 'CC-2611-0412':{updated:'16.11 17:40',
+  contact:['רונית כהן','050-771-2345'],contact2:['עמית כהן','052-301-7788'],pm:['אורית, משרד','03-555-0101'],payment:['שולם במלואו','ok'],
+  notes:[['pet','בעל חיים','כלב בבית'],['call','תיאום הגעה','טלפון 20 דקות לפני'],['trade','בעל מקצוע נוסף','חשמלאי ב-11:00 · תאורה תחת עליונים'],['protect','הגנות','פרקט חדש · הגנת רצפה מלאה']],
+  accessories:[['כיור אינטגרלי בקוורץ',1,'חברה'],['ברז נשלף',1,'לקוח'],['כיריים אינדוקציה (התאמה למשטח)',1,'לקוח'],['פס LED 24V + ספק',3,'חברה'],['ידיות פרופיל 160',11,'חברה'],['רגליות סוקל + קליפסים',24,'חברה'],['פח אשפה נשלף',1,'חברה'],['סיליקון שקוף',2,'חברה']],
+  docs:[
+   {id:'D-118',cat:'drw',kind:'elev',title:'חזית קיר A',from:'מחלקה טכנית · אבי ר.',ver:'גרסה 4',date:'12.11',isNew:true,note:'עודכן אחרי המדידה: פילר 12 מ״מ בצד ימין.'},
+   {id:'D-119',cat:'drw',kind:'plan',title:'תכנית מבט על',from:'מחלקה טכנית · אבי ר.',ver:'גרסה 4',date:'12.11'},
+   {id:'R-031',cat:'ren',kind:'render',title:'הדמיה מאושרת',from:'מעצבת · שירה ל.',ver:'V3',date:'28.10',note:'אושרה ע״י הלקוחה ב-28.10. גוון אלון לפי דוגמה מס׳ 7.'},
+   {id:'S-207',cat:'srv',kind:'survey',title:'מדידת שטח',from:'מודד · רמי ב.',ver:'מדידה סופית',date:'03.11'}],
+  survey:{walls:[['A',3412],['B',2650]],ceiling:2610,window:[1200,900],
+   points:[['A',450,500,'מים + ניקוז כיור','w'],['A',1050,300,'ניקוז מדיח','w'],['A',1300,1150,'שקע כפול מעל משטח','e'],['A',2900,600,'שקע תנור 16A','e'],['A',3200,2200,'נקודת אוורור קולט אדים','e']],
+   warn:['קיר A נמדד 3,412 מ״מ מול 3,400 בתכנון: פילר 12 מ״מ בצד ימין.','קיר B לא ישר: סטייה של 6 מ״מ בגובה 1,500. לפלס עליונים עם שימים.']},
+  spec:[['גוף','סנדוויץ׳ 18 מ״מ לבן, גב 8 מ״מ'],['חזיתות תחתונים','פורניר אלון טבעי, לכה מט'],['חזיתות עליונים','לכה לבן מט'],['משטח','קוורץ קלקטה 20 מ״מ, הגבהה 40 מ״מ'],['צירים','Blum Clip top Blumotion 110°'],['מגירות','Blum Legrabox, טריקה שקטה'],['ידיות','פרופיל אלומיניום שחור 160 מ״מ'],['סוקל','100 מ״מ, אלומיניום'],['גובה משטח מוגמר','900 מ״מ'],['תחתית עליונים','1,450 מ״מ מהרצפה'],['תאורה','פס LED 24V תחת עליונים, ספק מאחורי W-02']],
+  colors:{base:'#b98a58',wall:'#f2efe8',tall:'#b98a58',top:'#ece9e2',bg:'#e7e1d6'}},
+ 'CC-2611-0398':{updated:'15.11 11:05',
+  contact:['דנה מזרחי','052-440-9018'],contact2:['אבי מזרחי','054-610-2233'],pm:['אורית, משרד','03-555-0101'],payment:['יתרה 10% · המשרד גובה','warn'],
+  notes:[['tech','הנחיית התקנה','אי בשני חלקים · מחברי פלטה'],['time','זמינות לקוח','בבית עד 15:00 · מסירה לפני']],
+  accessories:[['כיור תחתון 60',1,'חברה'],['ברז',1,'לקוח'],['מחברי פלטה לאי',4,'חברה'],['ערכת חריץ לידיות שקועות',6,'חברה'],['תאורת LED בוויטרינה',1,'חברה'],['רגליות + סוקל שקוע',20,'חברה']],
+  docs:[
+   {id:'D-102',cat:'drw',kind:'elev',title:'חזית קיר ראשי',from:'מחלקה טכנית · מאיה ק.',ver:'גרסה 3',date:'09.11'},
+   {id:'D-103',cat:'drw',kind:'plan',title:'תכנית + אי',from:'מחלקה טכנית · מאיה ק.',ver:'גרסה 3',date:'09.11',isNew:true,note:'האי הוזז 100 מ״מ: מעבר 1,100 מ״מ.'},
+   {id:'R-027',cat:'ren',kind:'render',title:'הדמיה מאושרת',from:'מעצבת · שירה ל.',ver:'V2',date:'21.10',note:'אושרה ע״י הלקוחות. ידיות שקועות, ללא ידיות חיצוניות.'},
+   {id:'S-199',cat:'srv',kind:'survey',title:'מדידת שטח',from:'מודד · רמי ב.',ver:'מדידה סופית',date:'30.10'}],
+  survey:{walls:[['A',3800],['B',3300]],ceiling:2700,window:null,
+   points:[['A',620,500,'מים + ניקוז כיור','w'],['A',1600,1150,'שקע כפול','e'],['A',2350,1800,'מקרר: מים + שקע','w'],['B',1500,0,'רצפה: שקע לאי','e']],
+   warn:['נקודת המים זזה 120 מ״מ שמאלה מהתכנון. מאומת בשרטוט גרסה 3.']},
+  spec:[['גוף','סנדוויץ׳ 18 מ״מ אפור'],['חזיתות','לכה אנתרציט מט, ידיות שקועות'],['זכוכית','זכוכית מעושנת 4 מ״מ במסגרת אלומיניום'],['משטח','קוורץ לבן 20 מ״מ, אי עם נפילה 900 מ״מ'],['צירים','Blum Clip top Blumotion 110°'],['מגירות','Blum Legrabox'],['סוקל','80 מ״מ, שקוע 50 מ״מ'],['גובה משטח מוגמר','910 מ״מ']],
+  colors:{base:'#3d4148',wall:'#3d4148',tall:'#3d4148',top:'#f1f0ec',bg:'#d9d6d0'}},
+ 'CC-2611-0377':{updated:'14.11 08:20',
+  contact:['ליאור אהרון','054-218-6650'],pm:['אורית, משרד','03-555-0101'],payment:['שולם במלואו','ok'],
+  notes:[['tech','הנחיית התקנה','ארון תלוי · קיר בלוק · לבדוק לפני קידוח']],
+  accessories:[['כיור אינטגרלי לארון אמבטיה',1,'חברה'],['ברז קיר',1,'לקוח'],['מראה מוארת',1,'לקוח'],['מתלים נסתרים 80 ק״ג',2,'חברה'],['מגירות פנימיות Legrabox',4,'חברה']],
+  docs:[
+   {id:'D-087',cat:'drw',kind:'elev',title:'חזיתות אמבטיה ומזווה',from:'מחלקה טכנית · אבי ר.',ver:'גרסה 2',date:'05.11'},
+   {id:'R-019',cat:'ren',kind:'render',title:'הדמיה מאושרת',from:'מעצבת · נועה פ.',ver:'V1',date:'18.10'},
+   {id:'S-188',cat:'srv',kind:'survey',title:'מדידת שטח',from:'מודד · רמי ב.',ver:'מדידה סופית',date:'27.10'}],
+  survey:{walls:[['A',2520],['B',1600]],ceiling:2560,window:[300,600],
+   points:[['A',500,550,'אמבטיה: מים + ניקוז','w'],['A',1100,1100,'שקע מראה מוארת','e']],
+   warn:[]},
+  spec:[['גוף','סנדוויץ׳ עמיד מים 18 מ״מ'],['חזית אמבטיה','פורניר אגוז, לכה עמידת לחות'],['חזיתות מזווה','לבן מט'],['תלייה','מתלים נסתרים, עומס 80 ק״ג'],['מגירות פנימיות','Blum Legrabox Inner'],['סוקל מזווה','100 מ״מ']],
+  colors:{base:'#6b4a33',wall:'#f2efe8',tall:'#f4f2ee',top:'#e6e2da',bg:'#e3e0da'}}
+};
+/* site access, from the CABICAD project card */
+const ACCESS={
+ 'CC-2611-0412':{entrance:'כניסה ראשית מהרחוב, לובי משותף · קוד 4512#',floor:'3',elevator:'מעלית משא',elev:{w:1100,d:2100,h:2200,door:900},crane:false,
+   stairs:'חדר מדרגות ברוחב 1,100',parking:'חניון ‎-1, חניה 14 (שמורה לרכב ההתקנה)',unload:'פריקה ליד הכניסה, עד 30 דקות',notes:'לובי משיש: הגנות רצפה מהכניסה ועד הדירה.'},
+ 'CC-2611-0398':{entrance:'כניסה מהחצר האחורית, שער צד',floor:'קרקע',elevator:'אין (לא נדרשת)',elev:null,door:900,crane:false,
+   stairs:'3 מדרגות בכניסה לחצר',parking:'ברחוב, אזור כחול-לבן',unload:'מהמדרכה, אין מפרץ פריקה',notes:'השער צר: את האי מכניסים בשני חלקים.'},
+ 'CC-2611-0377':{entrance:'כניסה ראשית, דלת 900',floor:'קרקע + 2 (אמבטיה)',elevator:'אין',elev:null,door:900,crane:false,
+   stairs:'מדרגות פנימיות ברוחב 950 עם פנייה של 90°',parking:'חניה פרטית בחזית הבית',unload:'ישירות מהחניה',notes:'ארון האמבטיה עולה במדרגות: לבדוק את הפנייה לפני ההרמה.'}
+};
+function accessCheck(i,A){
+  if(!A||!i.cabinets.length)return null;
+  const items=i.cabinets.map(c=>({c,d:[c.w,c.h,c.d].sort((a,b)=>b-a)})).sort((a,b)=>b.d[0]-a.d[0]);
+  const big=items[0];
+  if(A.elev){const e=A.elev,diag=Math.sqrt(e.d*e.d+e.h*e.h);
+    const bad=items.filter(x=>x.d[0]>diag-50||x.d[1]>Math.min(e.door,e.w));
+    return bad.length?{ok:false,t:`${bad.map(x=>x.c.code).join(', ')} לא נכנס למעלית. לתאם מדרגות או מנוף.`}
+      :{ok:true,t:`כל הארונות נכנסים למעלית. הגדול ביותר: ${big.c.code} (<span dir="ltr">${fmt(big.c.w)}×${fmt(big.c.h)}×${fmt(big.c.d)}</span>).`};}
+  const door=A.door||900, tight=items.filter(x=>x.d[2]>door-20);
+  return tight.length?{ok:false,t:`${tight.map(x=>`${x.c.code} (עובי ${fmt(x.d[2])})`).join(', ')} עובר בצמוד לפתח ${fmt(door)}. להכין פירוק או הכנסה בחלקים.`}
+    :{ok:true,t:`כל הארונות עוברים בפתח ${fmt(door)}. הגדול ביותר: ${big.c.code}.`};
+}
+function accessBlock(i){const A=ACCESS[i.id]; if(!A)return '';const chk=accessCheck(i,A);
+  return `${A.crane?'<span class="pill blocked">נדרש מנוף</span>':''}<dl class="accgrid">
+    <dt>כניסה</dt><dd>${esc(A.entrance)}</dd><dt>קומה</dt><dd>${esc(A.floor)}</dd>
+    <dt>מעלית</dt><dd>${esc(A.elevator)}${A.elev?`<div class="muted">פנים <span dir="ltr">${fmt(A.elev.w)}×${fmt(A.elev.d)}</span> · גובה ${fmt(A.elev.h)} · דלת ${fmt(A.elev.door)} מ״מ</div>`:''}</dd>
+    <dt>מנוף</dt><dd>${A.crane?'<span class="yes">כן</span>':'<span class="no">לא נדרש</span>'}</dd>
+    <dt>מדרגות</dt><dd>${esc(A.stairs)}</dd><dt>חניה</dt><dd>${esc(A.parking)}</dd><dt>פריקה</dt><dd>${esc(A.unload)}</dd></dl>
+    ${A.notes?`<p class="note" style="margin:8px 0 0">${esc(A.notes)}</p>`:''}
+    ${chk?`<p class="note ${chk.ok?'ok':'bad'}" style="margin:6px 0 0">${chk.t}</p>`:''}`;}
+function samplePhoto(title,tone){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240"><rect width="240" height="240" fill="${tone}"/><rect x="30" y="20" width="180" height="200" fill="#f2efe8" stroke="#00000033"/>
+  <path d="M120 20 L112 70 L126 110 L108 160 L118 220" stroke="#3a2a1f" stroke-width="3" fill="none"/><rect x="0" y="206" width="240" height="34" fill="#000000aa"/>
+  <text x="120" y="228" fill="#fff" font-size="15" text-anchor="middle" font-family="sans-serif">${title}</text></svg>`;
+  return 'data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);}
+const CATS=[['drw','שרטוטים','מחלקה טכנית'],['ren','הדמיות','מעצבת'],['srv','מדידה','מודד']];
+const fmt=n=>n.toLocaleString('en-US');
+const isWall=c=>/^W/.test(c.code), isTall=c=>/^[TP]/.test(c.code), isIsland=c=>/^I/.test(c.code), isHung=c=>/^V/.test(c.code);
+function layout(cabs){
+  let x=0; const floor=cabs.filter(c=>!isWall(c)&&!isIsland(c)).map(c=>{const r={c,x,w:c.w,y:isHung(c)?450:100,h:c.h};x+=c.w;return r});
+  const talls=floor.filter(r=>isTall(r.c)); let wx=(floor.find(r=>!isTall(r.c))||{x:0}).x;
+  const wall=cabs.filter(isWall).map(c=>{talls.forEach(t=>{if(wx>=t.x&&wx<t.x+t.w)wx=t.x+t.w});const r={c,x:wx,w:c.w,y:1450,h:c.h};wx+=c.w;return r});
+  const H=Math.max(2600,...floor.map(r=>r.y+r.h+150),...wall.map(r=>r.y+r.h+150));
+  return {floor,wall,W:Math.max(x,1),H};
+}
+function svgElev(cabs){
+  const L=layout(cabs),{W,H}=L,Y=v=>H-v,fs=Math.max(80,W/26);
+  let o=`<svg class="drw" viewBox="-200 -100 ${W+400} ${H+520}" role="img" aria-label="שרטוט חזית"><line x1="-150" y1="${Y(0)}" x2="${W+150}" y2="${Y(0)}"/>`;
+  L.floor.forEach(r=>{ if(!isTall(r.c)&&!isHung(r.c)) o+=`<rect class="ct" x="${r.x}" y="${Y(r.y+r.h+40)}" width="${r.w}" height="40"/>`;});
+  [...L.floor,...L.wall].forEach(r=>{
+    o+=`<rect x="${r.x}" y="${Y(r.y+r.h)}" width="${r.w}" height="${r.h}"/>`;
+    if(r.w>=800&&!isHung(r.c)) o+=`<line class="thin" x1="${r.x+r.w/2}" y1="${Y(r.y+r.h)}" x2="${r.x+r.w/2}" y2="${Y(r.y)}"/>`;
+    o+=`<text x="${r.x+r.w/2}" y="${Y(r.y+r.h/2)}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle">${r.c.code}</text>`;
+  });
+  L.floor.forEach(r=>o+=`<text class="d" x="${r.x+r.w/2}" y="${Y(0)+fs*1.6}" font-size="${fs*.85}" text-anchor="middle">${r.w}</text>`);
+  const dy=Y(0)+fs*3.4;
+  o+=`<line class="dim" x1="0" y1="${dy}" x2="${W}" y2="${dy}"/><line class="dim" x1="0" y1="${dy-40}" x2="0" y2="${dy+40}"/><line class="dim" x1="${W}" y1="${dy-40}" x2="${W}" y2="${dy+40}"/>`;
+  o+=`<text class="d" x="${W/2}" y="${dy-24}" font-size="${fs}" text-anchor="middle">${fmt(W)}</text>`;
+  [[100,'100'],[860,'860'],[1450,'1450']].forEach(([v,t])=>o+=`<text class="m" x="-40" y="${Y(v)}" font-size="${fs*.7}" text-anchor="end" dominant-baseline="middle">${t}</text>`);
+  return o+`<text class="m" x="${W}" y="${-20}" font-size="${fs*.75}" text-anchor="end">מ״מ · חזית</text></svg>`;
+}
+function svgPlan(cabs){
+  const L=layout(cabs),W=L.W,isl=cabs.filter(isIsland),fs=Math.max(80,W/26);
+  const D=Math.max(...L.floor.map(r=>Math.max(r.c.d,350)),600);
+  let H=D+300; isl.forEach(c=>H=D+1100+c.d+400);
+  let o=`<svg class="drw" viewBox="-200 -200 ${W+400} ${H+300}" role="img" aria-label="תכנית מבט על"><line x1="-150" y1="0" x2="${W+150}" y2="0" style="stroke-width:4"/>`;
+  L.floor.forEach(r=>{const d=Math.max(r.c.d,560);o+=`<rect x="${r.x}" y="0" width="${r.w}" height="${d}"/><text x="${r.x+r.w/2}" y="${d/2}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle">${r.c.code}</text>`});
+  L.wall.forEach(r=>o+=`<rect class="thin" x="${r.x}" y="0" width="${r.w}" height="${r.c.d}"/>`);
+  isl.forEach(c=>{const x=(W-c.w)/2,y=D+1100;o+=`<rect x="${x}" y="${y}" width="${c.w}" height="${c.d}"/><text x="${W/2}" y="${y+c.d/2}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle">${c.code} · ${fmt(c.w)}×${fmt(c.d)}</text>
+    <line class="dim" x1="${W/2}" y1="${D}" x2="${W/2}" y2="${y}"/><text class="d" x="${W/2+30}" y="${D+550}" font-size="${fs*.85}">מעבר 1,100</text>`});
+  return o+`<text class="d" x="${W/2}" y="-60" font-size="${fs}" text-anchor="middle">${fmt(W)}</text><text class="m" x="${W}" y="${H}" font-size="${fs*.75}" text-anchor="end">מ״מ · מבט על (קווקו: עליונים)</text></svg>`;
+}
+function svgRender(cabs,col){
+  const L=layout(cabs),{W,H}=L,Y=v=>H-v;
+  let o=`<svg viewBox="-300 0 ${W+600} ${H+250}" role="img" aria-label="הדמיה"><defs><linearGradient id="lt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset="1" stop-color="#000" stop-opacity=".12"/></linearGradient></defs>
+  <rect x="-300" y="0" width="${W+600}" height="${H}" fill="${col.bg}"/><rect x="-300" y="${H}" width="${W+600}" height="250" fill="#9c907f"/>`;
+  L.floor.forEach(r=>{ if(!isTall(r.c)&&!isHung(r.c)) o+=`<rect x="${r.x}" y="${Y(1450)}" width="${r.w}" height="${1450-860}" fill="${col.top}" opacity=".55"/>`;});
+  const draw=(r,f)=>{o+=`<rect x="${r.x+4}" y="${Y(r.y+r.h)}" width="${r.w-8}" height="${r.h}" fill="${f}"/><rect x="${r.x+4}" y="${Y(r.y+r.h)}" width="${r.w-8}" height="${r.h}" fill="url(#lt)"/>`;
+    if(r.w>=800)o+=`<line x1="${r.x+r.w/2}" y1="${Y(r.y+r.h)}" x2="${r.x+r.w/2}" y2="${Y(r.y)}" stroke="#000" stroke-opacity=".25" stroke-width="6"/>`;
+    o+=`<rect x="${r.x+r.w/2-80}" y="${Y(r.y+r.h)+(r.y>=1450?r.h-60:40)}" width="160" height="14" rx="7" fill="#1d1d1d" opacity=".8"/>`;
+    if(r.y===100&&!isTall(r.c))o+=`<rect x="${r.x}" y="${Y(100)}" width="${r.w}" height="100" fill="#2b2b2b" opacity=".75"/>`;};
+  L.floor.forEach(r=>{draw(r,isTall(r.c)?col.tall:col.base);if(!isTall(r.c)&&!isHung(r.c))o+=`<rect x="${r.x-10}" y="${Y(r.y+r.h+40)}" width="${r.w+20}" height="40" fill="${col.top}" stroke="#0002"/>`});
+  L.wall.forEach(r=>{draw(r,r.c.front.includes('זכוכית')?'#5d6a70':col.wall);o+=`<rect x="${r.x}" y="${Y(r.y)}" width="${r.w}" height="10" fill="#fff6c8" opacity=".9"/>`});
+  return o+`</svg>`;
+}
+function svgSurvey(sv){
+  const [A,B]=sv.walls,a=A[1],b=B[1],fs=Math.max(110,a/18);
+  let o=`<svg class="drw" viewBox="-400 -400 ${a+800} ${b+800}" role="img" aria-label="סקיצת מדידה"><path d="M0 ${b} L0 0 L${a} 0 L${a} ${b}" style="stroke-width:3"/><line class="thin" x1="0" y1="${b}" x2="${a}" y2="${b}"/>`;
+  if(sv.window)o+=`<rect x="${a-20}" y="${sv.window[0]}" width="40" height="${sv.window[1]}" style="stroke:var(--accent)"/><text class="d" x="${a+60}" y="${sv.window[0]+sv.window[1]/2}" font-size="${fs*.8}" dominant-baseline="middle">חלון</text>`;
+  o+=`<text class="d" x="${a/2}" y="-90" font-size="${fs}" text-anchor="middle">קיר ${A[0]} · ${fmt(a)}</text><text class="d" x="${a+60}" y="${b-120}" font-size="${fs}">קיר ${B[0]} · ${fmt(b)}</text>`;
+  o+=`<text class="m" x="${a/2}" y="${b/2}" font-size="${fs*.8}" text-anchor="middle">גובה תקרה ${fmt(sv.ceiling)}</text>`;
+  sv.points.forEach((p,k)=>{const [w,pos]=p;const cx=w==='A'?pos:a,cy=w==='A'?0:pos;
+    o+=`<circle class="${p[4]==='w'?'w':''}" cx="${cx}" cy="${cy}" r="${fs*.75}"/><text class="pt" x="${cx}" y="${cy}" font-size="${fs*.9}" text-anchor="middle" dominant-baseline="central">${k+1}</text>`});
+  return o+`</svg>`;
+}
+function docSvg(i,d){const P=PROJ[i.id];return d.kind==='elev'?svgElev(i.cabinets):d.kind==='plan'?svgPlan(i.cabinets):d.kind==='render'?svgRender(i.cabinets,P.colors):svgSurvey(P.survey)}
+
+function seed(){
+  const steps=n=>STEPS.map((_,i)=>i<n);
+  return {
+    loggedIn:true, view:'list', sel:null, tab:'steps', desk:'board', sheet:null, rejectSeq:42, rf:{p:'all',t:'all',s:'all'}, rsel:null,
+    installs:[
+      {id:'CC-2611-0412',installer:ME,customer:'משפחת כהן',phone:'050-771-2345',address:'הרצל 45, רחובות',geo:[31.894,34.811],window:'08:00–12:00',
+       item:'מטבח פינתי',kitchen:'חזית פורניר אלון, משטח קוורץ',status:'scheduled',steps:steps(0),photos:[],issues:[],checkin:null,signoff:null,updated:null,
+       cabinets:[cab('B-01','תחתון כיור',900,720,580,'פורניר אלון'),cab('B-02','תחתון 3 מגירות',600,720,580,'פורניר אלון'),cab('B-03','פינתי עם קרוסלה',1000,720,580,'פורניר אלון'),
+        cab('B-04','תחתון מדיח (חזית)',600,720,20,'פורניר אלון'),cab('T-01','מגדל תנור ומיקרו',600,2200,580,'פורניר אלון'),cab('W-01','עליון מעל כיור',900,700,350,'לכה לבן מט'),
+        cab('W-02','עליון ונטה',600,400,350,'לכה לבן מט'),cab('W-03','עליון פינתי',650,700,350,'לכה לבן מט')]},
+      {id:'CC-2611-0398',installer:ME,customer:'דנה ואבי מזרחי',phone:'052-440-9018',address:'שדרות ירושלים 12, נס ציונה',geo:[31.93,34.80],window:'12:30–16:00',
+       item:'מטבח ישר + אי',kitchen:'חזית לכה אנתרציט',status:'scheduled',steps:steps(0),photos:[],issues:[],checkin:null,signoff:null,updated:null,
+       cabinets:[cab('B-01','תחתון כיור',1200,720,600,'לכה אנתרציט'),cab('B-02','תחתון 2 מגירות',800,720,600,'לכה אנתרציט'),cab('I-01','אי מטבח, צד ישיבה',2400,900,1000,'לכה אנתרציט'),
+        cab('T-01','מגדל מקרר',700,2400,600,'לכה אנתרציט'),cab('W-01','עליון',1200,720,350,'לכה אנתרציט'),cab('W-02','עליון זכוכית',600,720,350,'זכוכית מעושנת')]},
+      {id:'CC-2611-0377',installer:ME,customer:'ליאור אהרון',phone:'054-218-6650',address:'האלה 7, מזכרת בתיה',geo:[31.85,34.84],window:'16:30–18:30',
+       item:'ארון אמבטיה + מזווה',kitchen:'פורניר אגוז, לבן מט',status:'scheduled',steps:steps(0),photos:[],issues:[],checkin:null,signoff:null,updated:null,
+       cabinets:[cab('V-01','ארון אמבטיה תלוי',1000,500,460,'פורניר אגוז'),cab('P-01','מזווה דלתות',900,2400,600,'לבן מט'),cab('P-02','מזווה מגירות פנימיות',600,2400,600,'לבן מט')]},
+      {id:'CC-2611-0421',installer:ME,day:1,customer:'משפחת לוי',phone:'052-777-1020',address:'הדקל 9, רחובות',geo:[31.9,34.81],window:'08:00–13:00',item:'ארון קיר לחדר שינה',
+       kitchen:'לבן מט, ידיות שקועות',status:'scheduled',steps:steps(0),photos:[],issues:[],checkin:null,signoff:null,updated:null,
+       cabinets:[cab('K-01','ארון 3 דלתות',1500,2400,600,'לבן מט'),cab('K-02','ארון 2 דלתות',1000,2400,600,'לבן מט')]},
+      {id:'CC-2611-0388',installer:ME,day:3,type:'השלמות',customer:'משפחת אורן',phone:'050-332-1188',address:'בן גוריון 21, נס ציונה',geo:[31.92,34.79],window:'09:00–10:00',item:'השלמה: חזית מגירה + כיוון צירים',
+       kitchen:'לכה אפור',status:'scheduled',steps:steps(0),photos:[],issues:[],checkin:null,signoff:null,updated:null,
+       cabinets:[cab('B-02','תחתון 3 מגירות',800,720,580,'לכה אפור')]},
+      {id:'CC-2611-0405',installer:'אלון גבאי',customer:'משפחת פרץ',address:'הנביאים 3, ראשון לציון',window:'08:00–13:00',status:'in_progress',steps:steps(4),photos:[],
+       issues:[],checkin:{at:ago(190)},signoff:null,updated:ago(12),cabinets:[]},
+      {id:'CC-2611-0401',installer:'אלון גבאי',customer:'רון שגיא',address:'ויצמן 88, כפר סבא',window:'07:00–08:00',status:'done',steps:steps(7),photos:[],issues:[],checkin:{at:ago(340)},
+       signoff:{name:'רון שגיא',rating:5,at:ago(275)},updated:ago(275),cabinets:[]},
+      {id:'CC-2611-0409',installer:'מיכאל שושן',customer:'נגה ברק',address:'הגפן 14, יבנה',window:'09:00–14:00',status:'blocked',steps:steps(2),photos:[],
+       issues:[],checkin:{at:ago(120)},signoff:null,updated:ago(35),cabinets:[]}
+    ].map(i=>Object.assign({day:0,type:'התקנה',acc:[],slots:{}},i)),
+    cmode:null, sub:'srv',
+    rejects:[
+      {ticket:'RJT-2026-0042',install:'CC-2611-0409',project:'נגה ברק',installer:'מיכאל שושן',requestType:'ריגקט',faultType:'תקלת ייצור',faultCode:'A2.2',priority:'P1',
+       cabinet:'B-03',box:'13',partCode:'B-03.01',edge:'קדמי',part:'דופן ימין',sku:'0409-B-03',dimsReq:'1000×720×580',dimsAct:'',color:'לבן מט',side:'לא רלוונטי',qty:1,
+       loc:'כל החלק',desc:'שבר בלוח · כל החלק',required:'ייצור מחדש · בנסיעה הבאה',rootCause:'נזק הובלה',blocks:true,photos:[samplePhoto('דוגמה: דופן סדוקה','#8f8a82'),samplePhoto('דוגמה: תווית ארגז 13','#a49c90')],
+       status:'open',assignee:null,resolution:null,at:ago(35),history:[{to:'open',by:'מיכאל שושן',at:ago(35),note:'נפתח מהשטח'}]},
+      {ticket:'RJT-2026-0041',install:'CC-2611-0405',project:'משפחת פרץ',installer:'אלון גבאי',requestType:'ריגקט',faultType:'תקלת ייצור',faultCode:'B1.2',priority:'P2',
+       cabinet:'W-02',box:'21',partCode:'W-02.07',edge:'4 צדדים',part:'דלת',sku:'0405-W-02',dimsReq:'600×400×350',dimsAct:'585×400×350',color:'לכה לבן מט',side:'מרים',qty:1,
+       loc:'חזית',desc:'רוחב שגוי · חזית',required:'ייצור מחדש · בנסיעה הבאה',rootCause:'שגיאת ייצור / CNC',blocks:false,photos:[samplePhoto('דוגמה: רווח 15 מ״מ','#9aa3ab')],
+       status:'in_progress',assignee:'ייצור',resolution:null,at:ago(48),history:[{to:'open',by:'אלון גבאי',at:ago(48),note:'נפתח מהשטח'},{to:'in_progress',by:'מנהל ייצור',at:ago(30),note:'נכנס לייצור'}]},
+      {ticket:'RJT-2026-0040',install:'CC-2611-0401',project:'רון שגיא',installer:'אלון גבאי',requestType:'תוספת',faultType:'אחר',faultCode:'C3.4',priority:'P4',
+       cabinet:'',box:'7',part:'ידית למגירה עליונה',sku:'',dimsReq:'',dimsAct:'',color:'שחור מט',side:'לא רלוונטי',qty:2,
+       desc:'ידית חסרה',required:'שליחת חלק חסר · בנסיעה הבאה',rootCause:'',blocks:false,photos:[],
+       status:'done',assignee:'רכש / ספק',resolution:'נשלחו עם השליח והותקנו',at:ago(300),resolvedAt:ago(280),history:[{to:'open',by:'אלון גבאי',at:ago(300),note:'נפתח מהשטח'},{to:'done',by:'רכש',at:ago(280),note:'נשלחו עם השליח'}]}
+    ],
+    log:[
+      {at:ago(35),m:'EVT',p:'/v1/rejects',n:'ריג׳קט RJT-2026-0042 נפתח מהשטח: A2.2 שבר בלוח, P1 עוצר עבודה (מיכאל שושן)'},
+      {at:ago(48),m:'EVT',p:'/v1/rejects',n:'ריג׳קט RJT-2026-0041 נפתח מהשטח: B1.2 רוחב שגוי, P2 (אלון גבאי)'},
+      {at:ago(1),m:'GET',p:'/v1/installs?date=today&installer=me',n:'התקבלו 5 משימות של יוסי לוי (3 היום), כולל פרטי לקוח, דרכי גישה ותיק פרויקט'}
+    ]
+  };
+}
+
+let S;
+try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
+if(!S||!S.installs)S=seed();
+let syncing=false, sigDirty=false, draft={kind:'before',rating:0,requestType:'ריגקט',faultType:'תקלת ייצור',priority:'P3'};
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){/* photos may exceed quota; demo still works in memory */}}
+const cur=()=>S.installs.find(i=>i.id===S.sel);
+const mine=()=>S.installs.filter(i=>i.installer===ME);
+const pct=i=>Math.round(i.steps.filter(Boolean).length/i.steps.length*100);
+const rejOf=i=>S.rejects.filter(r=>r.install===i.id);
+const openIssues=i=>rejOf(i).filter(r=>r.status!=='done').length;
+
+function api(m,p,n){
+  S.log.unshift({at:new Date().toISOString(),m,p,n});
+  S.log=S.log.slice(0,60);
+  const inst=cur(); if(inst)inst.updated=new Date().toISOString();
+  syncing=true; save(); render();
+  setTimeout(()=>{syncing=false;const el=phone.querySelector('.sync');if(el){el.classList.remove('busy');el.lastChild.textContent='CABICAD מחובר'}},700);
+}
+
+/* ---------- phone ---------- */
+function bar(title,back){
+  return `<div class="bar">${back?`<button class="iconbtn" data-a="back" aria-label="חזרה">→</button>`:''}
+  <h2>${title}</h2><span class="sync ${syncing?'busy':''}"><span class="dot"></span><span>${syncing?'מסנכרן…':'CABICAD מחובר'}</span></span></div>`;
+}
+function statusPill(s){return `<span class="pill ${s}">${STATUS[s]}</span>`}
+
+function vLogin(){
+  return bar('כניסה')+`<div class="screen"><div class="login">
+    <div class="logo">CABI<span>CAD</span> שטח</div>
+    <p class="muted" style="margin:0">כניסה עם מספר הטלפון הרשום אצלך ב-CABICAD. נשלח אליך קוד ב-SMS.</p>
+    <div class="field"><label class="lbl" for="ph">טלפון</label><input id="ph" inputmode="tel" value="050-123-4567" dir="ltr"></div>
+    <div class="field"><label class="lbl" for="otp">קוד אימות</label><input id="otp" inputmode="numeric" maxlength="4" placeholder="1234" dir="ltr"></div>
+    <p class="note" id="login-msg">בדמו הקוד הוא 1234.</p>
+    <button class="btn primary block" data-a="login">כניסה</button></div></div>`;
+}
+
+const ICON={pet:'🐕',call:'📞',trade:'🔌',protect:'🛡',tech:'🔧',time:'⏰'};
+const dayLabel=n=>{if(!n)return 'היום';if(n===1)return 'מחר';const d=new Date();d.setDate(d.getDate()+n);return d.toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'numeric'})};
+const stageOf=i=>i.status==='done'?'נמסר':!i.checkin?'לא התחיל':openIssues(i)?'השלמות פתוחות':'בעבודה';
+function vList(){
+  const list=mine(), days=[...new Set(list.map(i=>i.day))].sort((a,b)=>a-b);
+  const today=list.filter(i=>!i.day);
+  return bar('המשימות שלי')+`<div class="screen">
+    <div class="row between"><div><div class="title">שלום ${ME.split(' ')[0]}</div><div class="muted" style="font-size:13px">${list.length} משימות · ${today.length} היום · ${today.filter(i=>i.status==='done').length} נמסרו</div></div>
+    <button class="btn" data-a="logout">יציאה</button></div>
+    ${days.map(d=>`<div class="sec"><h4>${dayLabel(d)}<span>${list.filter(i=>i.day===d).length} משימות</span></h4>
+      ${list.filter(i=>i.day===d).map(i=>`<button class="card" data-a="open" data-id="${i.id}">
+        <div class="row between"><span class="title">${esc(i.customer)}</span>${statusPill(i.status)}</div>
+        <div class="row" style="gap:6px"><span class="pill ${i.type==='השלמות'?'P2':'scheduled'}">${i.type}</span><b style="font-size:14px">${esc(i.item)}</b></div>
+        <div class="row between muted" style="font-size:13px"><span>🕗 ${i.window} · ${esc(i.address.split(',').pop().trim())}</span><span>${i.cabinets.length} ארונות</span></div>
+        ${i.day===0?`<div class="prog ${i.status==='done'?'done':''}"><i style="width:${pct(i)}%"></i></div><div class="row between" style="font-size:12px"><span class="muted">${stageOf(i)}</span>${openIssues(i)?`<span class="pill blocked">${openIssues(i)} ריג׳קטים פתוחים</span>`:''}</div>`:''}
+      </button>`).join('')}</div>`).join('')}
+  </div>`;
+}
+const STEPNAMES=[['cust','לקוח'],['proj','תיק פרויקט'],['close','מסירה / השלמות']];
+function stepper(){const idx=STEPNAMES.findIndex(x=>x[0]===S.tab);
+  return `<nav class="stepper" aria-label="שלבי המשימה">${STEPNAMES.map(([k,l],n)=>`<button data-a="go" data-k="${k}" aria-current="${S.tab===k?'step':'false'}" class="${n<idx?'past':''}"><b>${n<idx?'✓':n+1}</b><span>${l}</span></button>`).join('')}</nav>`;}
+function vDetail(){
+  const i=cur(); if(!i){S.view='list';return vList()}
+  if(!['cust','proj','close'].includes(S.tab))S.tab='cust';
+  return bar(esc(i.customer),true)+stepper()+`<div class="screen">${S.tab==='cust'?stepCust(i):S.tab==='proj'?stepProj(i):stepClose(i)}</div>`;
+}
+function checkinBlock(i){
+  if(i.day>0)return `<p class="note">המשימה מתוכננת ל${dayLabel(i.day)} ${i.window}. צ׳ק-אין ייפתח ביום העבודה.</p>`;
+  if(i.checkin)return `<p class="note ok">צ׳ק-אין ${hhmm(i.checkin.at)} · מיקום GPS נשמר</p>`;
+  return `<button class="btn primary block" data-a="checkin">📍 הגעתי · צ׳ק-אין</button>`;
+}
+function stepCust(i){
+  const P=PROJ[i.id]||{}, c=P.contact||[i.customer,i.phone], A=ACCESS[i.id];
+  const row=(k,v)=>`<dt>${k}</dt><dd>${v}</dd>`;
+  return `<section class="card"><h3 class="ch">פרטי לקוח <small class="mono">${i.id}</small></h3><dl class="accgrid">
+      ${row('שם',esc(c[0]))}${row('טלפון',`<span dir="ltr" style="user-select:all">${c[1]}</span>`)}
+      ${P.contact2?row('איש קשר נוסף',`${esc(P.contact2[0])} · <span dir="ltr" style="user-select:all">${P.contact2[1]}</span>`):''}
+      ${row('כתובת',esc(i.address))}${row('מועד',`${dayLabel(i.day)} · ${i.window}`)}
+      ${row('לביצוע',`<span class="pill ${i.type==='השלמות'?'P2':'scheduled'}">${i.type}</span> ${esc(i.item)}`)}
+      ${P.pm?row('מנהלת פרויקט',`${esc(P.pm[0])} · <span dir="ltr">${P.pm[1]}</span>`):''}
+      ${P.payment?row('תשלום',`<span class="pill ${P.payment[1]==='ok'?'done':'in_progress'}">${esc(P.payment[0])}</span>`):''}</dl>
+      <div class="btns"><a class="btn" href="https://waze.com/ul?q=${encodeURIComponent(i.address)}&navigate=yes" target="_blank" rel="noopener">ניווט ב-Waze</a><button class="btn" data-a="copy" data-v="${c[1]}">העתקת טלפון</button></div></section>
+    ${A?`<section class="card"><h3 class="ch">דרכי גישה <small>מ-CABICAD</small></h3>${accessBlock(i)}</section>`:''}
+    ${P.notes?`<section class="card"><h3 class="ch">הערות לתיאום</h3><ul class="tags">${P.notes.map(([t,k,v])=>`<li><span class="ic" aria-hidden="true">${ICON[t]||'•'}</span><span class="k">${esc(k)}</span><span>${esc(v)}</span></li>`).join('')}</ul></section>`:''}
+    ${checkinBlock(i)}
+    <button class="btn block next" data-a="go" data-k="proj">המשך לתיק פרויקט ←</button>`;
+}
+function docTiles(i,cat){const P=PROJ[i.id],ds=P.docs.filter(d=>d.cat===cat);
+  return ds.length?`<div class="docs">${ds.map(d=>`<button class="doc" data-a="doc" data-k="${d.id}"><span class="th">${docSvg(i,d)}</span><span class="meta"><b>${esc(d.title)}${d.isNew?'<span class="new">עודכן</span>':''}</b>
+    <span class="muted">${esc(d.ver)} · ${d.date}</span><span class="muted">${esc(d.from)}</span></span></button>`).join('')}</div>`:'<p class="muted" style="margin:0">אין מסמכים בקטגוריה הזו.</p>';}
+function stepProj(i){
+  const P=PROJ[i.id], started=!!i.checkin, closed=i.status==='done';
+  const nextBtn=`<button class="btn block next" data-a="go" data-k="close">המשך למסירה / השלמות ←</button>`;
+  const cabList=`<div class="row between"><span class="lbl">${i.cabinets.filter(c=>c.done).length}/${i.cabinets.length} הותקנו</span><span class="muted" style="font-size:12px">מידות במ״מ: רוחב × גובה × עומק</span></div>
+    ${!started&&!closed?'<p class="note" style="margin:0">סימון התקנה נפתח אחרי צ׳ק-אין.</p>':''}
+    ${i.cabinets.map((c,k)=>`<button class="check" data-a="cab" data-code="${c.code}" aria-pressed="${c.done}" ${!started||closed?'disabled':''}><span class="box">${c.done?'✓':''}</span>
+      <span style="flex:1;min-width:0"><span class="t"><span class="mono">${c.code}</span> · ${esc(c.name)}</span><br><span class="dims">${c.w} × ${c.h} × ${c.d}</span> <span class="muted" style="font-size:12px">· ${esc(c.front)} · ארגז ${k+11}</span></span></button>`).join('')}`;
+  if(!P)return `<p class="note">תיק הפרויקט המלא נטען למכשיר יום לפני העבודה. בינתיים: רשימת הארונות.</p>${cabList}${nextBtn}`;
+  const subs=[['srv','מדידות',P.docs.filter(d=>d.cat==='srv').length],['drw','תכניות',P.docs.filter(d=>d.cat==='drw').length],['ren','הדמיות',P.docs.filter(d=>d.cat==='ren').length],
+    ['spec','מפרטים',P.spec.length],['cabs','ארונות',i.cabinets.length],['acc','מוצרים נלווים',P.accessories.length]];
+  if(!subs.some(x=>x[0]===S.sub))S.sub='srv';
+  let body='';
+  if(S.sub==='srv'){const sv=P.survey;body=docTiles(i,'srv')+(sv.warn.length?sv.warn.map(w=>`<p class="note bad" style="margin:0">⚠ ${esc(w)}</p>`).join(''):'')+
+    `<section class="card"><h3 class="ch">נקודות שנמדדו <small>קיר · מרחק / גובה, מ״מ</small></h3><ul class="tags">${sv.points.map(p=>`<li><span class="ic">${p[4]==='w'?'💧':'⚡'}</span><span class="k">קיר ${p[0]} · <span dir="ltr">${fmt(p[1])} / ${fmt(p[2])}</span></span><span>${esc(p[3])}</span></li>`).join('')}</ul>
+     <dl class="accgrid"><dt>קירות</dt><dd>${sv.walls.map(w=>`${w[0]}: ${fmt(w[1])}`).join(' · ')}</dd><dt>גובה תקרה</dt><dd>${fmt(sv.ceiling)}</dd></dl></section>`;}
+  else if(S.sub==='drw'||S.sub==='ren')body=docTiles(i,S.sub);
+  else if(S.sub==='spec')body=`<dl class="kv">${P.spec.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+  else if(S.sub==='cabs')body=cabList;
+  else body=`<div class="row between"><span class="lbl">${i.acc.filter(Boolean).length}/${P.accessories.length} הותקנו</span><span class="muted" style="font-size:12px">מסופק ע״י</span></div>
+    ${P.accessories.map(([n,q,by],k)=>`<button class="check" data-a="acc" data-k="${k}" aria-pressed="${!!i.acc[k]}" ${!started||closed?'disabled':''}><span class="box">${i.acc[k]?'✓':''}</span>
+      <span style="flex:1;min-width:0" class="t">${esc(n)}</span><span class="mono muted">×${q}</span><span class="pill ${by==='לקוח'?'in_progress':''}">${by}</span></button>`).join('')}`;
+  return `<div class="row muted" style="font-size:12px">מתוך CABICAD · קריאה בלבד · עודכן ${P.updated}</div>
+    <div class="subnav" role="tablist">${subs.map(([k,l,n])=>`<button role="tab" data-a="sub" data-k="${k}" aria-pressed="${S.sub===k}">${l} <span class="muted">${n}</span></button>`).join('')}</div>
+    ${body}${nextBtn}`;
+}
+const CONFIRMS=['ההתקנה בוצעה לפי התכנית וההדמיה','חזיתות ומגירות מכוונות','האזור נוקה ופסולת פונתה','הוסבר תפעול ותחזוקה'];
+const SLOTS=[['gen','מבט כללי'],['top','משטח וכיור'],['fronts','חזיתות וידיות'],['open','פנים ארונות פתוחים']];
+function stepClose(i){
+  const rs=rejOf(i), open=openIssues(i);
+  if(i.status==='done')return `<p class="note ok">נמסר ב-${hhmm(i.signoff.at)} · חתם/ה: ${esc(i.signoff.name)} · דירוג ${'★'.repeat(i.signoff.rating)}${i.signoff.open?` · ${i.signoff.open} השלמות פתוחות`:''}</p>
+    <div class="slots">${SLOTS.map(([k,l])=>`<div class="slot ${i.slots[k]?'has':''}">${i.slots[k]?`<img src="${i.slots[k]}" alt="${l}">`:''}<span class="cap">${l}</span></div>`).join('')}</div>
+    ${rs.length?`<div class="rlist">${rs.map(rCard).join('')}</div>`:''}`;
+  if(!i.checkin)return `<p class="note">${i.day>0?'המשימה עוד לא התחילה.':'מסירה והשלמות נפתחות אחרי צ׳ק-אין בשלב 1.'}</p><button class="btn block" data-a="go" data-k="cust">חזרה לשלב 1</button>`;
+  let body='';
+  if(S.cmode==='hand'){
+    const n=SLOTS.filter(([k])=>i.slots[k]).length;
+    body=`<div class="fsec"><h4>שלבי עבודה <span class="muted" style="font-weight:400;font-size:12px">${i.steps.filter(Boolean).length}/${i.steps.length}</span></h4>
+      ${i.steps.map((v,k)=>`<button class="check" data-a="step" data-k="${k}" aria-pressed="${v}"><span class="box">${v?'✓':''}</span><span class="t">${STEPS[k]}</span></button>`).join('')}</div>
+      <div class="fsec"><h4>צילומי מסירה <span class="muted" style="font-weight:400;font-size:12px">${n}/${SLOTS.length} · מבט כללי חובה</span></h4>
+      <div class="slots">${SLOTS.map(([k,l])=>`<label class="slot ${i.slots[k]?'has':''}" for="slot-${k}">${i.slots[k]?`<img src="${i.slots[k]}" alt="${l}">`:`📷<br>${l}`}<span class="cap">${l}</span></label><input id="slot-${k}" class="slotin" data-k="${k}" type="file" accept="image/*" capture="environment" hidden>`).join('')}</div></div>
+      ${open?`<p class="note bad" style="margin:0">${open} ריג׳קטים פתוחים יירשמו כהשלמות במסמך המסירה.</p>`:''}
+      <button class="btn primary block" data-a="sheet" data-s="sign">✍ החתמת לקוח וסגירה</button>`;
+  } else if(S.cmode==='rej'){
+    body=`<button class="btn danger block" data-a="sheet" data-s="issue">⚠ פתיחת ריג׳קט / בקשת חלק</button>
+      ${rs.length?`<div class="rlist">${rs.map(rCard).join('')}</div>`:'<p class="muted" style="margin:0">אין ריג׳קטים במשימה הזו.</p>'}
+      <button class="btn block next" data-a="cmode" data-k="hand">המשך למסירה ←</button>`;
+  }
+  return `<div class="choice">
+      <button data-a="cmode" data-k="hand" aria-pressed="${S.cmode==='hand'}"><b>✍ מסירה ללקוח</b><span>שלבים, צילומים וחתימה</span></button>
+      <button data-a="cmode" data-k="rej" aria-pressed="${S.cmode==='rej'}"><b>⚠ השלמות וריג׳קטים</b><span>${rs.length?`${open} פתוחים מתוך ${rs.length}`:'פתיחת ריג׳קט או בקשת חלק'}</span></button></div>
+    ${body||'<p class="muted" style="margin:0;font-size:13px">בחרו: לסגור את המשימה מול הלקוח, או לפתוח ולנהל השלמות. אפשר לעבור ביניהם.</p>'}`;
+}
+
+/* cut list per cabinet, as CABICAD exports it (generated for the demo from the cabinet's dimensions) */
+const pad2=n=>String(n).padStart(2,'0');
+function partsOf(c){
+  const T=18,P=[],body='סנדוויץ׳ 18 לבן',hdf='HDF 8 לבן',t=c.code[0],w=c.w,h=c.h,d=c.d;
+  const add=(name,L,W,th,mat,edge,qty=1,kind='body',side='')=>P.push({code:`${c.code}.${pad2(P.length+1)}`,name,L:Math.round(L),W:Math.round(W),th,mat,edge,qty,kind,side});
+  if(/מדיח/.test(c.name)){add('חזית מדיח',w-4,h-4,19,c.front,'4 צדדים',1,'front');add('ערכת חיבור חזית למדיח',0,0,0,'פרזול','',1,'hw');return P}
+  add('דופן ימין',h,d,T,body,'קדמי');add('דופן שמאל',h,d,T,body,'קדמי');add('תחתית',w-2*T,d,T,body,'קדמי');
+  if('BI'.includes(t)){add('חיזוק עליון קדמי',w-2*T,100,T,body,'');add('חיזוק עליון אחורי',w-2*T,100,T,body,'')} else add('תקרה',w-2*T,d,T,body,'קדמי');
+  add('גב',w-2,h-2,8,hdf,'');
+  const dm=c.name.match(/(\d)\s*מגירות/),drawers=dm?+dm[1]:0,shelves=drawers?0:({B:1,W:1,T:4,P:4,V:0,I:2}[t]??1);
+  if(shelves)add('מדף',w-2*T-2,d-20,T,body,'קדמי',shelves);
+  if(drawers){for(let k=0;k<drawers;k++)add(`חזית מגירה ${k+1}`,w-4,Math.round(h/drawers)-4,19,c.front,'4 צדדים',1,'front');add('מסילות מגירה (זוג)',0,0,0,'Blum Legrabox','',drawers,'hw')}
+  else{const nd=w>=800?2:1;for(let k=0;k<nd;k++)add(nd===2?(k?'דלת שמאל':'דלת ימין'):'דלת',w/nd-4,h-4,19,c.front,'4 צדדים',1,'front',nd===2?(k?'שמאל':'ימין'):'ימין');
+    add('צירים',0,0,0,'Blum Clip top 110°','',nd*(h>1500?4:2),'hw')}
+  add('ידית',0,0,0,'פרופיל אלומיניום שחור 160','',drawers||(w>=800?2:1),'hw');
+  return P;
+}
+const pdims=p=>p.L?`${p.L}×${p.W}×${p.th}`:'פרזול';
+function cabRows(i){const q=(draft.cabq||'').trim().toLowerCase();
+  const rows=i.cabinets.map((c,k)=>({c,k})).filter(({c})=>!q||c.code.toLowerCase().includes(q)||c.name.includes(q));
+  return rows.map(({c,k})=>`<button type="button" role="option" data-a="pcab" data-k="${c.code}" aria-selected="${draft.cab===c.code}"><span class="mono">${c.code}</span><span class="nm">${esc(c.name)}</span><span class="dims">${c.w}×${c.h}×${c.d}</span><span class="muted">ארגז ${k+11} · ${esc(c.front)}</span></button>`).join('')||'<p class="muted" style="padding:10px;margin:0">לא נמצא ארון. נסו מספר אחר, או בחרו ״חלק חדש״.</p>';}
+const LOCS=['חזית','קצה / קנט','פינה','צד פנימי','גב','כל החלק'];
+const NEEDS=['ייצור מחדש','החלפה מהמלאי','שליחת חלק חסר','תיקון בשטח','הזמנה מספק'];
+const WHEN=['בנסיעה הבאה','דחוף, מחר','בתיאום עם הלקוח'];
+const CAUSES=['נזק הובלה','שגיאת ייצור / CNC','טעות בתכנית','טעות מדידה','נזק בהתקנה','לא ידוע'];
+const NTYPES=['פילר','פנל צד / כיסוי','סוקל','כרכוב / קרניז','מדף','חזית / דלת','גב','אחר'];
+const NPURP=['השלמת רווח לקיר','כיסוי צנרת / חשמל','תיקון מידה בשטח','בקשת לקוח'];
+const chips=(g,arr)=>`<div class="chips">${arr.map(x=>`<button type="button" data-a="pick" data-g="${g}" data-k="${esc(x)}" aria-pressed="${draft[g]===x}">${esc(x)}</button>`).join('')}</div>`;
+function pickerHTML(i){
+  if(draft.pmode==='new'){const mats=[...new Set(i.cabinets.map(c=>c.front))].concat(['סנדוויץ׳ 18 לבן (גוף)']);
+    return `<div class="field"><span class="lbl">סוג החלק *</span>${chips('ntype',NTYPES)}</div>
+    <div class="field"><span class="lbl">מידות במ״מ *</span><div class="nums"><input id="nl" inputmode="numeric" placeholder="אורך" aria-label="אורך"><input id="nw" inputmode="numeric" placeholder="רוחב" aria-label="רוחב"><input id="nt" inputmode="numeric" placeholder="עובי" value="19" aria-label="עובי"></div></div>
+    <div class="grid2"><div class="field"><label class="lbl" for="nmat">חומר / גוון</label><select id="nmat">${mats.map(m=>`<option>${esc(m)}</option>`).join('')}</select></div>
+    <div class="field"><label class="lbl" for="ncab">ליד ארון</label><select id="ncab"><option value="">לא ליד ארון</option>${i.cabinets.map(c=>`<option value="${c.code}">${c.code} · ${esc(c.name)}</option>`).join('')}</select></div></div>
+    <div class="field"><span class="lbl">צד</span>${chips('nside',['ימין','שמאל','לא רלוונטי'])}</div>
+    <div class="field"><span class="lbl">למה צריך *</span>${chips('npurp',NPURP)}</div>
+    <div class="field"><span class="lbl">שרטוט או צילום *</span>
+      <div class="row"><label class="btn" for="nfile">📎 צירוף שרטוט / צילום</label><input id="nfile" type="file" accept="image/*" multiple hidden><button type="button" class="btn" data-a="skclear">ניקוי שרטוט</button></div>
+      <div class="thumbs" id="nfile-prev"></div>
+      <canvas class="sig sk" id="sk" aria-label="משטח לשרטוט ביד"></canvas><span class="muted" style="font-size:12px">אפשר גם לשרטט כאן ביד.</span></div>`;}
+  const sel=i.cabinets.find(c=>c.code===draft.cab), idx=i.cabinets.indexOf(sel);
+  let h=`<div class="field"><label class="lbl" for="cabq">1. ארון מהתכנית</label><input id="cabq" placeholder="חיפוש לפי מספר או שם: B-02, מגירות, עליון" value="${esc(draft.cabq||'')}" autocomplete="off">
+    <div class="plist" id="cablist" role="listbox" aria-label="ארונות בפרויקט">${cabRows(i)}</div></div>`;
+  if(sel){const parts=partsOf(sel);
+    h+=`<div class="field" id="partfield"><span class="lbl">2. החלק ב-${sel.code} · ${esc(sel.name)} (${parts.length} פריטים)</span><div class="plist" role="listbox" aria-label="חלקי הארון">${parts.map((p,k)=>`<button type="button" role="option" data-a="ppart" data-k="${k}" aria-selected="${draft.part===k}"><span class="mono">${p.code.split('.')[1]}</span><span class="nm">${esc(p.name)}${p.qty>1?` ×${p.qty}`:''}</span><span class="dims">${pdims(p)}</span><span class="muted">${esc(p.mat)}${p.edge?' · קנט '+esc(p.edge):''}</span></button>`).join('')}</div></div>`;
+    const p=parts[draft.part];
+    if(p)h+=`<div class="note ok" style="font-size:13px"><b>נבחר: <span class="mono">${p.code}</span> · ${esc(p.name)}</b><br>${p.L?`מידה <span dir="ltr">${pdims(p)}</span> · `:''}${esc(p.mat)}${p.edge?` · קנט ${esc(p.edge)}`:''}${p.side?` · צד ${p.side}`:''} · ארגז ${idx+11}<br><span class="muted">יישלח לייצור בדיוק לפי הנתונים ב-CABICAD.</span></div>`;
+  }
+  return h;
+}
+function refreshPicker(){const i=cur(),el=document.getElementById('picker');if(!el)return;
+  const sc=[...el.querySelectorAll('.plist')].map(x=>x.scrollTop);el.innerHTML=pickerHTML(i);
+  el.querySelectorAll('.plist').forEach((x,k)=>{if(sc[k])x.scrollTop=sc[k]});if(draft.pmode==='new')initSketch();}
+let skDirty=false;
+function initSketch(){
+  const c=document.getElementById('sk'); if(!c||c._init)return; c._init=1;
+  const r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1; c.width=r.width*dpr; c.height=r.height*dpr;
+  const x=c.getContext('2d'); x.scale(dpr,dpr); x.lineWidth=2.4; x.lineCap='round'; x.lineJoin='round';
+  x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#2447d6';
+  let down=false; skDirty=false; const p=e=>{const b=c.getBoundingClientRect();return[e.clientX-b.left,e.clientY-b.top]};
+  c.addEventListener('pointerdown',e=>{down=true;c.setPointerCapture(e.pointerId);x.beginPath();x.moveTo(...p(e))});
+  c.addEventListener('pointermove',e=>{if(!down)return;x.lineTo(...p(e));x.stroke();skDirty=true});
+  c.addEventListener('pointerup',()=>down=false);
+}
+function sketchPNG(){const c=document.getElementById('sk'),o=document.createElement('canvas');o.width=c.width;o.height=c.height;
+  const x=o.getContext('2d');x.fillStyle='#ffffff';x.fillRect(0,0,o.width,o.height);x.drawImage(c,0,0);return o.toDataURL('image/png')}
+
+function rCard(r){const sl=slaInfo(r);
+  return `<button class="card rj ${r.priority}" data-a="rej" data-k="${r.ticket}">
+    <div class="row between"><span class="mono" style="font-size:13px">${r.ticket}</span><span class="row" style="gap:4px"><span class="pill ${r.priority}">${r.priority}</span><span class="pill r-${r.status}">${RSTAT[r.status]}</span></span></div>
+    <div class="row" style="gap:6px">${r.isNew?'<span class="pill P3">חלק חדש</span>':''}<span class="pill">${esc(r.requestType)}</span><span class="pill">${esc(r.faultType)}</span>${r.faultCode?`<span class="code">${r.faultCode}</span> <span style="font-size:13px">${esc(subLabel(r.faultCode))}</span>`:''}</div>
+    <div style="font-size:14px">${r.partCode?`<span class="mono">${r.partCode}</span> · `:''}${esc(r.part)}${r.cabinet&&!r.partCode?` · ארון <span class="mono">${r.cabinet}</span>`:''}${r.box?` · ארגז ${esc(r.box)}`:''}</div>
+    ${(()=>{const th=r.photos.concat(r.sketches||[]);return th.length?`<div class="thumbs">${th.map(p=>`<img src="${p}" alt="צילום או שרטוט" style="background:#fff">`).join('')}</div>`:'<span class="muted" style="font-size:12px">ללא תמונות</span>'})()}
+    <div class="row between muted" style="font-size:12px"><span>${esc(r.installer)} · ${hhmm(r.at)}${r.assignee?' · אצל '+esc(r.assignee):''}</span><span class="sla ${sl.over?'over':''}">${sl.t}</span></div>
+    ${r.blocks&&r.status!=='done'?`<span class="pill blocked">עוצר עבודה</span>`:''}
+  </button>`}
+function rDetail(r,editable){
+  const sl=slaInfo(r), kv=[['פרויקט',`${r.project} · ${r.install}`],['מתקין',r.installer],['סוג',`${r.requestType} · ${r.faultType}`],['קוד תקלה',r.faultCode?`${r.faultCode} ${subLabel(r.faultCode)}`:'—'],['מיקום הפגם',r.loc||'—'],
+    ['עדיפות',`${r.priority} ${PRI[r.priority].label} (${PRI[r.priority].full}) · SLA ${PRI[r.priority].sla} ש׳`],['ארון / ארגז',`${r.cabinet||'—'}${r.box?' · ארגז '+r.box:''}`],['חלק',`${r.partCode?r.partCode+' · ':''}${r.part} × ${r.qty}${r.isNew?' (חלק חדש, לא בתכנית)':''}`],
+    ['מידה נדרשת',r.dimsReq||'—'],['מידה בפועל',r.dimsAct||'—'],['חומר / קנט',`${r.color||'—'}${r.edge?' · קנט '+r.edge:''}`],['צד פתיחה',r.side||'—'],
+    ...(r.isNew?[['למה צריך',r.newNotes||'—']]:[]),
+    ['פעולה ומועד',r.required],['סיבה משוערת',r.rootCause||'—'],['אחראי',r.assignee||'לא שויך'],['פתרון',r.resolution||'—']];
+  return `<div class="row between"><span class="title"><span class="mono">${r.ticket}</span></span><span class="row" style="gap:4px"><span class="pill ${r.priority}">${r.priority}</span><span class="pill r-${r.status}">${RSTAT[r.status]}</span></span></div>
+    <div class="row between"><span>${esc(r.desc)}</span></div>
+    <div class="row">${r.blocks&&r.status!=='done'?`<span class="pill blocked">עוצר עבודה</span>`:''}<span class="sla ${sl.over?'over':''}">${sl.t}</span></div>
+    <div class="sec"><h4>תמונות<span>${r.photos.length}/6</span></h4>
+      ${r.photos.length?`<div class="thumbs">${r.photos.map((p,k)=>`<button type="button" data-a="lb" data-t="${r.ticket}" data-k="${k}" aria-label="הגדלת תמונה ${k+1}"><img src="${p}" alt="צילום ריג׳קט ${k+1}"></button>`).join('')}</div>`:'<span class="muted" style="font-size:13px">אין תמונות עדיין.</span>'}
+      ${r.photos.length<6?`<label class="btn" style="align-self:flex-start" for="addph-${editable?'d':'p'}-${r.ticket}">📷 הוספת תמונה</label><input class="addph" id="addph-${editable?'d':'p'}-${r.ticket}" data-t="${r.ticket}" type="file" accept="image/*" multiple hidden>`:''}</div>
+    ${r.sketches&&r.sketches.length?`<div class="sec"><h4>שרטוט / צילום לחלק<span>${r.sketches.length}</span></h4><div class="thumbs">${r.sketches.map((p,k)=>`<button type="button" data-a="lb" data-s="1" data-t="${r.ticket}" data-k="${k}" aria-label="הגדלת שרטוט ${k+1}"><img src="${p}" alt="שרטוט ${k+1}" style="background:#fff"></button>`).join('')}</div></div>`:''}
+    <dl class="kv">${kv.map(([k,v])=>`<dt>${k}</dt><dd>${/מידה/.test(k)?`<span dir="ltr">${esc(v)}</span>`:`<bdi>${esc(v)}</bdi>`}</dd>`).join('')}</dl>
+    ${editable?`<div class="sec"><h4>עדכון טיפול<span>חוזר למתקין בזמן אמת</span></h4>
+      <div class="seg c3">${Object.entries(RSTAT).map(([k,v])=>`<button type="button" data-a="rstat" data-k="${k}" aria-pressed="${r.status===k}">${v}</button>`).join('')}</div>
+      <div class="grid2"><div class="field"><label class="lbl" for="ras">אחראי</label><select id="ras"><option value="">לא שויך</option>${ASSIGNEES.map(a=>`<option ${r.assignee===a?'selected':''}>${a}</option>`).join('')}</select></div>
+      <div class="field"><label class="lbl" for="rnote">הערה / פתרון</label><input id="rnote" placeholder="לדוגמה: נכנס לחיתוך מחר"></div></div>
+      <button class="btn primary" data-a="rsave" data-k="${r.ticket}">שמירת עדכון</button></div>`:''}
+    <div class="sec"><h4>היסטוריית סטטוס</h4><ul class="hist">${r.history.slice().reverse().map(h=>`<li><b>${RSTAT[h.to]}</b> · ${esc(h.by)} · <time>${hhmm(h.at)}</time>${h.note?`<div class="muted">${esc(h.note)}</div>`:''}</li>`).join('')}</ul></div>`;
+}
+
+function vSheet(){
+  const i=cur(); if(!S.sheet||!i)return '';
+  if(S.sheet==='rejd'){
+    const r=S.rejects.find(x=>x.ticket===S.rdoc); if(!r)return '';
+    return `<div class="sheet-bg" data-a="close-bg"><div class="sheet" role="dialog" aria-label="ריג׳קט ${r.ticket}">
+      <div class="row between"><h3>ריג׳קט</h3><button type="button" class="iconbtn" data-a="close" aria-label="סגירה">✕</button></div>${rDetail(r,false)}</div></div>`;
+  }
+  if(S.sheet==='issue'){
+    const pick=(g,arr,cls)=>`<div class="seg ${cls}">${arr.map(([k,v])=>`<button type="button" data-a="pick" data-g="${g}" data-k="${k}" aria-pressed="${draft[g]===k}">${v}</button>`).join('')}</div>`;
+    return `<div class="sheet-bg" data-a="close-bg"><form class="sheet" id="issue-form" aria-label="דיווח ריג׳קט" novalidate>
+      <div class="row between"><h3>ריג׳קט / בקשת חלק</h3><button type="button" class="iconbtn" data-a="close" aria-label="סגירה">✕</button></div>
+      <p class="muted" style="margin:0;font-size:12px">${esc(i.customer)} · <span class="mono">${i.id}</span> · ${ME} · ייפתח כ-<span class="mono">RJT-2026-${String(S.rejectSeq+1).padStart(4,'0')}</span></p>
+      <div class="fsec"><h4>1. איזה חלק?</h4>
+        <div class="seg c2"><button type="button" data-a="pmode" data-k="plan" aria-pressed="${draft.pmode==='plan'}">חלק מהתכנית</button><button type="button" data-a="pmode" data-k="new" aria-pressed="${draft.pmode==='new'}">חלק חדש, לא בתכנית</button></div>
+        <div id="picker" class="sec">${pickerHTML(i)}</div></div>
+      <div class="fsec"><h4>2. מה הבעיה?</h4>
+        <div class="field"><span class="lbl">סוג בקשה *</span>${pick('requestType',REQ_TYPES.map(x=>[x,x]),'c3')}</div>
+        <div class="field"><span class="lbl">סוג תקלה *</span>${pick('faultType',FAULT_TYPES.map(x=>[x,x]),'c2')}</div>
+        <div class="grid2"><div class="field"><label class="lbl" for="rcat">קוד תקלה</label><select id="rcat"><option value="">קטגוריה</option>${Object.entries(TAX).map(([k,[l]])=>`<option value="${k}">${k} · ${l}</option>`).join('')}</select></div>
+        <div class="field"><label class="lbl" for="rsub">תת-קטגוריה</label><select id="rsub" disabled><option value="">בחרו קטגוריה</option></select></div></div>
+        <div class="field"><span class="lbl">מיקום הפגם</span>${chips('loc',LOCS)}</div>
+        <div class="field"><span class="lbl">סיבה משוערת</span>${chips('cause',CAUSES)}</div></div>
+      <div class="fsec"><h4>3. מה צריך?</h4>
+        <div class="field"><span class="lbl">פעולה נדרשת *</span>${chips('need',NEEDS)}</div>
+        <div class="field"><span class="lbl">מועד אספקה *</span>${chips('when',WHEN)}</div>
+        <div class="grid2"><div class="field"><span class="lbl">כמות</span><div class="stepq"><button type="button" data-a="qty" data-k="-1" aria-label="פחות">−</button><input id="rqty" inputmode="numeric" value="1" aria-label="כמות"><button type="button" data-a="qty" data-k="1" aria-label="יותר">+</button></div></div>
+        <div class="field"><span class="lbl">מידה בפועל (אם נמדדה)</span><div class="nums"><input id="da1" inputmode="numeric" placeholder="רוחב" aria-label="רוחב בפועל"><input id="da2" inputmode="numeric" placeholder="גובה" aria-label="גובה בפועל"><input id="da3" inputmode="numeric" placeholder="עובי" aria-label="עובי בפועל"></div></div></div></div>
+      <div class="fsec"><h4>4. דחיפות ותיעוד</h4>
+        <div class="field"><span class="lbl">עדיפות</span>${pick('priority',Object.entries(PRI).map(([k,v])=>[k,`${k} ${v.label}`]),'')}<span class="muted" style="font-size:12px" id="pri-hint">${PRI[draft.priority].full} · SLA ${PRI[draft.priority].sla} שעות</span></div>
+        <label class="chk"><input type="checkbox" id="rblock" ${draft.priority==='P1'?'checked':''}> עוצר עבודה</label>
+        <div class="field"><span class="lbl" id="ip-lbl">תמונות מהשטח (1–3)${draft.pmode==='new'?'':' *'}</span><label class="btn block" for="ip">📷 צילום או בחירת תמונות</label>
+          <input id="ip" type="file" accept="image/*" multiple hidden><div class="thumbs" id="ip-prev"></div><span class="muted" id="ip-msg" style="font-size:12px">צלמו את החלק, את התווית של הארגז ואת המקום בהתקנה.</span></div></div>
+      <p class="note bad" id="issue-err" hidden></p>
+      <button class="btn danger block" type="submit">פתיחת ריג׳קט</button></form></div>`;
+  }
+  if(S.sheet==='doc'){
+    const P=PROJ[i.id],d=P&&P.docs.find(x=>x.id===S.doc); if(!d)return '';
+    const sv=P.survey;
+    return `<div class="sheet-bg" data-a="close-bg"><div class="sheet" role="dialog" aria-label="${esc(d.title)}">
+      <div class="row between"><h3>${esc(d.title)}</h3><button type="button" class="iconbtn" data-a="close" aria-label="סגירה">✕</button></div>
+      <div class="row muted" style="font-size:13px"><span class="mono">${d.id}</span><span>· ${esc(d.ver)} · ${d.date}</span><span>· ${esc(d.from)}</span></div>
+      ${d.note?`<p class="note" style="margin:0">${esc(d.note)}</p>`:''}
+      <div class="viewer ${S.zoom?'zoom':''}">${docSvg(i,d)}</div>
+      <button class="btn" data-a="zoom">${S.zoom?'הקטנה':'הגדלה'}</button>
+      ${d.kind==='survey'?`<div class="sec"><h4>נקודות שנמדדו<span>מרחק מתחילת הקיר / גובה, מ״מ</span></h4><ol class="pts">${sv.points.map(p=>`<li>${esc(p[3])} · קיר ${p[0]} · <span class="dims">${fmt(p[1])} / ${fmt(p[2])}</span></li>`).join('')}</ol>
+        ${sv.warn.map(w=>`<p class="note bad" style="margin:0">${esc(w)}</p>`).join('')}</div>`:''}
+      ${d.kind==='elev'?`<p class="muted" style="font-size:12px;margin:0">מידות במ״מ. גובה משטח 860 + הגבהה 40. תחתית עליונים 1,450.</p>`:''}
+    </div></div>`;
+  }
+  const P=PROJ[i.id]||{}, names=[P.contact&&P.contact[0],P.contact2&&P.contact2[0]].filter(Boolean), undone=i.steps.filter(x=>!x).length;
+  return `<div class="sheet-bg" data-a="close-bg"><form class="sheet" id="sign-form" aria-label="מסירה ללקוח">
+    <div class="row between"><h3>מסירה ללקוח</h3><button type="button" class="iconbtn" data-a="close" aria-label="סגירה">✕</button></div>
+    <p class="muted" style="margin:0;font-size:12px">${esc(i.customer)} · ${esc(i.item)} · ${i.steps.length-undone}/${i.steps.length} שלבים · ${SLOTS.filter(([k])=>i.slots[k]).length} צילומי מסירה</p>
+    ${openIssues(i)?`<p class="note bad" style="margin:0">השלמות פתוחות: ${rejOf(i).filter(r=>r.status!=='done').map(r=>`${r.partCode||''} ${esc(r.part)}`).join(' · ')}</p>`:''}
+    <div class="field"><span class="lbl">הלקוח מאשר</span>${CONFIRMS.map((c,k)=>`<label class="chk"><input type="checkbox" id="cf${k}"> ${c}</label>`).join('')}</div>
+    <div class="field"><span class="lbl">שם החותם</span>${chips('signer',names.concat(['אחר מטעם הלקוח']))}</div>
+    <div class="field"><span class="lbl">דירוג ההתקנה</span><div class="stars">${[1,2,3,4,5].map(n=>`<button type="button" data-a="rate" data-k="${n}" class="${draft.rating>=n?'on':''}" aria-label="${n} כוכבים">★</button>`).join('')}</div></div>
+    <div class="field"><div class="row between"><span class="lbl">חתימה</span><button type="button" class="linkbtn" data-a="clear-sig">ניקוי</button></div><canvas class="sig" id="sig"></canvas></div>
+    <p class="note bad" id="sign-err" hidden></p>
+    <button class="btn primary block" type="submit">אישור מסירה וסגירה</button></form></div>`;
+}
+
+/* ---------- desk ---------- */
+function vDesk(){
+  const all=S.installs.filter(i=>!i.day), open=S.rejects.filter(r=>r.status!=='done').length;
+  const p1=S.rejects.filter(r=>r.status!=='done'&&r.priority==='P1').length;
+  const rated=all.filter(i=>i.signoff), avg=rated.length?(rated.reduce((a,i)=>a+i.signoff.rating,0)/rated.length).toFixed(1):'—';
+  const tabs=`<div class="tabs" role="tablist"><button role="tab" data-a="desk" data-k="board" aria-selected="${S.desk==='board'}">לוח מנהל, היום</button>
+    <button role="tab" data-a="desk" data-k="rej" aria-selected="${S.desk==='rej'}">ריג׳קטים<span class="count">${open}</span></button>
+    <button role="tab" data-a="desk" data-k="log" aria-selected="${S.desk==='log'}">יומן סנכרון <bdi>CABICAD</bdi><span class="count">${S.log.length}</span></button></div>`;
+  if(S.desk==='rej') return tabs+vRejDesk();
+  if(S.desk==='log') return tabs+`<div class="desk-body">
+    <p class="muted" style="margin:0;font-size:14px">כל פעולה של המתקין נשלחת ל-CABICAD כקריאת API. בדמו הקריאות מדומות, והמבנה הוא החוזה שעליו מתחברים לשרת האמיתי.</p>
+    <div class="log"><ul>${S.log.map(l=>`<li><span class="m ${l.m}">${l.m}</span><span class="path">${esc(l.p)}</span><time>${hhmm(l.at)}</time><span class="n">${esc(l.n)}</span></li>`).join('')}</ul></div></div>`;
+  const ord={blocked:0,in_progress:1,scheduled:2,done:3};
+  const rows=[...all].sort((a,b)=>ord[a.status]-ord[b.status]);
+  return tabs+`<div class="desk-body">
+    <div class="kpis">
+      <div class="kpi"><span class="lbl">התקנות היום</span><b>${all.length}</b></div>
+      <div class="kpi"><span class="lbl">בביצוע</span><b>${all.filter(i=>i.status==='in_progress').length}</b></div>
+      <div class="kpi"><span class="lbl">הושלמו</span><b>${all.filter(i=>i.status==='done').length}</b></div>
+      <div class="kpi ${open?'alert':''}"><span class="lbl">ריג׳קטים פתוחים</span><b>${open}</b></div>
+      <div class="kpi ${p1?'alert':''}"><span class="lbl">P1 עוצרי עבודה</span><b>${p1}</b></div>
+      <div class="kpi"><span class="lbl">דירוג לקוח ממוצע</span><b>${avg}</b></div>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>פרויקט</th><th>מתקין</th><th>לקוח</th><th>סטטוס</th><th>התקדמות</th><th>ריג׳קטים</th><th>עדכון אחרון</th></tr></thead><tbody>
+    ${rows.map(i=>`<tr><td class="mono">${i.id}</td><td>${esc(i.installer)}</td><td>${esc(i.customer)}</td><td>${statusPill(i.status)}</td>
+      <td><span class="prog ${i.status==='done'?'done':''}"><i style="width:${pct(i)}%"></i></span> <span class="mono muted">${pct(i)}%</span></td>
+      <td>${openIssues(i)?`<span class="pill blocked">${openIssues(i)}</span>`:'<span class="muted">—</span>'}</td>
+      <td class="mono muted">${i.updated?hhmm(i.updated):'—'}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="muted" style="margin:0;font-size:13px">הלוח מתעדכן בזמן אמת מהאפליקציה. נסו לבצע צ׳ק-אין או לפתוח ריג׳קט במסך המתקין וצפו בשינוי כאן.</p></div>`;
+}
+
+function vRejDesk(){
+  const R=S.rejects, by=s=>R.filter(r=>r.status===s).length, blocked=R.filter(r=>r.blocks&&r.status!=='done').length;
+  const p1=R.filter(r=>r.priority==='P1'&&r.status!=='done').length;
+  if(S.rsel){const r=R.find(x=>x.ticket===S.rsel); if(r) return `<div class="desk-body"><button class="btn" style="align-self:flex-start" data-a="rback">→ כל הדיווחים</button>${rDetail(r,true)}</div>`;}
+  const f=S.rf, list=R.filter(r=>(f.p==='all'||r.priority===f.p)&&(f.t==='all'||r.requestType===f.t)&&(f.s==='all'||r.status===f.s))
+    .sort((a,b)=>(a.status==='done')-(b.status==='done')||a.priority.localeCompare(b.priority)||b.at.localeCompare(a.at));
+  const sel=(id,v,opts)=>`<select id="${id}" data-a="rfilter" aria-label="סינון">${opts.map(([k,l])=>`<option value="${k}" ${v===k?'selected':''}>${l}</option>`).join('')}</select>`;
+  return `<div class="desk-body">
+    <div class="kpis"><div class="kpi"><span class="lbl">סה״כ דיווחים</span><b>${R.length}</b></div>
+      <div class="kpi ${by('open')?'alert':''}"><span class="lbl">פתוחים${blocked?` · ${blocked} עוצרים עבודה`:''}</span><b>${by('open')}</b></div>
+      <div class="kpi"><span class="lbl">בטיפול</span><b>${by('in_progress')}</b></div>
+      <div class="kpi"><span class="lbl">הושלמו</span><b>${by('done')}</b></div>
+      <div class="kpi ${R.some(r=>slaInfo(r).over)?'alert':''}"><span class="lbl">בחריגת SLA</span><b>${R.filter(r=>slaInfo(r).over).length}</b></div>
+      <div class="kpi"><span class="lbl">החלפות ותוספות</span><b>${R.filter(r=>r.requestType!=='ריגקט').length}</b></div></div>
+    ${p1?`<div class="alertbar">${p1} ריג׳קטים קריטיים (P1) מחכים לטיפול</div>`:''}
+    <div class="filters"><span class="title" style="flex:1">כל הדיווחים</span>
+      ${sel('f-p',f.p,[['all','כל העדיפויות'],...Object.keys(PRI).map(k=>[k,k])])}
+      ${sel('f-t',f.t,[['all','כל הסוגים'],...REQ_TYPES.map(k=>[k,k])])}
+      ${sel('f-s',f.s,[['all','כל הסטטוסים'],...Object.entries(RSTAT)])}</div>
+    <div class="rlist">${list.length?list.map(r=>rCard(r).replace('data-a="rej"','data-a="rdesk"')).join(''):'<p class="muted">אין דיווחים בסינון הזה.</p>'}</div>
+    <p class="muted" style="margin:0;font-size:13px">אותו מודל כמו כלי הריג׳קטים: סוג בקשה, סוג תקלה, קוד תקלה, עדיפות P1–P4 עם SLA, ארגז וחלק, סטטוס והיסטוריה. כאן הנתונים מגיעים ישירות מהמתקין ומ-CABICAD.</p></div>`;
+}
+
+/* ---------- render ---------- */
+const phone=document.getElementById('phone'), desk=document.getElementById('desk');
+function render(){
+  const st=phone.querySelector('.screen')?.scrollTop||0;
+  phone.innerHTML=!S.loggedIn?vLogin():(S.view==='detail'?vDetail()+vSheet():vList());
+  const sc=phone.querySelector('.screen'); if(sc)sc.scrollTop=st;
+  desk.innerHTML=vDesk();
+  if(S.sheet==='sign')initSig();
+}
+
+function initSig(){
+  const c=document.getElementById('sig'); if(!c||c._init)return; c._init=1;
+  const r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  c.width=r.width*dpr; c.height=r.height*dpr;
+  const x=c.getContext('2d'); x.scale(dpr,dpr); x.lineWidth=2.2; x.lineCap='round'; x.lineJoin='round';
+  x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--ink').trim()||'#141b26';
+  let down=false; sigDirty=false;
+  const p=e=>{const b=c.getBoundingClientRect();return[e.clientX-b.left,e.clientY-b.top]};
+  c.addEventListener('pointerdown',e=>{down=true;c.setPointerCapture(e.pointerId);x.beginPath();x.moveTo(...p(e))});
+  c.addEventListener('pointermove',e=>{if(!down)return;x.lineTo(...p(e));x.stroke();sigDirty=true});
+  c.addEventListener('pointerup',()=>down=false);
+}
+
+function readImage(file,max=520){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{const im=new Image();im.onload=()=>{
+      const k=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement('canvas');
+      cv.width=Math.round(im.width*k);cv.height=Math.round(im.height*k);
+      cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);res(cv.toDataURL('image/jpeg',.72))};
+      im.onerror=rej; im.src=fr.result};
+    fr.onerror=rej; fr.readAsDataURL(file);
+  });
+}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-a]'); if(!t)return;
+  const a=t.dataset.a, i=cur();
+  if(a==='close-bg'&&e.target!==t)return;
+  switch(a){
+    case 'login':{
+      const v=(document.getElementById('otp').value||'').trim();
+      if(v!=='1234'){const m=document.getElementById('login-msg');m.textContent='הקוד שגוי. בדמו הקוד הוא 1234.';m.className='note bad';return}
+      S.loggedIn=true;S.view='list';api('POST','/v1/auth/verify','מתקין אומת ב-OTP וקיבל token שמציג רק את ההתקנות שלו');break}
+    case 'logout':S.loggedIn=false;save();render();break;
+    case 'open':S.sel=t.dataset.id;S.view='detail';S.tab='cust';S.cmode=null;save();render();phone.querySelector('.screen').scrollTop=0;break;
+    case 'back':S.view='list';S.sheet=null;save();render();break;
+    case 'tab':S.tab=t.dataset.k;save();render();break;
+    case 'go':S.tab=t.dataset.k;save();render();phone.querySelector('.screen').scrollTop=0;break;
+    case 'sub':S.sub=t.dataset.k;save();render();break;
+    case 'cmode':S.cmode=t.dataset.k;save();render();break;
+    case 'acc':{const P=PROJ[i.id],k=+t.dataset.k;i.acc[k]=!i.acc[k];
+      api('PATCH',`/v1/installs/${i.id}/accessories/${k+1}`,`${P.accessories[k][0]} סומן ${i.acc[k]?'כמותקן':'כלא מותקן'}`);break}
+    case 'copy':{const v=t.dataset.v;try{navigator.clipboard.writeText(v).then(()=>{t.textContent='הועתק ✓'},()=>{t.textContent=v})}catch(_){t.textContent=v}break}
+    case 'qty':{const el=document.getElementById('rqty');el.value=Math.max(1,(+el.value||1)+(+t.dataset.k));break}
+    case 'desk':S.desk=t.dataset.k;save();render();break;
+    case 'checkin':{
+      const j=()=> (Math.random()-.5)*0.002;
+      i.checkin={at:new Date().toISOString(),lat:i.geo[0]+j(),lng:i.geo[1]+j()};i.status='in_progress';
+      api('POST',`/v1/installs/${i.id}/checkin`,`צ׳ק-אין של ${ME} ב-${esc(i.address)}, מיקום GPS נשמר (בדמו מיקום מדומה). סטטוס הפרויקט עבר ל״בביצוע״`);break}
+    case 'step':{
+      const k=+t.dataset.k;i.steps[k]=!i.steps[k];
+      api('PATCH',`/v1/installs/${i.id}/steps/${k+1}`,`${i.steps[k]?'הושלם':'בוטל סימון'}: ${STEPS[k]} · התקדמות ${pct(i)}%`);break}
+    case 'cab':{
+      const c=i.cabinets.find(c=>c.code===t.dataset.code);c.done=!c.done;
+      api('PATCH',`/v1/projects/${i.id}/cabinets/${c.code}`,`ארון ${c.code} (${c.name}) סומן ${c.done?'כמותקן':'כלא מותקן'}`);break}
+    case 'kind':draft.kind=t.dataset.k;render();break;
+    case 'doc':{S.sheet='doc';S.doc=t.dataset.k;S.zoom=false;const d=PROJ[i.id].docs.find(x=>x.id===S.doc);
+      S.log.unshift({at:new Date().toISOString(),m:'GET',p:`/v1/projects/${i.id}/documents/${d.id}`,n:`${ME} פתח: ${d.title} (${d.ver}, ${d.from})`});save();render();break}
+    case 'zoom':S.zoom=!S.zoom;render();break;
+    case 'sheet':S.sheet=t.dataset.s;Object.assign(draft,{requestType:'ריגקט',faultType:'תקלת ייצור',priority:'P3',rating:0,pmode:'plan',cab:null,part:null,cabq:'',loc:null,cause:null,need:null,when:null,ntype:null,nside:null,npurp:null,signer:null});render();if(S.sheet==='issue'&&draft.pmode==='new')initSketch();break;
+    case 'close':case 'close-bg':S.sheet=null;render();break;
+    case 'pick':{draft[t.dataset.g]=t.dataset.k;
+      t.parentNode.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));
+      if(t.dataset.g==='priority'){document.getElementById('pri-hint').textContent=`${PRI[draft.priority].full} · SLA ${PRI[draft.priority].sla} שעות`;
+        if(draft.priority==='P1')document.getElementById('rblock').checked=true;}
+      break}
+    case 'pmode':{draft.pmode=t.dataset.k;t.parentNode.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));
+      if(draft.pmode==='new'){draft.requestType='תוספת';draft.faultType='אחר';document.querySelectorAll('[data-g="requestType"],[data-g="faultType"]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===draft[b.dataset.g]))}
+      refreshPicker();const lb=document.getElementById('ip-lbl');if(lb)lb.textContent=draft.pmode==='new'?'תמונות מהשטח (1–3)':'תמונות מהשטח (1–3) *';break}
+    case 'pcab':draft.cab=t.dataset.k;draft.part=null;refreshPicker();document.getElementById('partfield')?.scrollIntoView({block:'nearest',behavior:'smooth'});break;
+    case 'ppart':draft.part=+t.dataset.k;refreshPicker();break;
+    case 'skclear':{const c=document.getElementById('sk');if(c){c.getContext('2d').clearRect(0,0,c.width,c.height);skDirty=false}break}
+    case 'rej':S.sheet='rejd';S.rdoc=t.dataset.k;render();break;
+    case 'lb':{const r=S.rejects.find(x=>x.ticket===t.dataset.t),lb=document.getElementById('lb');lb.querySelector('img').src=(t.dataset.s?r.sketches:r.photos)[+t.dataset.k];lb.hidden=false;break}
+    case 'lbclose':t.hidden=true;break;
+    case 'rdesk':S.rsel=t.dataset.k;render();desk.scrollIntoView({block:'start',behavior:'smooth'});break;
+    case 'rback':S.rsel=null;render();break;
+    case 'rstat':draft.rstat=t.dataset.k;t.parentNode.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',b===t));break;
+    case 'rsave':{
+      const r=S.rejects.find(x=>x.ticket===t.dataset.k), to=draft.rstat||r.status, note=document.getElementById('rnote').value.trim(), as=document.getElementById('ras').value||null;
+      if(to===r.status&&as===r.assignee&&!note)break;
+      const now=new Date().toISOString(); r.history.push({to,by:'מנהל',at:now,note:note||(as!==r.assignee?`שויך ל${as||'—'}`:'')});
+      r.status=to; r.assignee=as; if(to==='done'){r.resolution=note||r.resolution||'טופל';r.resolvedAt=now}
+      const inst=S.installs.find(x=>x.id===r.install);
+      if(inst&&inst.status==='blocked'&&!S.rejects.some(x=>x.install===inst.id&&x.blocks&&x.status!=='done')){inst.status='in_progress';inst.updated=now}
+      draft.rstat=null;
+      api('PATCH',`/v1/rejects/${r.ticket}`,`${r.ticket} → ${RSTAT[to]}${as?' · אחראי: '+as:''}${note?' · '+note:''}. המתקין רואה את העדכון באפליקציה`);break}    case 'rate':draft.rating=+t.dataset.k;
+      phone.querySelectorAll('.stars button').forEach(b=>b.classList.toggle('on',+b.dataset.k<=draft.rating));break;
+    case 'clear-sig':{const c=document.getElementById('sig');c.getContext('2d').clearRect(0,0,c.width,c.height);sigDirty=false;break}
+    case 'reset':try{localStorage.removeItem(KEY)}catch(_){};S=seed();syncing=false;render();break;
+  }
+});
+
+document.addEventListener('change',async e=>{
+  const id=e.target.id, i=cur();
+  if(id==='rcat'){const sub=document.getElementById('rsub'),k=e.target.value;
+    sub.innerHTML=k?`<option value="">תת-קטגוריה</option>`+Object.entries(TAX[k][1]).map(([c,l])=>`<option value="${c}">${c} · ${l}</option>`).join(''):'<option value="">בחרו קטגוריה</option>';sub.disabled=!k;return}
+  if(e.target.classList.contains('slotin')&&i){const f=e.target.files[0];if(!f)return;const k=e.target.dataset.k;
+    try{i.slots[k]=await readImage(f,520);api('POST',`/v1/installs/${i.id}/handover-photos/${k}`,`צילום מסירה ״${SLOTS.find(x=>x[0]===k)[1]}״ הועלה`)}catch(_){alertNote('לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.')}return}
+  if(id==='nfile'){const prev=document.getElementById('nfile-prev');prev.innerHTML='';[...e.target.files].slice(0,3).forEach(f=>{const im=document.createElement('img');im.alt='שרטוט מצורף';im.src=URL.createObjectURL(f);prev.appendChild(im)});return}
+  if(id==='f-p'||id==='f-t'||id==='f-s'){S.rf[{'f-p':'p','f-t':'t','f-s':'s'}[id]]=e.target.value;save();render();return}
+  if(id==='ip'){const fs=[...e.target.files],prev=document.getElementById('ip-prev'),msg=document.getElementById('ip-msg');
+    prev.innerHTML='';fs.slice(0,3).forEach(f=>{const im=document.createElement('img');im.alt='תצוגה מקדימה';im.src=URL.createObjectURL(f);prev.appendChild(im)});
+    msg.textContent=fs.length>3?`נבחרו ${fs.length} תמונות. יישמרו 3 הראשונות.`:`${fs.length} תמונות נבחרו.`;return}
+  if(e.target.classList.contains('addph')){const r=S.rejects.find(x=>x.ticket===e.target.dataset.t),fs=[...e.target.files].slice(0,6-r.photos.length);if(!fs.length)return;
+    try{const ph=await Promise.all(fs.map(f=>readImage(f,420)));r.photos.push(...ph);
+      r.history.push({to:r.status,by:S.sheet==='rejd'?ME:'מנהל',at:new Date().toISOString(),note:`נוספו ${ph.length} תמונות`});
+      api('POST',`/v1/rejects/${r.ticket}/photos`,`${ph.length} תמונות נוספו ל-${r.ticket} (סה״כ ${r.photos.length})`)}catch(_){}
+    return}
+  if(id!=='photo-in')return;
+  const f=e.target.files[0]; if(!f||!i)return;
+  try{
+    const src=await readImage(f);
+    i.photos.unshift({kind:draft.kind,src,at:new Date().toISOString()});
+    api('POST',`/v1/installs/${i.id}/photos`,`צילום ״${KIND[draft.kind]}״ הועלה ושויך לפרויקט`);
+  }catch(_){alertNote('לא הצלחתי לקרוא את הקובץ. נסו תמונה בפורמט JPG או PNG.')}
+});
+function alertNote(msg){const sc=phone.querySelector('.screen');if(!sc)return;const p=document.createElement('p');p.className='note bad';p.textContent=msg;sc.prepend(p)}
+
+document.addEventListener('input',e=>{if(e.target.id==='cabq'){draft.cabq=e.target.value;const l=document.getElementById('cablist');if(l)l.innerHTML=cabRows(cur())}});
+
+document.addEventListener('submit',async e=>{
+  e.preventDefault(); const i=cur(); if(!i)return;
+  if(e.target.id==='issue-form'){
+    const g=id=>{const el=document.getElementById(id);return el?el.value.trim():''}, err=document.getElementById('issue-err');
+    const fail=m=>{err.textContent='חסר: '+m.join(', ')+'.';err.hidden=false;err.scrollIntoView({block:'nearest'})};
+    const files=[...document.getElementById('ip').files].slice(0,3), isNew=draft.pmode==='new';
+    let pi={};
+    if(isNew){const nf=[...document.getElementById('nfile').files].slice(0,3);
+      const miss=[[!draft.ntype,'סוג החלק'],[!g('nl')||!g('nw'),'מידות'],[!draft.npurp,'למה צריך'],[!nf.length&&!skDirty,'שרטוט או צילום'],[!draft.need,'פעולה נדרשת'],[!draft.when,'מועד']].filter(x=>x[0]).map(x=>x[1]);
+      if(miss.length)return fail(miss);
+      let sk=[];try{sk=await Promise.all(nf.map(f=>readImage(f,520)))}catch(_){}
+      if(skDirty)sk.unshift(sketchPNG());
+      const side=draft.nside&&draft.nside!=='לא רלוונטי'?' '+draft.nside:'';
+      pi={isNew:true,cabinet:g('ncab'),box:'',partCode:'',part:draft.ntype+side,dimsReq:`${g('nl')}×${g('nw')}×${g('nt')||19}`,color:g('nmat'),edge:'',side:draft.nside||'',newNotes:draft.npurp,sketches:sk,desc:draft.npurp};
+    }else{
+      const c=i.cabinets.find(x=>x.code===draft.cab),p=c&&partsOf(c)[draft.part];
+      const miss=[[!c,'ארון'],[c&&!p,'חלק'],[!draft.need,'פעולה נדרשת'],[!draft.when,'מועד'],[!files.length,'תמונה']].filter(x=>x[0]).map(x=>x[1]);
+      if(miss.length)return fail(miss);
+      pi={isNew:false,cabinet:c.code,box:String(i.cabinets.indexOf(c)+11),partCode:p.code,part:p.name,dimsReq:p.L?pdims(p):'',color:p.mat,edge:p.edge,side:p.side,sku:`${i.id.slice(-4)}-${p.code}`,sketches:[]};
+    }
+    let photos=[]; try{photos=await Promise.all(files.map(f=>readImage(f,420)))}catch(_){err.textContent='לא הצלחתי לקרוא את התמונה. נסו JPG או PNG.';err.hidden=false;return}
+    const now=new Date().toISOString(), blocks=document.getElementById('rblock').checked, code=g('rsub')||g('rcat')||'';
+    const da=[g('da1'),g('da2'),g('da3')].filter(Boolean).join('×');
+    const r={ticket:'RJT-2026-'+String(++S.rejectSeq).padStart(4,'0'),install:i.id,project:i.customer,installer:ME,requestType:draft.requestType,faultType:draft.faultType,
+      faultCode:code,priority:draft.priority,desc:[subLabel(code)||draft.faultType,draft.loc].filter(Boolean).join(' · '),...pi,loc:draft.loc||'',dimsAct:da,
+      qty:Math.max(1,+g('rqty')||1),required:`${draft.need} · ${draft.when}`,rootCause:draft.cause||'',
+      blocks,photos,status:'open',assignee:null,resolution:null,at:now,history:[{to:'open',by:ME,at:now,note:isNew?'בקשת חלק חדש מהשטח':'נפתח מהשטח'}]};
+    S.rejects.unshift(r); S.sheet=null; S.tab='close'; S.cmode='rej';
+    S.log.unshift({at:now,m:'POST',p:'/v1/rejects',n:`${r.ticket}: ${r.requestType} · ${r.faultCode?r.faultCode+' '+subLabel(r.faultCode):r.faultType} · ${r.priority} · ${r.isNew?'חלק חדש: '+r.part+' '+r.dimsReq+' · '+r.sketches.length+' שרטוטים':r.partCode+' '+r.part+' ('+(r.dimsReq||'פרזול')+', ארגז '+r.box+')'} · ${r.required} · ${photos.length} תמונות`});
+    if(blocks){i.status='blocked';S.log.unshift({at:now,m:'EVT',p:`/v1/installs/${i.id}/status`,n:`ההתקנה סומנה ״עבודה נעצרה״ בגלל ${r.ticket}`})}
+    api('EVT','/v1/rejects/notify',`התראה נשלחה למחלקה הטכנית על ${r.ticket} (${r.priority}, SLA ${PRI[r.priority].sla} ש׳)`);
+  }
+  if(e.target.id==='sign-form'){
+    const err=document.getElementById('sign-err'), miss=[[!i.slots.gen,'צילום ״מבט כללי״'],[!draft.signer,'שם החותם'],[!draft.rating,'דירוג'],[!sigDirty,'חתימה']].filter(x=>x[0]).map(x=>x[1]);
+    if(miss.length){err.textContent='חסר: '+miss.join(', ')+'.';err.hidden=false;return}
+    const conf=CONFIRMS.map((_,k)=>document.getElementById('cf'+k).checked), open=openIssues(i);
+    i.signoff={name:draft.signer,rating:draft.rating,at:new Date().toISOString(),sig:document.getElementById('sig').toDataURL('image/png'),confirms:conf,open};
+    i.status='done'; S.sheet=null;
+    S.log.unshift({at:i.signoff.at,m:'POST',p:`/v1/installs/${i.id}/signoff`,n:`מסירה: ${draft.signer} · דירוג ${draft.rating}/5 · אישר ${conf.filter(Boolean).length}/${CONFIRMS.length} סעיפים${open?` · ${open} השלמות פתוחות`:''}`});
+    api('PATCH',`/v1/projects/${i.id}`,`הפרויקט סומן ב-CABICAD כ״${open?'נמסר עם השלמות':'הותקן'}״ · ${i.steps.filter(Boolean).length}/${i.steps.length} שלבים · ${SLOTS.filter(([k])=>i.slots[k]).length} צילומי מסירה`);
+  }
+});
+
+render();
+})();
+</script>
