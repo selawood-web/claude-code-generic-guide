@@ -267,7 +267,7 @@ The knowledge system has three layers:
 - Auto memory: Claude writes and recalls per-project notes in `~/.claude/projects/<project>/memory/`; the index loads every session
 - `CLAUDE.md` (importing `AGENTS.md`) and `~/.claude/CLAUDE.md` load every session
 - Session-start, pre-compaction, and session-end hooks fire via `.claude/settings.json` — every session opens with repo health and memory pointers
-- A context guard stops `/ccgg-audit`, `/gbb`, `/product-brief` and `/dream` once on a session already over 100k tokens, and warns past 300k — see [USER-MANUAL.md](USER-MANUAL.md#keeping-sessions-cheap)
+- A context guard stops `/ccgg-audit`, `/gbb`, `/product-brief`, `/bonanza` and `/dream` once on a session already over 100k tokens, and warns past 300k — see [USER-MANUAL.md](USER-MANUAL.md#keeping-sessions-cheap)
 
 ### 2. Semi-automatic (you trigger it)
 - `/flush` — write an LLM-generated session summary before compacting or closing

@@ -121,6 +121,15 @@ class ContextGuardTests(unittest.TestCase):
         self.assertEqual(self.run_hook("UserPromptExpansion", "product-brief",
                                        CCGG_CONTEXT_GUARD="off").returncode, 0)
 
+    def test_every_fan_out_skill_is_stopped_on_a_long_session(self):
+        # The list is the guard's whole policy, and it lives in one bash string:
+        # a skill that fans out and is missing from it runs unchecked on a long
+        # session, which is the pattern this hook was written to catch.
+        self.write(turn(200_000))
+        for command in ("ccgg-audit", "gbb", "product-brief", "bonanza", "dream"):
+            self.assertEqual(self.run_hook("UserPromptExpansion", command).returncode, 2, command)
+        self.assertEqual(self.run_hook("UserPromptExpansion", "decide").returncode, 0)
+
     def test_missing_or_empty_transcript_is_silent(self):
         missing = self.run_hook("UserPromptExpansion", "ccgg-audit",
                                 transcript=os.path.join(self.tmp.name, "nope.jsonl"))

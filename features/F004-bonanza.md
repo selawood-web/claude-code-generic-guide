@@ -123,8 +123,6 @@ gate it could not influence, with the cheapest test that would prove it wrong.
   at it and do not restate it
 
 ## Open questions
-- Should `/bonanza` join the context guard's heavy-skill list, so a full run is
-  stopped once on a session already over 100k tokens? — owner: repository owner, blocks: no
 - Do generators keep the main model after the first three real runs, or move to the
   smaller one? — owner: repository owner, blocks: no
 - Does the fact sheet belong under `ideas/`, or beside the project's other standing
@@ -138,4 +136,7 @@ gate it could not influence, with the cheapest test that would prove it wrong.
 - 2026-11-20 — Idea-family skills must ask what the request relates to before running — [in] one routing question, single-homed in the Skill Checker
 - 2026-11-20 — Routing question drafted with six options — [in] cut to four, the pick-list maximum; `/decide` announces itself and `/requirements` is reached through `/feature`
 - 2026-11-20 — Other skills waking this one, for example after a No-go verdict from `/product-brief` — [deferred] until the first real runs show whether a No-go usually wants a new search
+- 2026-11-20 — Whether `/bonanza` joins the context guard's heavy-skill list — [in] added. The full path orchestrates six subagents and merges their returns, the pattern the guard was written for, and `/product-brief` in the same family is already listed. The block is once, on a typed command, over 100k tokens; a skill that woke by itself is not affected
+- 2026-11-20 — Surface idea records still in `proposed` or `testing` at session start, the way open decisions are — [deferred] until the first records exist; a move left in `testing` with nobody reminded is the failure it would prevent
+- 2026-11-20 — A fresh headless session to prove the routing question fires — [deferred] until a runner with credentials is available; the attempt from the build session failed on authentication, so the three routing criteria above are checked by hand on the first real run
 - 2026-11-20 — [in] Built on `claude/bonanza-skill`. [verified] validator clean, catalog current, unit tests pass, feature lint clean. [not exercised from this seat] a real full-path run with subagents on a real business, and auto-invocation from a trigger phrase in a fresh session

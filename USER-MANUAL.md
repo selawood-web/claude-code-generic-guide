@@ -1171,7 +1171,7 @@ Details for each command are in [section 6](#6-skills-reference).
 | `/decide <question>` | Choosing between options: X vs Y, go/no-go. Reversible, low-stakes choices take the light path by themselves | medium, high on big calls |
 | `/architecture <system>` | Designing something new, or restructuring across modules | medium |
 | `/product-brief <idea>` | Deciding whether an app or feature is worth building at all | high, fresh |
-| `/bonanza <business>` | Looking for a new way to make money, with no idea yet. Quick questions take the light path | medium, high on the full path |
+| `/bonanza <business>` | Looking for a new way to make money, with no idea yet. Quick questions take the light path | medium on the light path; high, fresh on the full path |
 
 **Build**
 
@@ -1227,7 +1227,7 @@ Details for each command are in [section 6](#6-skills-reference).
   and the session is long? `/compact`. `/clear` is cheaper: nothing is carried
   over and nothing has to be summarized.
 - **The context guard enforces the worst case.** `.claude/hooks/context-guard.sh`
-  blocks `/ccgg-audit`, `/gbb`, `/product-brief` and `/dream` once when the
+  blocks `/ccgg-audit`, `/gbb`, `/product-brief`, `/bonanza` and `/dream` once when the
   session already holds more than 100k tokens, and tells you to flush and clear.
   Type the command again to run it anyway. Past 300k tokens it shows one
   warning per 100k. `CCGG_CONTEXT_GUARD=off` disables it; the thresholds are
