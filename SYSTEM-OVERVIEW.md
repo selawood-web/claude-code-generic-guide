@@ -35,7 +35,7 @@ start from than this one had.
 
 ```mermaid
 flowchart LR
-    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>29 skills, quality gate</i>"]
+    A["Session starts<br/><i>rules + memory load</i>"] --> B["Work<br/><i>30 skills, quality gate</i>"]
     B --> C["Save knowledge<br/><i>learn · flush</i>"]
     C --> D["Session ends<br/><i>hook leaves a marker</i>"]
     D -. "the next session starts<br/>already knowing what this one learned" .-> A
@@ -90,7 +90,7 @@ through a pull request that the owner merges**. The AI proposes; the human decid
 
 ---
 
-## The workers: 29 skills
+## The workers: 30 skills
 
 A skill is a written procedure the AI follows instead of improvising — like a
 checklist an experienced engineer would use. Each triggers when you type its command
@@ -104,6 +104,7 @@ one line of explanation.
 | Skill | Goal | Behavior |
 |-------|------|----------|
 | `/decide` | A researched, debated, recorded decision | Criteria before options, live research before recommending, five personas argue, and the choice lands in `decisions/` with a revisit trigger |
+| `/bonanza` | Find a new way for a business to make money | Listens first and keeps a tagged fact sheet, then generators invent without judging, a Logic judge and a Caution judge test blind and kill most of the list, and the owner leaves with one move in one sentence, a cheap test, and a record in `ideas/` that keeps what was killed and why |
 | `/product-brief` | Know if an idea is worth building | Market research, viability debate, an explicit Go / No-go / Pivot verdict — the spec is only written on Go |
 | `/gbb` | Close the gap between the vision and how the product feels | Writes the design intent before anything is built — who, environment, feeling, then colour, type, icons, motion and voice with a test each — then researches who it is for, walks the running product as a stranger, runs a ten-member design council, and returns a Good / Better / Best ladder with a timed test per rung — a rerun moves the bar |
 
@@ -165,7 +166,7 @@ has to remember anything.
 | **Session start** | The moment a session opens | Syncs CCGG-owned files from the guide clone when `CCGG_HOME`, `CCGG_REPO` and `CCGG_REF` are all set (so merged guide PRs reach every session; any one of them missing and it runs nothing), runs the validator and shows the repo's health, points at the last session log in `memory/sessions/` and asks for `/dream` once five pile up, and counts open decision records and open feature-ledger ideas. In a project without these tools, it stays silent |
 | **Before compaction** | Just before the AI compresses its conversation history | Tells the compaction model what the summary must keep — boundary, decisions, gate state, open threads — so the facts whose loss causes re-work survive the compression |
 | **Session end** | The session closes | Leaves a timestamped marker, per project, that the next session's start hook reads back |
-| **Context guard** | Every prompt, and every typed command | Stops a heavy command (`/ccgg-audit`, `/gbb`, `/product-brief`, `/dream`) once when the session is already over 100k tokens and names the cheaper path — `/flush`, `/clear`, run it again; past 300k it warns once per 100k. Typing the command again runs it anyway |
+| **Context guard** | Every prompt, and every typed command | Stops a heavy command (`/ccgg-audit`, `/gbb`, `/product-brief`, `/bonanza`, `/dream`) once when the session is already over 100k tokens and names the cheaper path — `/flush`, `/clear`, run it again; past 300k it warns once per 100k. Typing the command again runs it anyway |
 | **Flush guard** | Each time a reply ends | Whenever the session has grown ~150k tokens since it was last saved (or since it last asked), sends the reply back to run `/flush` first — so a long session saves itself instead of waiting for someone to remember |
 | **Skill usage** | Each time a skill runs, typed or called by the AI | Appends the skill's name to a local log; `/flush` copies the tally into the session log, and `/efficiency` uses it to name skills that never run. Prints nothing |
 
@@ -222,7 +223,7 @@ twice by a human becomes a check run forever by the machine**.
 |------|----------------|
 | **You (the owner)** | Decide. Every change reaches the main branch only through a pull request you merge. Judgment calls — what to delete, what to rewrite — are always yours |
 | **The AI** | Works by the charter: thinks before acting, verifies before claiming, asks all its questions at once as coded pick-lists, explains in plain-words cards, escalates instead of proceeding on anything destructive |
-| **The 29 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
+| **The 30 skills** | Written procedures for repeatable work — each checked for fit before it is trusted |
 | **The 6 hooks** | Run automatically at session start, before compaction, at session end, on every prompt (the context guard), as each reply ends (the flush guard), and whenever a skill runs (the usage log) — the part of the system that needs no one to remember it |
 | **The validator + CI** | Check every proposed change against every check in `tools/validate.py` and block anything broken from reaching the main branch |
 | **The knowledge base** | The permanent lessons — including the lessons learned while building this very system |

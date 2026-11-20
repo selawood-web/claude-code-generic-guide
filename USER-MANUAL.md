@@ -34,7 +34,7 @@ What you get:
 | Component | What it does |
 |-----------|-------------|
 | `AGENTS.md` | Tells the AI how to behave: professional, concise, self-critical |
-| 29 Skill workflows | Step-by-step procedures for every common dev task |
+| 30 Skill workflows | Step-by-step procedures for every common dev task |
 | Memory system | Knowledge that persists and grows across every session |
 | Session protocol | A ritual that turns sessions into compounding knowledge |
 | Knowledge base | Pre-seeded engineering wisdom (patterns, principles, pitfalls) |
@@ -115,7 +115,7 @@ cp -r /path/to/this-repo/.claude/ /path/to/your-project/.claude/
 ```
 
 This installs:
-- All 29 skill workflows
+- All 30 skill workflows
 - `settings.json`, which registers the session lifecycle hooks
 - The hook scripts themselves (they reference only `$HOME`, so they are portable)
 
@@ -160,7 +160,7 @@ Start a new AI session in your project directory and ask:
 what skills are available?
 ```
 
-You should see the 29 installed skills listed (typing `/` also filters through everything invocable). Then:
+You should see the 30 installed skills listed (typing `/` also filters through everything invocable). Then:
 
 ```
 what do you remember?
@@ -675,6 +675,29 @@ evaluate this feature idea
 
 ---
 
+### `/bonanza` — Finding the Money Idea
+
+**Use when:** You want a new way for a business to make money and do not have the idea yet. If the idea already exists, that is `/product-brief`; a choice between options is `/decide`.
+
+**What it does:**
+1. Settles what kind of request this is — one routing question, asked only when the request does not already say
+2. Listens first: builds or refreshes a short fact sheet about the business in `ideas/`, every line tagged `[known]`, `[assumed]` or `[hoped]`, so the questions are answered once
+3. Invents without judging: one generator per lens pack, each seeing the fact sheet and its own thinking tools and nothing else
+4. Tests blind: a Logic judge that never saw how the ideas were born checks each in numbers, then a Caution judge bounds the loss and names the cheapest test; most ideas are killed, and the reasons are kept
+5. Sharpens with you: one move, reduced to what is necessary, stated in one sentence
+6. Leaves the decision to you — run the cheap test, park, or kill — writes the record to `ideas/`, and hands the move to `/product-brief`, `/decide` or `/feature`
+
+A quick question takes the light path, in one thread. The full path fans out to subagents and starts only on your yes.
+
+**Examples:**
+```
+/bonanza a small software business with forty paying customers
+give me ways to grow revenue from the customers we already have
+סיעור מוחות — רעיון לעשות כסף מהמוצר הקיים
+```
+
+---
+
 ### `/gbb` — Good, Better, Best: the Design Gap
 
 **Use when:** The product works and is well built, but what users get feels far from the vision — layout, usability, knowing where you are. GBB is the gate for how it feels, the way the code gate is the gate for whether it is correct.
@@ -1148,6 +1171,7 @@ Details for each command are in [section 6](#6-skills-reference).
 | `/decide <question>` | Choosing between options: X vs Y, go/no-go. Reversible, low-stakes choices take the light path by themselves | medium, high on big calls |
 | `/architecture <system>` | Designing something new, or restructuring across modules | medium |
 | `/product-brief <idea>` | Deciding whether an app or feature is worth building at all | high, fresh |
+| `/bonanza <business>` | Looking for a new way to make money, with no idea yet. Quick questions take the light path | medium on the light path; high, fresh on the full path |
 
 **Build**
 
@@ -1203,7 +1227,7 @@ Details for each command are in [section 6](#6-skills-reference).
   and the session is long? `/compact`. `/clear` is cheaper: nothing is carried
   over and nothing has to be summarized.
 - **The context guard enforces the worst case.** `.claude/hooks/context-guard.sh`
-  blocks `/ccgg-audit`, `/gbb`, `/product-brief` and `/dream` once when the
+  blocks `/ccgg-audit`, `/gbb`, `/product-brief`, `/bonanza` and `/dream` once when the
   session already holds more than 100k tokens, and tells you to flush and clear.
   Type the command again to run it anyway. Past 300k tokens it shows one
   warning per 100k. `CCGG_CONTEXT_GUARD=off` disables it; the thresholds are

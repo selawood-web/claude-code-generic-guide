@@ -31,7 +31,7 @@ set -uo pipefail
 
 # Commands that fan out into subagents or run for many steps. Kept to the ones
 # that need nothing from the conversation they are typed into.
-HEAVY=" ccgg-audit gbb product-brief dream "
+HEAVY=" ccgg-audit gbb product-brief bonanza dream "
 
 # This runs on every prompt, and on Windows every process it starts costs tens
 # of milliseconds, so parsing stays in bash builtins: one grep and one tail per

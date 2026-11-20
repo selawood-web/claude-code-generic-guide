@@ -12,7 +12,9 @@ purpose: "Evaluate a product/app idea: market research, Go/No-go/Pivot"
 Answer "is this idea worth building, and in what shape?" *before* any spec is written.
 This skill evaluates; the `requirements` skill specifies. If the user already knows
 they are building it and needs a spec, route to `/requirements` instead. If the
-question is a choice between existing options, route to `/decide`.
+question is a choice between existing options, route to `/decide`. If there is no idea
+yet, only a wish for one, that is `/bonanza`. An unclear request is settled first by
+[`../../references/tool-choice.md`](../../references/tool-choice.md), *The idea family*.
 
 Shared companions (in the `decide` skill directory, which travels with this one):
 - [`../decide/decision-critics.md`](../decide/decision-critics.md) — debate personas

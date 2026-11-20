@@ -20,6 +20,7 @@ describes. Schema, field rules, and the status lifecycle live in
 ## Routing — this skill or another
 | The question | The skill |
 |--------------|-----------|
+| Where is a new way to make money? | `/bonanza` — it finds the idea; this skill defines it |
 | Is this worth building at all? | `/product-brief` — verdict first, definition after |
 | Which option do we pick? | `/decide` |
 | **What exactly are we building, and when is it done?** | **this skill** |
@@ -27,6 +28,10 @@ describes. Schema, field rules, and the status lifecycle live in
 
 `/requirements` is not a competitor: it is the interview this skill calls in Step 3 when
 detail is missing. It asks; this skill files the answers, checks them, and keeps them.
+
+When the request does not say which row it is, the routing question in
+[`../../references/tool-choice.md`](../../references/tool-choice.md), *The idea family*,
+settles it before anything here runs.
 
 ## Process
 
