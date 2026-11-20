@@ -11,6 +11,9 @@ purpose: "Structured decision: research, debate, durable record"
 ## Goal
 Turn "which should we pick?" into a researched, debated, recorded decision that future sessions can find, trust, and revisit.
 
+A request with no named options to choose between is not a decision yet — see
+[`../../references/tool-choice.md`](../../references/tool-choice.md), *The idea family*.
+
 Companion files beside this one:
 - [`decision-critics.md`](decision-critics.md) — the five debate personas and synthesis rules
 - [`decision-record.md`](decision-record.md) — the record template, naming convention, and status lifecycle

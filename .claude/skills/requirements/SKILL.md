@@ -15,6 +15,9 @@ Where the output lands: when the work needs a durable, checked record, this inte
 the `/feature` skill, which files it as `features/<id>-<slug>.md` and lints it. Run standalone
 only for a spec nobody needs to find again.
 
+"I have an idea" wakes several skills. Which one a request belongs to is settled first by
+[`../../references/tool-choice.md`](../../references/tool-choice.md), *The idea family*.
+
 ## Process
 
 ### Step 1 — Understand the Problem (not the solution)

@@ -120,6 +120,34 @@ that fits the words and not the situation.
 supplies a confident procedure for a job it was not built for, and its structure
 hides the mismatch.
 
+#### The idea family — one routing question
+
+Five skills wake on nearly the same words — "I have an idea", "brainstorm", "help me
+plan": `/bonanza`, `/product-brief`, `/feature`, `/requirements`, `/decide`. For them,
+question 1 has a fixed form, because the wrong one runs a whole procedure before
+anyone notices it was the wrong one.
+
+**The rule.** None of the five starts until the kind of request is settled.
+
+- The request already says what it is — "give me ways to grow revenue", "is this app
+  worth building", "X or Y" — the matching skill runs, and no question is asked.
+- It does not — one pick-list, asked once, that **waits**. Most likely reading first.
+  The answer names the skill, or names none.
+
+| The owner is… | Runs |
+|---------------|------|
+| looking for a new way to make money, with no idea yet | `/bonanza` |
+| holding a product or app idea, and asking whether it is worth building | `/product-brief` |
+| sure of what to build, and wanting it defined — usually a capability in a product that exists | `/feature`, which calls `/requirements` for missing detail |
+| none of these — thinking aloud about design, code, or anything else | no skill; the job is done directly |
+
+A choice between named options is `/decide` and announces itself, so it is not an
+option in the question. A fan-out never starts on the strength of a trigger phrase
+alone: a family skill that woke by itself does its cheap first step and stops for a yes.
+
+**Catches:** the skill that runs for nothing — a brainstorm about a screen layout
+handed to a financial procedure, or an idea already chosen sent back to be invented.
+
 ### 2. Does it work here?
 
 A quick run against our real input, not a promise that it works in general. One real

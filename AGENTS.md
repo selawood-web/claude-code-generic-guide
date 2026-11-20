@@ -93,6 +93,7 @@ listed below — the three questions and the verdict live there, with the proced
 | Skill | Purpose |
 |-------|---------|
 | `/architecture` | System design with trade-off analysis |
+| `/bonanza` | "Money-making ideas: wide generation, blind gates, one sharpened move" |
 | `/ccgg-audit` | Read-only three-layer audit with verified findings |
 | `/ccgg-code-review` | Multi-dimension review with severity levels |
 | `/ccgg-security-review` | OWASP-based security audit |
