@@ -1,0 +1,44 @@
+# Copy to config.yaml. Secrets never go here; they come from the environment (.env.example).
+data_dir: data
+
+script:
+  provider: claude            # claude | mock
+  model: claude-opus-5-5
+  niche: surprising science facts
+  audience: curious adults scrolling on their phone
+  language: English
+  target_seconds: 40
+  topics: []                  # optional queue; empty = model picks within the niche
+  avoid_recent: 30
+
+voice:
+  provider: elevenlabs        # elevenlabs | mock
+  voice_id: 21m00Tcm4TlvDq8ikWAM
+  model_id: eleven_multilingual_v2
+  speed: 1.0
+
+visuals:
+  provider: fal               # fal (AI images) | pexels (stock video) | mock
+  fal_model: fal-ai/flux/schnell
+  style_suffix: cinematic, vertical 9:16 composition, dramatic lighting, high detail, no text
+  motion: kenburns
+
+render:
+  fps: 30
+  font: DejaVu Sans
+  font_size: 72
+  highlight_color: "&H0000D7FF"   # ASS &HAABBGGRR
+  music_path: null                # e.g. assets/music.mp3 (royalty-free), looped under the voice
+  music_gain_db: -18
+  crf: 20
+
+publish:
+  providers: [youtube, instagram, tiktok]   # any subset, or [mock] for dry runs
+  youtube_privacy: public
+  tiktok_privacy: SELF_ONLY       # TikTok forces private until the app passes audit
+  require_all: false              # true = any failed platform fails the job
+
+schedule:
+  every_days: 3
+  hour_utc: 14
+  check_interval_seconds: 900
