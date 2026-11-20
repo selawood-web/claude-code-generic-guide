@@ -25,3 +25,4 @@ the skills get their own `decisions/` folder created by `/decide` on first use.
 | 2026-09-16 | [Architecture — the /ccgg-audit skill (F002)](2026-09-16-ccgg-audit-architecture.md) | architecture | decided |
 | 2026-09-17 | [Audit runs on this repository — what they reproduced (F002)](2026-09-17-ccgg-audit-runs.md) | evidence | decided |
 | 2026-11-03 | [Project memory lives in the repository](2026-11-03-repo-tracked-memory.md) | decision | decided |
+| 2026-11-18 | [pm-skills marketplace — approved at user scope, kept out of CCGG](2026-11-18-pm-skills-marketplace-user-scope.md) | decision | decided |
