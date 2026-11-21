@@ -1,0 +1,29 @@
+# Alternative to Railway: run the pipeline as a scheduled GitHub Action.
+# Copy to .github/workflows/shorts.yml in the pipeline's own repository.
+# Trade-off: no persistent data dir, so Instagram (which needs a public video URL)
+# must use another host; YouTube and TikTok upload the file directly and work as-is.
+name: shorts
+on:
+  schedule:
+    - cron: "0 14 */3 * *"
+  workflow_dispatch:
+jobs:
+  produce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: pip install .
+      - run: shorts --config config.yaml run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          TIKTOK_ACCESS_TOKEN: ${{ secrets.TIKTOK_ACCESS_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with: { name: video, path: data/jobs/**/final.mp4 }
