@@ -19,7 +19,31 @@ Rules:
 - Total narration must fit the target duration at ~2.6 words per second.
 - End with a payoff or a question that invites a comment, never "like and subscribe".
 - Facts must be true and non-controversial. If unsure, choose a different topic.
-- Title: under 60 characters, specific. Description: 1-3 sentences. Hashtags: 5-8, relevant."""
+- Title: under 60 characters, specific. Description: 1-3 sentences. Hashtags: 5-8, relevant.
+- If a channel brief follows, it overrides the tone and format above; the pacing rules stay."""
+
+
+def build_prompt(cfg: ScriptConfig, recent_topics: list[str]) -> str:
+    """The user turn: topic selection, audience, length and the channel brief. Pure, tested."""
+    words = int(cfg.target_seconds * 2.6)
+    queued = [t for t in cfg.topics if t not in recent_topics]
+    topic_line = (
+        f"Topic to cover: {queued[0]}"
+        if queued
+        else f"Pick one fresh topic within the niche: {cfg.niche}"
+    )
+    avoid = ", ".join(recent_topics[-cfg.avoid_recent :]) if cfg.avoid_recent else ""
+    parts = [
+        topic_line,
+        f"Audience: {cfg.audience}",
+        f"Language: {cfg.language}",
+        f"Target length: {cfg.target_seconds} seconds, about {words} spoken words total.",
+        f"Topics already covered (do not repeat): {avoid or 'none yet'}",
+    ]
+    if cfg.brief.strip():
+        parts.append(f"Channel brief:\n{cfg.brief.strip()}")
+    parts.append("Return the script.")
+    return "\n".join(parts)
 
 
 class ClaudeScriptWriter:
@@ -29,21 +53,7 @@ class ClaudeScriptWriter:
 
     def write(self, *, recent_topics: list[str]) -> Script:
         cfg = self._config
-        words = int(cfg.target_seconds * 2.6)
-        queued = [t for t in cfg.topics if t not in recent_topics]
-        topic_line = (
-            f"Topic to cover: {queued[0]}"
-            if queued
-            else f"Pick one fresh topic within the niche: {cfg.niche}"
-        )
-        avoid = ", ".join(recent_topics[-cfg.avoid_recent :]) or "none yet"
-        prompt = (
-            f"{topic_line}\n"
-            f"Audience: {cfg.audience}\nLanguage: {cfg.language}\n"
-            f"Target length: {cfg.target_seconds} seconds, about {words} spoken words total.\n"
-            f"Topics already covered (do not repeat): {avoid}\n"
-            "Return the script."
-        )
+        prompt = build_prompt(cfg, recent_topics)
         try:
             response = self._client.beta.messages.parse(
                 model=cfg.model,

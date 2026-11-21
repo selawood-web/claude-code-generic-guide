@@ -55,6 +55,11 @@ class ScriptConfig(BaseModel):
     provider: Literal["claude", "mock"] = "claude"
     model: str = "claude-opus-5-5"
     niche: str = Field(default="surprising science facts", description="What the channel is about")
+    brief: str = Field(
+        default="",
+        description="Channel rules in plain prose: format, tone, visual style, what to avoid. "
+        "Goes into the prompt verbatim; empty means the generic educational default.",
+    )
     audience: str = "curious adults scrolling on their phone"
     language: str = "English"
     target_seconds: int = Field(default=40, ge=15, le=90)
