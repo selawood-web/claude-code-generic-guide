@@ -40,6 +40,8 @@ CLAUDE.md imports a file that does not exist | caught | printf '@notes/private.m
 an import below the two roots points at a file that does not exist | caught | python3 -c "open('.claude/references/code-gate.md','a').write('\n@rules/deep.md\n');open('AGENTS.md','a').write('\n@.claude/references/code-gate.md\n')"
 hidden character planted in a skill companion page | caught | python3 -c "open('.claude/skills/decide/decision-record.md','a').write('review this\u200b line\n')"
 hidden character planted in a decision record | caught | test -d decisions || exit 3; python3 -c "import glob;open(sorted(glob.glob('decisions/*.md'))[0],'a').write('note\u202eflip\n')"
+hidden character planted in a design ladder | caught | mkdir -p design; python3 -c "open('design/GBB-probe.md','w').write('# ladder\n\nA review says\u200b this\n')"
+hidden character planted in a global design rule | caught | test -d cc-ui-ux || exit 3; python3 -c "import glob;open(sorted(glob.glob('cc-ui-ux/*/rules/*.md'))[0],'a').write('note\u200b here\n')"
 hidden character planted in a cached research note | caught | test -d knowledge-base/research || exit 3; python3 -c "import glob;open(sorted(glob.glob('knowledge-base/*/*.md'))[0],'a').write('as of\u200b today\n')"
 CLAUDE.md bridge removed | caught | echo '# nothing' > CLAUDE.md
 

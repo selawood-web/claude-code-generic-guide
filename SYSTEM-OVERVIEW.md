@@ -170,9 +170,10 @@ has to remember anything.
 | **Flush guard** | Each time a reply ends | Whenever the session has grown ~150k tokens since it was last saved (or since it last asked), sends the reply back to run `/flush` first — so a long session saves itself instead of waiting for someone to remember |
 | **Skill usage** | Each time a skill runs, typed or called by the AI | Appends the skill's name to a local log; `/flush` copies the tally into the session log, and `/efficiency` uses it to name skills that never run. Prints nothing |
 
-A seventh hook script, the audit verifier's guard, is not registered here: it is scoped to
-one subagent by its own definition and refuses write-shaped commands only while that
-agent runs.
+A seventh hook script, the audit verifier's guard, is registered too, but scoped to one
+subagent: `.claude/settings.json` runs it on that agent's Bash only, the agent's own
+definition declares it again for headless runs, and it refuses write-shaped commands
+only while that agent runs.
 
 ---
 
@@ -180,7 +181,8 @@ agent runs.
 
 ```mermaid
 flowchart LR
-    S["This session<br/><i>works, decides, discovers</i>"] -- "learn:<br/>durable principles" --> KB["<b>Knowledge base</b><br/><i>knowledge-base/entries/<br/>in the repo, permanent</i>"]
+    S["This session<br/><i>works, decides, discovers</i>"] -- "learn:<br/>durable facts" --> MM
+    KB["<b>Knowledge base</b><br/><i>knowledge-base/entries/<br/>seeded lessons, read on demand</i>"]
     S -- "flush:<br/>session summary" --> SL["<b>Session logs</b><br/><i>memory/sessions/ in the repo,<br/>committed by flush</i>"]
     S -- "automatic" --> AM["<b>Auto memory</b><br/><i>notes Claude writes by itself</i>"]
     SL -- "dream" --> MM["<b>PROJECT-MEMORY.md</b><br/><i>memory/ in the repo,<br/>organized reference</i>"]
