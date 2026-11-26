@@ -6,7 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/audit-verifier-guard.sh --only-agent audit-verifier"
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/audit-verifier-guard.sh --only-agent audit-verifier",
+            "onFailure": "block"
           }
         ]
       }

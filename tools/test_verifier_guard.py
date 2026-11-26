@@ -543,6 +543,30 @@ class GuardFailureTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
 
 
+class RegistrationFailsClosedTests(unittest.TestCase):
+    """A guard that cannot start is a guard that blocks nothing.
+
+    Claude Code treats a command hook that cannot launch (script missing, not
+    executable) or exits with anything but 0 or 2 as "no objection". The script
+    maps its own crashes to exit 2, but it cannot map a launch that never
+    happened; `onFailure: "block"` (v2.1.295+) on the registration does.
+    """
+
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def test_the_settings_registration_blocks_when_the_guard_fails(self):
+        with open(os.path.join(self.ROOT, ".claude", "settings.json"), encoding="utf-8") as fh:
+            settings = json.load(fh)
+        guards = [h for m in settings["hooks"]["PreToolUse"] if m.get("matcher") == "Bash"
+                  for h in m["hooks"] if "audit-verifier-guard.sh" in h.get("command", "")]
+        self.assertEqual(len(guards), 1)
+        self.assertEqual(guards[0].get("onFailure"), "block")
+
+    def test_the_audit_vocabulary_knows_the_skill_shell_event(self):
+        with open(os.path.join(self.ROOT, "tools", "audit_vocab.json"), encoding="utf-8") as fh:
+            self.assertIn("PreSkillShellCommand", json.load(fh)["hook_events"])
+
+
 class ScopedRegistrationTests(unittest.TestCase):
     """H-001/S-003: the settings.json registration decides only the verifier's calls.
 
