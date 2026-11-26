@@ -233,6 +233,27 @@ class LedgerTests(unittest.TestCase):
             any(f.level == "error" and "undecided idea" in f.message for f in findings)
         )
 
+    def test_tag_quoted_in_inline_code_is_a_mention_not_a_tag(self):
+        text = COMPLETE.replace("status: ready", "status: shipped").replace(
+            "- 2026-09-04 — Also export the credit notes — [in]",
+            "- 2026-09-04 — Refuse `shipped` while an idea reads `[open]` — [in]")
+        findings = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertFalse(any("undecided idea" in f.message for f in findings), findings)
+
+    def test_tag_only_inside_inline_code_counts_as_untagged(self):
+        text = COMPLETE.replace(
+            "- 2026-09-04 — Also export the credit notes — [in]",
+            "- 2026-09-04 — Mention the `[in]` tag in the docs")
+        findings = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertTrue(any("has no [" in f.message for f in findings), findings)
+
+    def test_real_tag_after_a_code_span_keeps_its_reason_check(self):
+        text = COMPLETE.replace(
+            "- 2026-09-04 — Also export the credit notes — [in]",
+            "- 2026-09-04 — Rename `export.csv` — [deferred]")
+        findings = lint_text(text, "F009-bulk-invoice-export.md")
+        self.assertTrue(any("[deferred] idea gives no reason" in f.message for f in findings), findings)
+
     def test_none_yet_is_a_valid_empty_ledger(self):
         text = COMPLETE.replace(
             "- 2026-09-04 — Also export the credit notes — [in]\n"

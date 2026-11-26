@@ -260,3 +260,5 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   describing behaviour the 2026-09-18 audit fixes had already changed in the skill:
   principles promoted unasked, the unrunnable-product fallback named the light path, and
   `--intent` writing CODEOWNERS without an offer. Aligned to the skill — [in]
+- 2026-11-26 — Status reviewed against the acceptance criteria: stays `building`. Shipping
+  needs a full `/gbb` run on a running product that leaves a ladder under `design/`. No run has happened: which project goes first is still an open question above, and no `design/` folder exists here — [deferred] until that run exists

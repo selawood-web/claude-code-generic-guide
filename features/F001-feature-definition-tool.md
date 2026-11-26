@@ -1,7 +1,7 @@
 ---
 id: F001
 title: Feature definition tool
-status: building
+status: shipped
 owner: repository owner
 target: unscheduled
 ---
@@ -90,3 +90,15 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   until the first three real definitions show what teams actually paste
 - 2026-09-06 — Have the ledger carry an owner per idea, like open questions do — [dropped]
   the disposition is the decision; an owner on a decided item is ceremony
+- 2026-11-26 — [in] Shipped. Every acceptance criterion maps to a test that runs in CI on
+  every pull request, and the linter runs inside the validator of every wired project.
+  [verified] a complete definition lints clean (`test_complete_definition_is_clean`); a
+  blocking question past draft fails (`test_blocking_question_past_draft_is_an_error`);
+  draft gaps are listed with exit 0 (`test_placeholder_is_a_gap`,
+  `test_gap_tolerated_in_draft`); a repository with no `features/` passes the validator
+  (`test_fresh_install_validates_on_first_run`, which now asserts the target has no
+  `features/`); an `[open]` idea blocks `shipped` (`test_open_idea_blocks_shipped`).
+  Deployed: the installed validator ran in chef-bekis's CI (F003 ledger, 2026-09-19).
+  Outcome so far: 0 lint findings across 4 definitions; 0 ideas reached `shipped`
+  undecided. [not exercised from this seat] the reader metric, which needs the owner's
+  review of the first three definitions

@@ -374,3 +374,5 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   listed Agent, Bash, Glob, Grep, Read, Write; --probe-verifier spawned the verifier, whose
   guard let `git status --porcelain` run and refused a redirect to a file, and the report
   directory took a write. Under 1 cent each, Haiku as orchestrator — [in]
+- 2026-11-26 — Status reviewed against the acceptance criteria: stays `building`. Shipping
+  needs a headless audit that is green end to end, with cost and duration in the revision stamp. Waiting on the owner authorising an authenticated CI run (the 2026-09-17 entry above) — [deferred] until that run exists
