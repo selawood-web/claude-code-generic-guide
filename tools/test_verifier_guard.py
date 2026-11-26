@@ -562,6 +562,13 @@ class RegistrationFailsClosedTests(unittest.TestCase):
         self.assertEqual(len(guards), 1)
         self.assertEqual(guards[0].get("onFailure"), "block")
 
+    def test_the_audit_skill_may_run_unattended(self):
+        # Since 2.1.325 a scheduled task or /loop asks before running a skill that
+        # declares allowed-tools; ccgg-audit is the one such skill, so it is allowed.
+        with open(os.path.join(self.ROOT, ".claude", "settings.json"), encoding="utf-8") as fh:
+            settings = json.load(fh)
+        self.assertIn("Skill(ccgg-audit)", settings["permissions"]["allow"])
+
     def test_the_audit_vocabulary_knows_the_skill_shell_event(self):
         with open(os.path.join(self.ROOT, "tools", "audit_vocab.json"), encoding="utf-8") as fh:
             self.assertIn("PreSkillShellCommand", json.load(fh)["hook_events"])
