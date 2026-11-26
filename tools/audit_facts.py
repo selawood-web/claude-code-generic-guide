@@ -66,7 +66,7 @@ NETWORK_PATTERNS = (
     (re.compile(r"\beval\b"), "eval"),
     (re.compile(r"\bsource\s+\$|\.\s+\$"), "source from variable"),
 )
-RULE_FILES = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md", "MEMORY.md")
+RULE_FILES = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md", ".claude/references/charter-core.md", "MEMORY.md")
 # Kept character-for-character identical to tools/validate.py's rules for the
 # same field; tools/test_validate.py compares the two. A skill's description is
 # shown to the model in every session's listing, before any invocation, and the

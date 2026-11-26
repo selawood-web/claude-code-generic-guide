@@ -98,6 +98,45 @@ class InstallSetTests(unittest.TestCase):
         self.assertEqual(int(label.group(1)), len(hooks))
 
 
+class ReferencesInstallTests(unittest.TestCase):
+    """The charter's core lives in .claude/references/. install.sh skipped that whole
+    directory when it existed, so a project with references of its own would get the
+    new WORKING-CHARTER.md importing a core that was never copied."""
+
+    def test_existing_references_dir_still_gets_the_core_and_keeps_its_own_files(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-refs-") as tmp:
+            target = os.path.join(tmp, "project")
+            refs = os.path.join(target, ".claude", "references")
+            os.makedirs(refs)
+            env = _git_env(tmp)
+            _git(target, env, "init", "-q")
+            mine = os.path.join(refs, "our-notes.md")
+            with open(mine, "w", encoding="utf-8") as fh:
+                fh.write("# Ours\n")
+            _install(target, env)
+            self.assertTrue(os.path.isfile(os.path.join(refs, "charter-core.md")))
+            self.assertTrue(os.path.isfile(os.path.join(refs, "code-gate.md")))
+            with open(mine, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "# Ours\n")
+            _git(target, env, "add", "-A")
+            gate = subprocess.run([sys.executable, "tools/validate.py"], cwd=target, env=env,
+                                  capture_output=True, text=True)
+            self.assertEqual(gate.returncode, 0, gate.stdout)
+
+    def test_a_reference_the_project_already_has_is_left_alone(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-refs-") as tmp:
+            target = os.path.join(tmp, "project")
+            refs = os.path.join(target, ".claude", "references")
+            os.makedirs(refs)
+            env = _git_env(tmp)
+            _git(target, env, "init", "-q")
+            with open(os.path.join(refs, "code-gate.md"), "w", encoding="utf-8") as fh:
+                fh.write("# Our gate\n")
+            _install(target, env)
+            with open(os.path.join(refs, "code-gate.md"), encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), "# Our gate\n")
+
+
 class FreshInstallTests(unittest.TestCase):
     def test_fresh_install_validates_on_first_run(self):
         with tempfile.TemporaryDirectory(prefix="ccgg-install-") as tmp:
@@ -235,6 +274,33 @@ class UpdateReportsTests(unittest.TestCase):
             self.assertIn("STALE", out)
             self.assertIn("--write", out)
             self.assertNotIn("could not read every skill", out)
+
+    PRE_SPLIT = "# Working Charter\n\n## PART ONE — CORE (always on, every session)\n\nrules\n"
+
+    def test_pre_split_charter_gets_the_migration_step_and_the_gate_still_passes(self):
+        """Charter-core decision: an old charter is told how to migrate on every sync, never rewritten."""
+        with tempfile.TemporaryDirectory(prefix="ccgg-update-") as tmp:
+            target, env = self._project(tmp)
+            charter = os.path.join(target, "WORKING-CHARTER.md")
+            with open(charter, "w", encoding="utf-8") as fh:
+                fh.write(self.PRE_SPLIT)
+            for _ in range(2):
+                out = self._update(target, env)
+                self.assertIn("one-time migration", out)
+                self.assertIn("@.claude/references/charter-core.md", out)
+            with open(charter, encoding="utf-8") as fh:
+                self.assertEqual(fh.read(), self.PRE_SPLIT, "update.sh must never rewrite the charter")
+            self.assertTrue(os.path.isfile(os.path.join(target, ".claude", "references", "charter-core.md")))
+            subprocess.run(["git", "add", "-A"], cwd=target, env=env, check=True)
+            gate = subprocess.run([sys.executable, "tools/validate.py"], cwd=target, env=env,
+                                  capture_output=True, text=True)
+            self.assertEqual(gate.returncode, 0, gate.stdout)
+            self.assertIn("charter-core.md", gate.stdout)
+
+    def test_split_charter_gets_no_migration_step(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-update-") as tmp:
+            target, env = self._project(tmp)
+            self.assertNotIn("one-time migration", self._update(target, env))
 
     def test_current_project_reports_neither(self):
         with tempfile.TemporaryDirectory(prefix="ccgg-update-") as tmp:

@@ -273,6 +273,30 @@ if [ "$USER_MODE" -eq 0 ] && [ -f "$TARGET/tools/catalog.py" ] && command -v pyt
   fi
 fi
 
+# The charter's core lives in .claude/references/charter-core.md, which this sync
+# keeps current, and WORKING-CHARTER.md imports it. A charter from before that split
+# carries its own copy of the core and never receives a core update, and nothing here
+# rewrites it. So the step is printed on every run until it is made
+# (decisions/2026-11-26-sync-charter-core-separately-from-project-constraints.md).
+charter_presplit() { # $1 = project root
+  [ -f "$1/WORKING-CHARTER.md" ] || return 1
+  grep -q '^## PART ONE — CORE' "$1/WORKING-CHARTER.md" || return 1
+  ! grep -qx '@.claude/references/charter-core.md' "$1/WORKING-CHARTER.md"
+}
+charter_migration_note() {
+  echo "  ! WORKING-CHARTER.md still holds its own copy of the charter's core, so core"
+  echo "    updates never reach this project. One edit, made once:"
+  echo "      1. Move any change you made to Part One, Part Two or the general"
+  echo "         Standing Constraints into your own section below them."
+  echo "      2. Replace those three parts with the single line:"
+  echo "           @.claude/references/charter-core.md"
+  echo "    The validator warns until this is done."
+}
+if [ "$USER_MODE" -eq 0 ] && charter_presplit "$TARGET"; then
+  echo "ccgg update: the charter needs a one-time migration:"
+  charter_migration_note
+fi
+
 REV="$(git -C "$SRC" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 if [ "$changed" -gt 0 ]; then
   echo "-- ccgg update: $changed file(s) refreshed to guide@$REV --"

@@ -25,3 +25,4 @@ the skills get their own `decisions/` folder created by `/decide` on first use.
 | 2026-09-16 | [Architecture — the /ccgg-audit skill (F002)](2026-09-16-ccgg-audit-architecture.md) | architecture | decided |
 | 2026-09-17 | [Audit runs on this repository — what they reproduced (F002)](2026-09-17-ccgg-audit-runs.md) | evidence | decided |
 | 2026-11-03 | [Project memory lives in the repository](2026-11-03-repo-tracked-memory.md) | decision | decided |
+| 2026-11-26 | [The charter's core syncs separately from project constraints](2026-11-26-sync-charter-core-separately-from-project-constraints.md) | architecture | decided |

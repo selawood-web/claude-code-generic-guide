@@ -1094,6 +1094,7 @@ description; the operating agreement is `WORKING-CHARTER.md`.
 | `.claude/skills/architecture/architecture-critic.md` | Full architecture rubric: 7 dimensions, checklist |
 | `.claude/skills/testing/strategy.md` | Test strategy by project phase, coverage targets by code type |
 | `.claude/skills/learn/extraction-rules.md` | What to capture to memory, what to skip, entry format |
+| `.claude/references/charter-core.md` | The charter's core, imported by `WORKING-CHARTER.md` — always loaded, synced by `update.sh`, never edited in a project |
 | `.claude/references/code-gate.md` | The code gate in full: what each stage runs, the failure loop, scaling |
 
 Each is referenced from the file that uses it — a `SKILL.md`, or the charter

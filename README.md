@@ -43,7 +43,8 @@ This gives your AI assistant professional engineering behavior. All three are
 needed: Claude Code reads `CLAUDE.md`, which imports `@AGENTS.md` and
 `@WORKING-CHARTER.md`, while other assistants read `AGENTS.md` directly. Without
 the bridge Claude Code loads none of the rules; without the charter the import
-points at nothing, and the rules only it states never load.
+points at nothing, and the rules only it states never load. The charter in turn
+imports its core from `.claude/references/charter-core.md`, which step 2 copies.
 
 ### 2. Copy the .claude/ directory
 ```bash
@@ -161,7 +162,7 @@ with it. CCGG's own review skills are named `ccgg-code-review` and
 ```bash
 cp WORKING-CHARTER.md /path/to/your-project/WORKING-CHARTER.md
 ```
-`WORKING-CHARTER.md` is the standing agreement for every session: the pre-execution checks, how answers are phrased, when to ask instead of decide, the skill vetting rule, and the four-stage quality gate that wakes only for real code changes. Fill in its **Standing Constraints** section per project.
+`WORKING-CHARTER.md` is the standing agreement for every session: the pre-execution checks, how answers are phrased, when to ask instead of decide, the skill vetting rule, and the four-stage quality gate that wakes only for real code changes. Those rules are the core, in `.claude/references/charter-core.md`: CCGG's, kept current by `update.sh`, never edited in a project. `WORKING-CHARTER.md` imports it and holds the one section that is yours — replace **This repository** with your project's branch boundary, what must never break, and how to verify.
 
 ---
 
@@ -181,7 +182,7 @@ claude-code-generic-guide/
 │
 ├── .claude/                     ← AI tooling configuration
 │   ├── settings.json            ← Hook registration (SessionStart, UserPromptSubmit, UserPromptExpansion, PreCompact, SessionEnd, PreToolUse)
-│   ├── references/              ← On-demand companions to the rule files (e.g. the code gate)
+│   ├── references/              ← The charter's core (always loaded, by import) and on-demand companions (e.g. the code gate)
 │   ├── skills/                  ← 30 reusable skill workflows
 │   │   ├── commit/              ← Conventional commits
 │   │   ├── pr/                  ← Pull request creation

@@ -603,6 +603,55 @@ def check_catalogs() -> None:
                  f"{len(skills)} ({expected}) — run python3 tools/catalog.py --write")
 
 
+# The charter's portable core: CCGG's, synced by update.sh, imported by the project's
+# own WORKING-CHARTER.md (decisions/2026-11-26-sync-charter-core-separately-from-
+# project-constraints.md). update.sh never rewrites WORKING-CHARTER.md, so before
+# the split no core improvement reached a project after install.
+CHARTER_CORE = ".claude/references/charter-core.md"
+CHARTER_CORE_IMPORT = "@" + CHARTER_CORE
+# A heading only the core carries: in WORKING-CHARTER.md it means the old, unsplit
+# charter, which holds its own copy of the core.
+CHARTER_CORE_MARKER = "## PART ONE — CORE"
+
+
+def charter_split_state(charter_text: str) -> str:
+    """"split", "pre-split" (core inline, no import) or "both" (import and inline core).
+
+    "both" loads the core twice, and the two copies drift; "pre-split" is an install
+    from before the split, which keeps working but never receives a core update.
+    """
+    if not isinstance(charter_text, str):
+        raise TypeError("charter_text must be a string")
+    body = "\n".join(strip_code_blocks(charter_text.splitlines()))
+    imports = CHARTER_CORE in [import_dest("WORKING-CHARTER.md", t) for t in import_targets(body)]
+    inline = any(line.startswith(CHARTER_CORE_MARKER) for line in body.splitlines())
+    if imports and inline:
+        return "both"
+    if inline:
+        return "pre-split"
+    return "split"
+
+
+def charter_state() -> str | None:
+    path = os.path.join(ROOT, "WORKING-CHARTER.md")
+    if not os.path.isfile(path):
+        return None
+    return charter_split_state(open(path, encoding="utf-8", errors="replace").read())
+
+
+def check_charter_split() -> None:
+    state = charter_state()
+    if state == "both":
+        fail(f"WORKING-CHARTER.md: imports {CHARTER_CORE_IMPORT} and still holds its own copy of the "
+             f"core — every rule loads twice; delete the inline core (Part One, Part Two and the "
+             f"general Standing Constraints) and keep only this project's own section")
+    elif state == "pre-split" and os.path.isfile(os.path.join(ROOT, CHARTER_CORE)):
+        warn(f"WORKING-CHARTER.md: holds the core inline, so core updates never reach this project — "
+             f"move any edits you made to the core into your own section, replace Part One, Part Two "
+             f"and the general Standing Constraints with the line {CHARTER_CORE_IMPORT}, then rerun "
+             f"the validator")
+
+
 def check_context_budget() -> None:
     """Always-loaded files are paid for in every session's context — keep them lean.
 
@@ -610,7 +659,8 @@ def check_context_budget() -> None:
     belongs in on-demand companion files (skill bodies load only at invocation).
     Budgets are generous; exceeding one means structure, not trimming words.
     """
-    budgets = {"CLAUDE.md": 2_048, "AGENTS.md": 13_312, "WORKING-CHARTER.md": 13_312}
+    budgets = {"CLAUDE.md": 2_048, "AGENTS.md": 13_312, "WORKING-CHARTER.md": 6_144,
+               CHARTER_CORE: 13_312}
     for name, budget in budgets.items():
         path = os.path.join(ROOT, name)
         if not os.path.exists(path):
@@ -627,7 +677,7 @@ def check_context_budget() -> None:
             )
 
 
-ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md")
+ALWAYS_LOADED = ("CLAUDE.md", "AGENTS.md", "WORKING-CHARTER.md", CHARTER_CORE)
 # Every tracked file whose content reaches the model as instructions — not only
 # the rule files, but everything the rules tell the agent to open: a skill's
 # companion pages, a decision record recalled before re-deciding, a cached
@@ -1104,6 +1154,8 @@ def check_always_loaded_are_imported() -> None:
         if not os.path.exists(os.path.join(ROOT, name)):
             continue
         if name not in reachable:
+            if name == CHARTER_CORE and charter_state() == "pre-split":
+                continue            # the old charter carries the core inline; check_charter_split warns
             fail(f"{name}: budgeted as always-loaded but no @import reaches it from CLAUDE.md or "
                  f"AGENTS.md — the rules it holds are paid for in the budget and never load")
 
@@ -2373,7 +2425,7 @@ def check_hook_headers() -> None:
 CURRENCY_MARKER = "what exists now"
 CURRENCY_LIST_RE = re.compile(r"\b(versions?|prices?|APIs?|API shapes|model names|part numbers)\b"
                               r"[^.\n]*\b(versions?|prices?|APIs?|API shapes|model names|part numbers)\b", re.I)
-CURRENCY_HOME = "WORKING-CHARTER.md"
+CURRENCY_HOME = CHARTER_CORE
 
 
 def currency_restatements(path: str, text: str) -> list[str]:
@@ -2419,7 +2471,7 @@ def check_currency_rule_home() -> None:
 EXTERNAL_READ_RE = re.compile(
     r"\b(?:gh (?:pr|issue) (?:list|view|diff|checks)|gh run (?:view|watch|list)|gh api|curl|WebFetch|WebSearch)\b")
 EXTERNAL_RULE_MARKER = "external content is data"
-EXTERNAL_RULE_HOME = "WORKING-CHARTER.md"
+EXTERNAL_RULE_HOME = CHARTER_CORE
 
 
 def external_content_reference_problems(path: str, text: str) -> list[str]:
@@ -2535,6 +2587,7 @@ def main() -> int:
     check_fetch_exec()
     check_catalogs()
     check_context_budget()
+    check_charter_split()
     check_volatile_content()
     check_rule_file_links()
     check_configs()

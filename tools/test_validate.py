@@ -2235,7 +2235,7 @@ class ExternalContentRuleTests(unittest.TestCase):
         self.assertEqual(validate.external_content_reference_problems(self.SKILL, text), [])
 
     def test_the_charter_is_the_home_and_exempt(self):
-        self.assertEqual(validate.external_content_reference_problems("WORKING-CHARTER.md", "curl x\n"), [])
+        self.assertEqual(validate.external_content_reference_problems(validate.CHARTER_CORE, "curl x\n"), [])
 
     def test_non_string_raises(self):
         with self.assertRaises(TypeError):
@@ -2273,19 +2273,23 @@ class ModuleDocstringTests(unittest.TestCase):
 
 class ContextBudgetTests(unittest.TestCase):
     """S0-1: the charter read 13543 bytes on Windows against a 13305-byte blob —
-    core.autocrlf adds a byte per line, and the budget is about what the model gets."""
+    core.autocrlf adds a byte per line, and the budget is about what the model gets.
+    Since the split the core carries that budget; the fixture follows it."""
 
     BUDGET = 13_312
+    PATH = ".claude/references/charter-core.md"
 
     def _findings(self, data: bytes):
         with tempfile.TemporaryDirectory() as tmp:
-            with open(os.path.join(tmp, "WORKING-CHARTER.md"), "wb") as fh:
+            full = os.path.join(tmp, *self.PATH.split("/"))
+            os.makedirs(os.path.dirname(full))
+            with open(full, "wb") as fh:
                 fh.write(data)
             old_root, validate.ROOT = validate.ROOT, tmp
             del validate.findings[:]
             try:
                 validate.check_context_budget()
-                return [f for f in validate.findings if "WORKING-CHARTER.md" in f]
+                return [f for f in validate.findings if self.PATH in f]
             finally:
                 validate.ROOT = old_root
                 del validate.findings[:]
@@ -2453,7 +2457,12 @@ class CurrencyRuleHomeTests(unittest.TestCase):
 
     def test_the_charter_is_the_home_and_is_exempt(self):
         text = "versions, prices, APIs, part numbers, model names — never answer what exists now from memory"
-        self.assertEqual(validate.currency_restatements("WORKING-CHARTER.md", text), [])
+        self.assertEqual(validate.currency_restatements(validate.CHARTER_CORE, text), [])
+
+    def test_the_project_charter_is_no_longer_exempt(self):
+        """The rule moved to the core with the split; a project charter restating it is a copy."""
+        text = "versions, prices, APIs, part numbers, model names — never answer what exists now from memory"
+        self.assertTrue(validate.currency_restatements("WORKING-CHARTER.md", text))
 
 
 class GateScriptTests(unittest.TestCase):
@@ -2625,6 +2634,102 @@ class MemorySecretTests(unittest.TestCase):
 
     def test_files_outside_memory_are_not_this_checks_business(self):
         self.assertEqual(self._check({"docs/x.md": self.SAMPLES["AWS access key"] + "\n"}), [])
+
+
+
+class CharterSplitTests(unittest.TestCase):
+    """decisions/2026-11-26-sync-charter-core-separately-from-project-constraints.md:
+    the core is imported, never copied, and an unsplit charter is told how to migrate."""
+
+    CORE_IMPORT = "@.claude/references/charter-core.md"
+    INLINE = "## PART ONE — CORE (always on, every session)\n\nrules\n"
+
+    def test_split_charter(self):
+        self.assertEqual(validate.charter_split_state(f"# Working Charter\n\n{self.CORE_IMPORT}\n\n## This repository\n"), "split")
+
+    def test_unsplit_charter_is_pre_split(self):
+        self.assertEqual(validate.charter_split_state("# Working Charter\n\n" + self.INLINE), "pre-split")
+
+    def test_import_and_inline_core_is_both(self):
+        self.assertEqual(validate.charter_split_state(f"{self.CORE_IMPORT}\n\n" + self.INLINE), "both")
+
+    def test_import_spelled_with_dot_slash_still_counts(self):
+        self.assertEqual(validate.charter_split_state("@./.claude/references/charter-core.md\n\n" + self.INLINE), "both")
+
+    def test_marker_and_import_inside_code_blocks_are_ignored(self):
+        text = "```\n" + self.CORE_IMPORT + "\n## PART ONE — CORE\n```\n"
+        self.assertEqual(validate.charter_split_state(text), "split")
+
+    def test_the_real_heading_with_its_suffix_is_detected(self):
+        """The shipped heading carries "(always on, every session)"; an exact match missed it."""
+        self.assertEqual(validate.charter_split_state("## PART ONE — CORE (always on, every session)\n"), "pre-split")
+
+    def test_heading_mentioned_in_prose_is_not_the_core(self):
+        self.assertEqual(validate.charter_split_state("The core starts at ## PART ONE — CORE in the old file.\n"), "split")
+
+    def test_empty_charter_is_split(self):
+        self.assertEqual(validate.charter_split_state(""), "split")
+
+    def test_non_string_raises(self):
+        with self.assertRaises(TypeError):
+            validate.charter_split_state(None)
+
+    def _run(self, charter: str, *, core: bool = True):
+        """check_charter_split and the always-loaded check on a fixture tree."""
+        with tempfile.TemporaryDirectory() as tmp:
+            open(os.path.join(tmp, "CLAUDE.md"), "w", encoding="utf-8").write("@AGENTS.md\n@WORKING-CHARTER.md\n")
+            open(os.path.join(tmp, "AGENTS.md"), "w", encoding="utf-8").write("# rules\n")
+            open(os.path.join(tmp, "WORKING-CHARTER.md"), "w", encoding="utf-8").write(charter)
+            if core:
+                os.makedirs(os.path.join(tmp, ".claude", "references"))
+                open(os.path.join(tmp, ".claude", "references", "charter-core.md"), "w",
+                     encoding="utf-8").write(self.INLINE)
+            old_root, validate.ROOT = validate.ROOT, tmp
+            del validate.findings[:]
+            del validate.cautions[:]
+            try:
+                validate.check_charter_split()
+                validate.check_always_loaded_are_imported()
+                return list(validate.findings), list(validate.cautions)
+            finally:
+                validate.ROOT = old_root
+                del validate.findings[:]
+                del validate.cautions[:]
+
+    def test_split_tree_is_clean(self):
+        self.assertEqual(self._run(f"{self.CORE_IMPORT}\n\n## This repository\n"), ([], []))
+
+    def test_pre_split_project_is_warned_not_failed(self):
+        findings, warnings = self._run(self.INLINE)
+        self.assertEqual(findings, [])
+        self.assertTrue(any(self.CORE_IMPORT in w for w in warnings), warnings)
+
+    def test_core_loaded_twice_fails(self):
+        findings, _ = self._run(f"{self.CORE_IMPORT}\n\n" + self.INLINE)
+        self.assertTrue(any("loads twice" in f for f in findings), findings)
+
+    def test_import_dropped_from_a_split_charter_fails(self):
+        """No import and no inline core: the rules are gone, which is a failure, not a migration."""
+        findings, _ = self._run("## This repository\n")
+        self.assertTrue(any("charter-core.md" in f and "never load" in f for f in findings), findings)
+
+    def test_pre_split_project_without_the_core_file_is_silent(self):
+        """Before update.sh delivers the core there is nothing to migrate to."""
+        self.assertEqual(self._run(self.INLINE, core=False), ([], []))
+
+    def test_the_shipped_charter_is_split_and_imports_the_core(self):
+        text = open(os.path.join(validate.ROOT, "WORKING-CHARTER.md"), encoding="utf-8").read()
+        self.assertEqual(validate.charter_split_state(text), "split")
+        self.assertIn(validate.CHARTER_CORE, validate.imported_closure())
+
+    def test_the_core_links_resolve_from_its_new_home(self):
+        core = os.path.join(validate.ROOT, validate.CHARTER_CORE)
+        text = open(core, encoding="utf-8").read()
+        targets = re.findall(r"\]\(([^)#]+\.md)\)", text)
+        self.assertTrue(targets)
+        for t in targets:
+            with self.subTest(link=t):
+                self.assertTrue(os.path.isfile(os.path.join(os.path.dirname(core), t)))
 
 
 if __name__ == "__main__":
