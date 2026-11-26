@@ -51,7 +51,7 @@ Where the two ever overlap, the charter is the specific instruction and wins.
 
 ## Memory Management
 
-Memory lives in four places; the first two load automatically every session.
+Memory lives in these places; the first two load automatically every session.
 
 | Location | What it holds |
 |----------|---------------|
@@ -60,6 +60,7 @@ Memory lives in four places; the first two load automatically every session.
 | `memory/` (in the repo) | Session logs in `sessions/`, written and committed by `/flush`; `/learn` facts under `## Learned` in `PROJECT-MEMORY.md`, where `/dream` consolidates both and the session-start hook points |
 | `decisions/` (in the repo) | Durable decision records and product briefs written by `/decide` and `/product-brief` — recall before re-deciding |
 | `features/` (in the repo) | Feature definitions written by `/feature` — what is being built and when it is done, checked by `tools/feature_lint.py` |
+| `knowledge-base/entries/` (where the repo has one) | Seeded engineering lessons — read the matching entry before `/decide` or `/architecture` |
 
 **When to write to memory:**
 - A non-obvious architecture decision was made and why

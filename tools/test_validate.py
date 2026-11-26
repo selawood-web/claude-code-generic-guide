@@ -789,6 +789,23 @@ class InstructionFileTests(unittest.TestCase):
                 self.assertTrue(paths, f"no files matched {pattern}")
                 self.assertEqual([p for p in paths if p not in self.scanned], [])
 
+    def test_covers_the_global_design_rules_and_their_hook(self):
+        paths = [p for p in validate.tracked("cc-ui-ux/*") if p.endswith((".md", ".sh"))]
+        self.assertTrue(paths, "no cc-ui-ux rule or hook files matched")
+        self.assertEqual([p for p in paths if p not in self.scanned], [])
+
+    def test_globs_cover_records_a_skill_writes_on_first_use(self):
+        """design/ (GBB) and ideas/ (bonanza) do not exist until a run creates them."""
+        def matched(path):
+            return any(validate.pathspec_filter([path], g) for g in validate.INSTRUCTION_GLOBS)
+        for path in ("design/GBB-app.md", "design/INTENT-app.md", "design/README.md",
+                     "ideas/business-facts.md"):
+            with self.subTest(path=path):
+                self.assertTrue(matched(path))
+        for path in ("design/walk/01-home.png", "ideas/export.csv", "designs/GBB-app.md"):
+            with self.subTest(path=path):
+                self.assertFalse(matched(path))
+
     def test_still_covers_what_it_always_did(self):
         for path in ("AGENTS.md", "WORKING-CHARTER.md", ".claude/agents/audit-verifier.md",
                      ".claude/hooks/session-start.sh", ".claude/skills/commit/SKILL.md"):

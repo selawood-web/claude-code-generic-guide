@@ -49,8 +49,8 @@ to spectacular, each with a number that proves when it has been reached.
 - A builder can treat a user-facing change as done only when the intent's tests pass
   in the running product with screenshots, and a feature for a surface names the
   intent file under Dependencies
-- An owner can have `/gbb --intent` write a CODEOWNERS file and a pull-request
-  checklist into their project, so a change to a design-owned path requests the
+- An owner is offered, on a project's first intent, a CODEOWNERS file and a pull-request
+  checklist for their project, so a change to a design-owned path requests the
   design owner's review and carries the intent's test results as evidence
 - An owner can scope a run to one screen or flow with `--screen`, which runs three
   council members instead of ten
@@ -59,8 +59,9 @@ to spectacular, each with a number that proves when it has been reached.
 - A council member can be edited in `design-council.md` without touching the skill
 - The top three Better rungs are handed to `/feature` with the stranger test already
   written as an acceptance criterion
-- The five design principles a full run derives are promoted to memory so later
-  features inherit them
+- The five design principles a full run derives are put to the owner, and the ones
+  they mark are promoted to memory so later features inherit them; a principle whose
+  only source is external text is never promoted
 - A project wired with CCGG receives the skill and its companions through `install.sh`
   and `update.sh` like every other skill
 
@@ -71,7 +72,7 @@ to spectacular, each with a number that proves when it has been reached.
   GBB assumes the product exists and is worth improving
 - Not a mockup critic — the full path requires the product running; a council judging
   descriptions produces a ladder nobody can verify, so that path stops and offers the
-  light path on owner-supplied screenshots
+  paper path on owner-supplied screenshots, where every stranger test reports `not run`
 - Not an automated usability lab — the stranger tests are timed by the walking agent
   adopting a portrait, not by recruited users; real user sessions would supersede
   them and are a later slice
@@ -85,8 +86,9 @@ to spectacular, each with a number that proves when it has been reached.
   most ten ladder rows each carrying a Good, a Better with a test and target, and a Best
   with a cited reference or transfer
 - Given a product that cannot be started in the session, when the full path is
-  invoked, then the run stops before the council with a pick-list offering the light
-  path on supplied screenshots, and no ladder is written
+  invoked, then the run stops before the council with a pick-list offering the paper
+  path on supplied screenshots or fixing the run path first, and the full path writes
+  no ladder
 - Given an existing ladder and a rerun, when a Better rung's test meets its target,
   then that rung becomes the row's Good, the Best becomes the Better, the score history
   gains a dated row, and no rung is marked passed on the strength of a merged pull
@@ -254,3 +256,7 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-09-18 — Ladders live in a new `design/` folder, created on first use like
   `features/`, because a ladder is a living file rewritten on every rerun and a
   decision record is not — [in]
+- 2026-11-26 — A read-only structure analysis found three Scope and criteria lines still
+  describing behaviour the 2026-09-18 audit fixes had already changed in the skill:
+  principles promoted unasked, the unrunnable-product fallback named the light path, and
+  `--intent` writing CODEOWNERS without an offer. Aligned to the skill — [in]

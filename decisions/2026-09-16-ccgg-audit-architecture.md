@@ -463,3 +463,10 @@ _Empty at creation._
   `export`/`declare`, re-assigned exported variables (`PATH=evil:$PATH`), `rg --pre`,
   `git grep -O`, `node <script>`, and several write-to-any-path options. Closed by class in
   the same change; each probe is a refused row in `tools/test_verifier_guard.py`.
+
+## Corrections — 2026-11-26 check
+
+- *Components 3 and 4, `maxTurns`.* The design above gives every specialist `maxTurns: 40`.
+  The agent files carry 60 for `audit-harness` and `audit-consistency`, 50 for the other
+  four specialists, and 60 for the verifier. The files in `.claude/agents/` are the live
+  values, and no turn limit in this record is a current claim.
