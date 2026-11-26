@@ -210,7 +210,7 @@ hooks, a JSON settings file, VS Code tasks, and the Python tooling in `tools/`
 
 **Languages here:** Markdown, bash for `.claude/hooks/*.sh`, and Python for `tools/`.
 
-**Branch boundary — strict.** Work happens on the session's own `claude/*` branch.
+**Branch boundary — strict.** Work happens on the branch the session was given, whatever its prefix.
 `master` moves only through a pull request. Nothing outside the branch gets touched.
 
 **Must never break:**
