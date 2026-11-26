@@ -155,6 +155,8 @@ hook syncs from a movable CCGG_REF name again | caught:hooks | sed -i '/CCGG_REF
 audit workflow stops pinning its base to the default branch | caught | test -f .github/workflows/audit.yml || exit 3; sed -i 's/github.base_ref == github.event.repository.default_branch/true/' .github/workflows/audit.yml
 audit workflow stops refusing fork pull requests | caught | test -f .github/workflows/audit.yml || exit 3; sed -i 's|github.event.pull_request.head.repo.full_name == github.repository|true|' .github/workflows/audit.yml
 charter dropped from the import graph while still budgeted | caught | sed -i '/^@WORKING-CHARTER.md$/d' CLAUDE.md
+charter keeps its inline core beside the core import | caught | grep -qx '@.claude/references/charter-core.md' WORKING-CHARTER.md || exit 3; printf '\n## PART ONE — CORE (always on, every session)\n' >> WORKING-CHARTER.md
+charter's import of its core removed | caught | grep -qx '@.claude/references/charter-core.md' WORKING-CHARTER.md || exit 3; sed -i '/^@\.claude\/references\/charter-core\.md$/d' WORKING-CHARTER.md
 facts stage stops inventorying the project-scoped MCP config surface | caught:facts | sed -i '/^        mcp_config_facts(/d' tools/audit_facts.py
 facts stage stops inventorying the global memory seed | caught:facts | sed -i '/^        memory_seed_facts(/d' tools/audit_facts.py
 facts stage counts a piped print as hook stdout again | caught:facts | sed -i 's/^                      and not piped(ln)\]$/                      ]/' tools/audit_facts.py
