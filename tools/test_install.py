@@ -111,6 +111,8 @@ class FreshInstallTests(unittest.TestCase):
                                      capture_output=True, text=True)
             self.assertEqual(install.returncode, 0, install.stdout + install.stderr)
             self.assertNotIn("validator reported findings", install.stdout)
+            # F001: a project that never adopted feature definitions still passes.
+            self.assertFalse(os.path.exists(os.path.join(target, "features")))
             subprocess.run(["git", "add", "-A"], cwd=target, env=env, check=True)
             gate = subprocess.run([sys.executable, "tools/validate.py"], cwd=target, env=env, capture_output=True, text=True)
             self.assertEqual(gate.returncode, 0, gate.stdout)

@@ -106,6 +106,20 @@ EMPTY_ANSWER_RE = re.compile(r"^(none|none yet|n/a|nothing)\.?$", re.I)
 # so the word a reader scans for is the leftmost one.
 DISPOSITION_RE = re.compile(r"\[(open|in|next|deferred|dropped)\]", re.I)
 DISPOSITION_LIST = "open|in|next|deferred|dropped"
+# A tag written inside inline code is a mention, not a disposition: F001's own
+# ledger says the linter "refuses `shipped` while any idea still reads `[open]`",
+# and the first-match search read that quote as the entry's tag, so the entry
+# blocked F001 from shipping despite its `[in]`.
+INLINE_CODE_RE = re.compile(r"`[^`]*`")
+
+
+def disposition_tag(item: str) -> re.Match | None:
+    """The entry's first disposition tag outside inline code, or None.
+
+    Code spans are blanked to spaces of the same length, so match offsets still
+    index the original text (the reason check reads what follows the tag).
+    """
+    return DISPOSITION_RE.search(INLINE_CODE_RE.sub(lambda m: " " * len(m.group()), item))
 NEEDS_REASON = ("next", "deferred", "dropped")
 
 # `[next]` is the post-ship disposition: raised after the definition shipped,
@@ -288,7 +302,7 @@ def lint_text(text: str, filename: str = "") -> list[Finding]:
                 Finding("gap", no, "ideas and changes is neither a list nor 'None yet.'")
             )
         for item in items:
-            tag = DISPOSITION_RE.search(item)
+            tag = disposition_tag(item)
             if not tag:
                 findings.append(
                     Finding("gap", no, f"idea has no [{DISPOSITION_LIST}] tag: {item[:50]}")

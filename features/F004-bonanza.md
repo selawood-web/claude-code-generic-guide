@@ -140,3 +140,5 @@ gate it could not influence, with the cheapest test that would prove it wrong.
 - 2026-11-20 — Surface idea records still in `proposed` or `testing` at session start, the way open decisions are — [deferred] until the first records exist; a move left in `testing` with nobody reminded is the failure it would prevent
 - 2026-11-20 — A fresh headless session to prove the routing question fires — [deferred] until a runner with credentials is available; the attempt from the build session failed on authentication, so the three routing criteria above are checked by hand on the first real run
 - 2026-11-20 — [in] Built on `claude/bonanza-skill`. [verified] validator clean, catalog current, unit tests pass, feature lint clean. [not exercised from this seat] a real full-path run with subagents on a real business, and auto-invocation from a trigger phrase in a fresh session
+- 2026-11-26 — Status reviewed against the acceptance criteria: stays `building`. Shipping
+  needs a real full-path run that leaves a record under `ideas/`, and a fresh headless session proving the routing question fires. Neither has run — [deferred] until that run exists

@@ -97,7 +97,7 @@ red-team probe env rebuilt from os.environ | caught | sed -i 's|env = audit_env.
 gate commands run with the inherited environment | caught | sed -i 's|env=audit_env.sandbox_env(home, actor="ccgg-gate"))|env=dict(os.environ))|' tools/audit_facts.py
 
 # --- the gate itself -------------------------------------------------------------
-feature marked shipped with an open idea | caught | test -e features/F001-feature-definition-tool.md || exit 3; sed -i 's/^status: building/status: shipped/' features/F001-feature-definition-tool.md
+feature marked shipped with an open idea | caught | test -e features/F001-feature-definition-tool.md || exit 3; sed -i 's/^status: .*/status: shipped/' features/F001-feature-definition-tool.md; printf -- '- 2026-01-01 — planted idea nobody decided — [open]\n' >> features/F001-feature-definition-tool.md
 CI workflow deleted | caught | test -f install.sh || exit 3; git rm -qf .github/workflows/validate.yml
 validator main forced to return 0 | caught | sed -i 's/^def main() -> int:/def main() -> int:\n    return 0/' tools/validate.py
 probe harness main forced to return 0 | caught | sed -i 's/^def main(argv: list\[str\]) -> int:/def main(argv: list[str]) -> int:\n    return 0/' tools/audit_probes.py
