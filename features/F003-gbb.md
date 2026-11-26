@@ -262,3 +262,6 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `--intent` writing CODEOWNERS without an offer. Aligned to the skill — [in]
 - 2026-11-26 — Status reviewed against the acceptance criteria: stays `building`. Shipping
   needs a full `/gbb` run on a running product that leaves a ladder under `design/`. No run has happened: which project goes first is still an open question above, and no `design/` folder exists here — [deferred] until that run exists
+- 2026-11-26 — The stranger tests become scripted measures with a replayable walk, defined
+  separately as [F005](F005-gbb-measured-stranger-tests.md) so it can ship on its own; this
+  definition's timing-based criteria change when F005 lands — [in]
