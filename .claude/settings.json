@@ -92,6 +92,11 @@
       }
     ]
   },
+  "permissions": {
+    "allow": [
+      "Skill(ccgg-audit)"
+    ]
+  },
   "worktree": {
     "baseRef": "head"
   }
