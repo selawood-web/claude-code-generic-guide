@@ -123,6 +123,7 @@
     "Setup",
     "UserPromptSubmit",
     "UserPromptExpansion",
+    "PreSkillShellCommand",
     "PreToolUse",
     "PermissionRequest",
     "PermissionDenied",
