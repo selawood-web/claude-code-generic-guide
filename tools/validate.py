@@ -840,14 +840,19 @@ def check_claude_md_bridge() -> None:
 def usable_bash() -> str | None:
     """The path to a bash that can actually run, or None.
 
-    Resolving the interpreter rather than invoking the bare name matters on
-    Windows, where `bash` hits an App Execution Alias for WSL that cannot
-    launch Git Bash scripts and reports a relay error instead of a syntax
-    error — every hook would come back "broken". The resolved path runs the
-    real interpreter; the probe then confirms it before we trust its verdict.
+    Which bash has one home: tools/audit_env.bash_path(), never the WSL
+    launcher, Git for Windows' bash when PATH's first bash is the launcher.
+    shutil.which("bash") alone followed PATH, and a Windows PATH that lists
+    System32 first handed back the launcher, which fails every hook with
+    "execvpe(/bin/bash) failed" or cannot open a C:\\ path. The probe then
+    confirms the interpreter starts before its verdict is trusted.
     """
-    path = shutil.which("bash")
-    if path is None:
+    try:
+        import audit_env  # installed and synced beside this file
+        path = audit_env.bash_path()
+    except ImportError:
+        path = shutil.which("bash")
+    if not path:
         return None
     try:
         probe = subprocess.run(
@@ -874,8 +879,11 @@ def check_hooks() -> None:
                 fail(f"{path}: not executable in the git index (mode {mode})")
             if bash is None:
                 continue
+            # Relative, from the root: a Linux bash (WSL) cannot open a C:\ path,
+            # and every bash resolves a forward-slash path against its cwd.
             probe = subprocess.run(
-                [bash, "-n", os.path.join(ROOT, path)],
+                [bash, "-n", path],
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
