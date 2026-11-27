@@ -136,8 +136,10 @@ to you; adding it is an owner gate (AGENTS.md). Dependencies and gaps:
   skill's light path is the pattern). Ceremony is a cost, not a virtue.
 - Always-loaded files (CLAUDE.md, AGENTS.md, this charter) are paid for in every
   session: keep them lean, push detail into on-demand companion files — and keep
-  them byte-stable: no dates, counters, or session-varying text, because every edit
-  invalidates the provider's prompt cache for all following sessions. The validator
+  them byte-stable: no dates, counters, or session-varying text. The provider caches
+  a prompt's prefix for minutes: a changed byte ends the cache hit there, everything
+  after it is billed in full, and a value that changes each session pays that each
+  session. The validator
   enforces the byte budget and the stability rule. The `/efficiency` skill audits
   all of this on demand.
 

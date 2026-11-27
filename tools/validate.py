@@ -727,8 +727,9 @@ VOLATILE_RES = (
 def volatile_lines(text: str) -> list[tuple[int, str]]:
     """Lines carrying session-volatile content — ISO dates, 'last updated' markers.
 
-    Always-loaded files must stay byte-stable: any churn invalidates the
-    provider's prompt cache for every following session (charter, Efficiency).
+    Always-loaded files must stay byte-stable: a changed byte ends the cached
+    prompt prefix there, so a value that changes each session pays the full
+    price for everything after it in each session (charter, Efficiency).
     Pure function so the check is unit-testable without a repository.
     """
     hits = []
