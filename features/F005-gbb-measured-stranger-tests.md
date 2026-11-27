@@ -23,9 +23,16 @@ measure model and tool latency, not a person's hesitation. Two reruns of an unch
 product can therefore disagree, and the ladder's central mechanism, a bar that moves
 only on evidence, moves on noise. F003 names the risk (`features/F003-gbb.md`,
 *Dependencies and risks*) and mitigates it only by reusing the same protocol, which does
-not help when the clock is the problem. The evidence is structural, not measured: GBB has
-never run on a real product, so the noise has not been seen yet. The first run of this
-feature is also that measurement.
+not help when the clock is the problem.
+
+The runs that did happen show a second, larger gap. GBB has run twice on CabiCAD
+(`design/GBB-canvas-colour.md` on 2026-09-20, `design/GBB-icons-visuals.md` on
+2026-10-16), and in both almost every stranger test reported `not run`: the first was a
+paper run, and the second could not sign in because it looked for production
+credentials, while the project already ships a local sign-up path for its own Playwright
+user-flow tests. One hand read `n/a (desk)` on a desktop CAD tool. The numbers those runs
+did produce were mechanical (a lint count of about 800 emoji glyphs in 212 files, a
+greyscale export check), which is the direction this feature takes.
 
 ## Outcome
 - Metric: stranger-test results that agree between two consecutive reruns of an
@@ -128,3 +135,13 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-11-26 — Send each council member only the screens and crops its discipline needs,
   and run members on the smaller model — [deferred] until this feature's first run
   measures what a council pass costs
+- 2026-11-27 — Correction: GBB had already run twice on CabiCAD, both runs blocked from the
+  in-app stranger tests. The Problem section now says so; earlier text here and in F003's
+  ledger claiming no run had happened was wrong — [in]
+- 2026-11-27 — Sign in through the project's own local test path (CabiCAD's user-flow
+  config boots the API on a throwaway database and allows an unverified local sign-up),
+  and save the signed-in session for replay, so a walk is never blocked on production
+  credentials — [open]
+- 2026-11-27 — Each stranger test declares when it applies, from the intent's context of
+  use, and reports `n/a` with the reason (One hand on a desktop-only product), so `n/a` and
+  `not run` stop being confused — [open]

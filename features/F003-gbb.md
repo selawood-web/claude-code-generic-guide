@@ -265,3 +265,7 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-11-26 — The stranger tests become scripted measures with a replayable walk, defined
   separately as [F005](F005-gbb-measured-stranger-tests.md) so it can ship on its own; this
   definition's timing-based criteria change when F005 lands — [in]
+- 2026-11-27 — Correction to the 2026-11-26 status entry: GBB has run twice on CabiCAD
+  (`design/GBB-canvas-colour.md`, 2026-09-20, paper path; `design/GBB-icons-visuals.md`,
+  2026-10-16, light path). Neither ran the in-app stranger tests, so no criterion here is
+  proved yet and the status stays `building`; the blockers they hit are captured in F005 — [in]
