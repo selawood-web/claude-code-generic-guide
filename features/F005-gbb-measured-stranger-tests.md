@@ -145,3 +145,27 @@ Append-only. Every idea raised while this work is in flight, with what was decid
 - 2026-11-27 — Each stranger test declares when it applies, from the intent's context of
   use, and reports `n/a` with the reason (One hand on a desktop-only product), so `n/a` and
   `not run` stop being confused — [open]
+- 2026-11-27 — [in] First measured run: CabiCAD's dashboard and the seven screens one hop
+  from it, signed in through the project's own local user-flow path (API on a throwaway
+  Postgres, unverified local sign-up), four replays from a fresh shop each.
+  [verified] two consecutive replays identical on all five tests, twice: before and after
+  a walker fix. Results: first success 3 actions; recovery passes (an invalid client email
+  blocks the submit with a message tied to the field, the entered name is kept, the task
+  then completes); back out 0 dead ends in 7 screens; where am I 5 of 8 screens (`/rejects`
+  and `/help` mark no current place, `/hardware` shows its title but not as a heading);
+  one hand `n/a (desktop product)`, with one target under 24 CSS px ("Set a status",
+  71×21, spacing exception not checked). Replays make no model calls.
+  [not exercised from this seat] contrast, since adding axe-core to CabiCAD is the owner's
+  call; the council and ladder; criteria 3, 4, 7 and 8; the walk saved inside the project
+  under `design/walks/`, since writing to CabiCAD is outside this branch
+- 2026-11-27 — A failing check is confirmed against its screenshot before it reaches the
+  ladder: the first walker reported two dead ends that were a Projects link outside the
+  navigation landmark and a Back button, both real ways back — [open]
+- 2026-11-27 — "Title" means a heading, not only visible text: report both, since a title a
+  screen reader cannot find as a heading fails people the visible check passes — [open]
+- 2026-11-27 — Where am I on a screen outside the app shell (`/help`, `/rejects` drop the
+  global navigation): decide whether the current-place marker applies there, or a
+  way-back control replaces it — [open]
+- 2026-11-27 — A replay step that no longer matches failed loudly instead of re-walking: the
+  empty-state "New Project" button disappears once a project exists. Criterion 4's
+  automatic re-walk is not built yet — [open]
