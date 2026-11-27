@@ -783,3 +783,57 @@ class ShippedSuiteWithOwnProbeListsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnpinnedSyncBranchTests(unittest.TestCase):
+    """An unpinned update.sh syncs only from the guide remote's default branch."""
+
+    def _clone(self, tmp, env):
+        origin = os.path.join(tmp, "origin.git")
+        subprocess.run(["git", "clone", "-q", "--bare", guide_copy(), origin], env=env, check=True,
+                       capture_output=True)
+        clone = os.path.join(tmp, "guide")
+        subprocess.run(["git", "clone", "-q", origin, clone], env=env, check=True, capture_output=True)
+        default = _git(clone, env, "symbolic-ref", "--short", "refs/remotes/origin/HEAD").strip()
+        return clone, default.split("/", 1)[1]
+
+    def _run(self, clone, target, env):
+        return subprocess.run([BASH, os.path.join(clone, "update.sh"), target], env=env,
+                              capture_output=True, text=True)
+
+    def _target(self, tmp, env):
+        target = os.path.join(tmp, "project")
+        os.makedirs(target)
+        subprocess.run(["git", "init", "-q"], cwd=target, env=env, check=True)
+        return target
+
+    def test_a_clone_on_a_feature_branch_is_refused_and_nothing_is_copied(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-branch-") as tmp:
+            env = {k: v for k, v in _git_env(tmp).items() if k != "CCGG_REF"}
+            clone, default = self._clone(tmp, env)
+            _git(clone, env, "checkout", "-q", "-b", "feature/unmerged")
+            target = self._target(tmp, env)
+            proc = self._run(clone, target, env)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn("refusing to sync unmerged guide code", proc.stdout)
+            self.assertIn(f"check out {default}", proc.stdout)
+            self.assertFalse(os.path.exists(os.path.join(target, ".claude")))
+
+    def test_a_detached_clone_is_refused(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-branch-") as tmp:
+            env = {k: v for k, v in _git_env(tmp).items() if k != "CCGG_REF"}
+            clone, _ = self._clone(tmp, env)
+            _git(clone, env, "checkout", "-q", "--detach")
+            proc = self._run(clone, self._target(tmp, env), env)
+            self.assertEqual(proc.returncode, 1, proc.stdout + proc.stderr)
+            self.assertIn("a detached HEAD", proc.stdout)
+
+    def test_a_clone_on_the_default_branch_syncs(self):
+        with tempfile.TemporaryDirectory(prefix="ccgg-branch-") as tmp:
+            env = {k: v for k, v in _git_env(tmp).items() if k != "CCGG_REF"}
+            clone, _ = self._clone(tmp, env)
+            target = self._target(tmp, env)
+            proc = self._run(clone, target, env)
+            self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertNotIn("refusing", proc.stdout)
+            self.assertTrue(os.path.isdir(os.path.join(target, ".claude", "skills")))
