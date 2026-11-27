@@ -2734,3 +2734,62 @@ class CharterSplitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HookSyntaxCheckTests(unittest.TestCase):
+    """check_hooks must not read a Windows setup's WSL launcher as broken hooks."""
+
+    def test_usable_bash_takes_the_shared_resolver(self):
+        # PATH's bash is ignored: audit_env.bash_path() is the one home for the choice.
+        ok = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(audit_env, "bash_path", return_value="/chosen/bash"), \
+                mock.patch.object(validate.shutil, "which", return_value=r"C:\Windows\System32\bash.exe"), \
+                mock.patch.object(validate.subprocess, "run", return_value=ok) as run:
+            self.assertEqual(validate.usable_bash(), "/chosen/bash")
+        self.assertEqual(run.call_args.args[0][0], "/chosen/bash")
+
+    def test_a_bash_that_cannot_start_is_not_used(self):
+        # The launcher with no distribution: "execvpe(/bin/bash) failed", exit 1.
+        failed = subprocess.CompletedProcess([], 1, "", "execvpe(/bin/bash) failed")
+        with mock.patch.object(audit_env, "bash_path", return_value=r"C:\Windows\System32\bash.exe"), \
+                mock.patch.object(validate.subprocess, "run", return_value=failed):
+            self.assertIsNone(validate.usable_bash())
+
+    def test_hooks_are_checked_by_relative_path_from_the_root(self):
+        # A Linux bash cannot open C:\...\.claude\hooks\x.sh; a relative path works in any bash.
+        listing = subprocess.check_output(
+            ["git", "ls-files", "-s", ".claude/hooks/"], cwd=validate.ROOT, text=True)
+        seen = []
+
+        def run(cmd, **kwargs):
+            seen.append((cmd, kwargs.get("cwd")))
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+
+        with mock.patch.object(validate, "usable_bash", return_value="bash"), \
+                mock.patch.object(validate.subprocess, "check_output", return_value=listing), \
+                mock.patch.object(validate.subprocess, "run", side_effect=run), \
+                mock.patch.object(validate, "fail") as fail:
+            validate.check_hooks()
+        fail.assert_not_called()
+        self.assertTrue(seen)
+        for cmd, cwd in seen:
+            self.assertEqual(cmd[:2], ["bash", "-n"])
+            self.assertFalse(os.path.isabs(cmd[2]), cmd[2])
+            self.assertTrue(cmd[2].startswith(".claude/hooks/"), cmd[2])
+            self.assertEqual(cwd, validate.ROOT)
+
+    def test_a_real_syntax_error_still_fails(self):
+        if shutil.which("bash") is None:
+            self.skipTest("no bash")
+        with tempfile.TemporaryDirectory() as root:
+            hooks = os.path.join(root, ".claude", "hooks")
+            os.makedirs(hooks)
+            with open(os.path.join(hooks, "bad.sh"), "w") as f:
+                f.write("#!/usr/bin/env bash\nif then\n")
+            listing = "100755 0123456789012345678901234567890123456789 0\t.claude/hooks/bad.sh\n"
+            with mock.patch.object(validate, "ROOT", root), \
+                    mock.patch.object(validate.subprocess, "check_output", return_value=listing), \
+                    mock.patch.object(validate, "fail") as fail:
+                validate.check_hooks()
+        self.assertEqual(fail.call_count, 1)
+        self.assertIn("bash syntax error", fail.call_args.args[0])
