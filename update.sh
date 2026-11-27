@@ -80,6 +80,18 @@ if [ -n "${CCGG_REF:-}" ]; then
     && git -C "$SRC" checkout -q --detach refs/ccgg/pin 2>/dev/null \
     || echo "ccgg update: could not fetch CCGG_REF from origin; syncing the clone as it is"
 else
+  # Unpinned, the sync follows the clone's own branch, so a clone left on a feature
+  # branch shipped unmerged guide code into the project (memome-1 sync, 2026-11-27).
+  # Unpinned runs sync only from the remote's default branch; a clone with no
+  # origin/HEAD has no default to compare with and is synced as before.
+  branch="$(git -C "$SRC" symbolic-ref --short -q HEAD 2>/dev/null || true)"
+  default="$(git -C "$SRC" symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null || true)"
+  default="${default#origin/}"
+  if [ -n "$default" ] && [ "$branch" != "$default" ]; then
+    echo "ccgg update: the guide clone is on '${branch:-a detached HEAD}', not '$default'; refusing to sync unmerged guide code"
+    echo "  check out $default in $SRC, or set CCGG_REF to the commit to sync"
+    exit 1
+  fi
   git -C "$SRC" pull --ff-only -q 2>/dev/null \
     || echo "ccgg update: could not pull the clone's branch; syncing the clone as it is"
 fi
