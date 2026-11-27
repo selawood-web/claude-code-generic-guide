@@ -28,3 +28,4 @@ skills get their own `features/` folder created by `/feature` on first use.
 | [F002](F002-audit-skill.md) | Audit skill | building | repository owner | unscheduled |
 | [F003](F003-gbb.md) | GBB — vision-to-product design gap | building | repository owner | unscheduled |
 | [F004](F004-bonanza.md) | Bonanza — finding the money idea | building | repository owner | unscheduled |
+| [F005](F005-gbb-measured-stranger-tests.md) | GBB measured stranger tests | ready | repository owner | unscheduled |

@@ -112,7 +112,7 @@ one line of explanation.
 | `/decide` | A researched, debated, recorded decision | Criteria before options, live research before recommending, five personas argue, and the choice lands in `decisions/` with a revisit trigger |
 | `/bonanza` | Find a new way for a business to make money | Listens first and keeps a tagged fact sheet, then generators invent without judging, a Logic judge and a Caution judge test blind and kill most of the list, and the owner leaves with one move in one sentence, a cheap test, and a record in `ideas/` that keeps what was killed and why |
 | `/product-brief` | Know if an idea is worth building | Market research, viability debate, an explicit Go / No-go / Pivot verdict — the spec is only written on Go |
-| `/gbb` | Close the gap between the vision and how the product feels | Writes the design intent before anything is built — who, environment, feeling, then colour, type, icons, motion and voice with a test each — then researches who it is for, walks the running product as a stranger, runs a ten-member design council, and returns a Good / Better / Best ladder with a timed test per rung — a rerun moves the bar |
+| `/gbb` | Close the gap between the vision and how the product feels | Writes the design intent before anything is built — who, environment, feeling, then colour, type, icons, motion and voice with a test each — then researches who it is for, walks the running product as a stranger, runs a ten-member design council, and returns a Good / Better / Best ladder with a measured test per rung, replayed on every rerun, so the bar moves only on a real change |
 
 ### Build — from vague idea to working code
 

@@ -99,7 +99,7 @@ token, a session URL, or another person's details.
 
 **When the product cannot be started** (the paper path, `/gbb --paper`): the owner
 supplies screenshots and one line per screen saying what reaches it and what returns.
-B1 and B2's timings are skipped, B3's spatial map is built from those two inputs and
+B1, B2 and B4's replay are skipped, B3's spatial map is built from those two inputs and
 marked `from supplied screens`, and B4's five tests all report `not run`. Every ladder
 row a paper run produces carries `unmeasured` until a real walk measures it. A paper
 run never passes a rung.
@@ -117,7 +117,7 @@ For each screen reached, one entry:
 S07  /orders/new           reached from: S03 (tap "New")   back: header arrow → S03
      tells me where I am:  title "New order"; breadcrumb absent
      states seen:          empty ✔  loading ✔  error ✘ (could not provoke)  success ✔
-     hesitation:           4s — "Save" vs "Submit", unclear which finishes
+     hesitation:           "Save" vs "Submit", unclear which finishes
      screenshot:           walk/S07-new-order-empty.png
 ```
 Every screenshot is saved under `design/walks/<date>/` and referenced from the log.
@@ -134,9 +134,19 @@ mark:
 
 The map is the artifact the Wayfinder on the council critiques first.
 
-### B4. Time the stranger tests
-Run the five tests defined in [`gbb-ladder.md`](gbb-ladder.md), record the number
-and the moment where the time went. These are the baseline the ladder moves.
+### B4. Record the walk and measure the stranger tests
+Save the walk as a Playwright script, `design/walks/YYYY-MM-DD/walk.spec.ts`, and the
+spatial map as `map.json` beside it: every screen with its URL, its exits, and where
+each back or close control leads. Locate by role, label and text (`getByRole`,
+`getByLabel`), never by CSS path, so a small UI change does not break the replay.
+The script runs the five checks defined in [`gbb-ladder.md`](gbb-ladder.md) and prints
+one result per test; those results are the baseline the ladder moves, and a rerun
+replays the same script. Where the project has its own Playwright setup, the walk
+runs inside it.
+
+Contrast and target size are mechanical, so axe-core checks them in the same script
+(`@axe-core/playwright`, pinned to an exact release at least two weeks old). Adding it
+to the walked project is a dependency the owner approves.
 
 ### B5. Provoke the bad day
 Turn the network off mid-action. Enter something wrong. Come back after the session

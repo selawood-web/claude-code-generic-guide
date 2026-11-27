@@ -11,7 +11,7 @@ target: unscheduled
 ## Summary
 One command, `/gbb`, takes a running app and returns a ranked Good / Better / Best
 ladder: evidence-based portraits of who it is for, a stranger walk with screenshots and
-a spatial map, a ten-member design council, and a timed test on every rung. Top rungs leave as feature definitions; a rerun moves the bar.
+a spatial map, a ten-member design council, and a measured test on every rung. Top rungs leave as feature definitions; a rerun moves the bar.
 
 ## Problem
 Two projects built with this repository's process are correct, well-tested and
@@ -54,7 +54,7 @@ to spectacular, each with a number that proves when it has been reached.
   design owner's review and carries the intent's test results as evidence
 - An owner can scope a run to one screen or flow with `--screen`, which runs three
   council members instead of ten
-- An owner can run `--rerun` after changes and see every stranger test re-timed, passed
+- An owner can run `--rerun` after changes and see every stranger test re-measured, passed
   Better rungs promoted to Good, and a new score-history row
 - A council member can be edited in `design-council.md` without touching the skill
 - The top three Better rungs are handed to `/feature` with the stranger test already
@@ -262,3 +262,10 @@ Append-only. Every idea raised while this work is in flight, with what was decid
   `--intent` writing CODEOWNERS without an offer. Aligned to the skill — [in]
 - 2026-11-26 — Status reviewed against the acceptance criteria: stays `building`. Shipping
   needs a full `/gbb` run on a running product that leaves a ladder under `design/`. No run has happened: which project goes first is still an open question above, and no `design/` folder exists here — [deferred] until that run exists
+- 2026-11-26 — The stranger tests become scripted measures with a replayable walk, defined
+  separately as [F005](F005-gbb-measured-stranger-tests.md) so it can ship on its own; this
+  definition's timing-based criteria change when F005 lands — [in]
+- 2026-11-27 — Correction to the 2026-11-26 status entry: GBB has run twice on CabiCAD
+  (`design/GBB-canvas-colour.md`, 2026-09-20, paper path; `design/GBB-icons-visuals.md`,
+  2026-10-16, light path). Neither ran the in-app stranger tests, so no criterion here is
+  proved yet and the status stays `building`; the blockers they hit are captured in F005 — [in]
