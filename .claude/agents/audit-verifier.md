@@ -126,6 +126,8 @@ F002 finding schema, and nothing else:
 {"id": "H-001", "layer": "harness", "class": "dead-mechanism", "severity": "important", "confidence": "verified", "location": ".claude/hooks/pre-compact.sh:8", "claim": "...", "evidence": "...", "reproduction": "grep -n echo .claude/hooks/pre-compact.sh\n# hooks reference, Exit code 0: only SessionStart, UserPromptSubmit, UserPromptExpansion, PostModelSwitch add stdout to context", "fix": "...", "becomes_check": "hook-stdout fact in audit_facts.py", "source_candidate": "H-001", "notes": ""}
 ```
 
+`layer` is `harness`, `product` or `process`, copied from the candidate: never a
+specialist's name such as `tests`, `consistency` or `ci`, which the renderer rejects.
 `confidence` is `verified` or `unverified`; an unverified line carries the reason
 in `notes` and an empty `reproduction`. The renderer rejects any line that
 violates the schema, so a malformed line loses the finding.

@@ -4,6 +4,7 @@
 Run: python -m unittest discover -s tools -p "test_*.py"
 """
 
+import json
 import os
 import re
 import shutil
@@ -2793,3 +2794,33 @@ class HookSyntaxCheckTests(unittest.TestCase):
                 validate.check_hooks()
         self.assertEqual(fail.call_count, 1)
         self.assertIn("bash syntax error", fail.call_args.args[0])
+
+
+class VerifierWorktreeBaseTests(unittest.TestCase):
+    """memome-1 audit: without worktree.baseRef "head" the verifier audited main."""
+
+    def _check(self, settings):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, ".claude"))
+            with open(os.path.join(tmp, ".claude", "settings.json"), "w", encoding="utf-8") as fh:
+                json.dump(settings, fh)
+            with mock.patch.object(validate, "ROOT", tmp), \
+                    mock.patch.object(validate, "tracked", side_effect=lambda pattern: [pattern]), \
+                    mock.patch.object(validate, "guard_registration_problems", return_value=[]), \
+                    mock.patch.object(validate, "fail") as fail:
+                validate.check_guard_settings_registration()
+        return [c.args[0] for c in fail.call_args_list]
+
+    def test_head_base_passes(self):
+        self.assertEqual(self._check({"worktree": {"baseRef": "head"}}), [])
+
+    def test_missing_base_fails_with_the_fix(self):
+        problems = self._check({"hooks": {}})
+        self.assertEqual(len(problems), 1)
+        self.assertIn('"worktree": {"baseRef": "head"}', problems[0])
+
+    def test_another_base_fails(self):
+        self.assertEqual(len(self._check({"worktree": {"baseRef": "main"}})), 1)
+
+    def test_a_non_object_worktree_fails(self):
+        self.assertEqual(len(self._check({"worktree": "head"})), 1)

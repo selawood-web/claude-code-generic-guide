@@ -81,7 +81,7 @@ if ! command -v python3 >/dev/null 2>&1; then
 fi
 
 read -r -d '' GUARD <<'PY' || true
-import json, posixpath, re, shlex, sys
+import fnmatch, json, os, posixpath, re, shlex, sys
 
 KEYWORDS = {"if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done",
             "in", "!", "{", "}", "(", ")", "time", "[[", "]]"}
@@ -382,16 +382,68 @@ def check_sh_script(path):
     refuse(f"{norm} is not one of the repository's own shell scripts")
 
 
+DISCOVER_VALUE_FLAGS = {"-s": "start", "--start-directory": "start", "-p": "pattern",
+                        "--pattern": "pattern", "-t": "top", "--top-level-directory": "top",
+                        "-k": None}
+DISCOVER_BOOL_FLAGS = {"-v", "--verbose", "-q", "--quiet", "-f", "--failfast", "-c",
+                       "--catch", "-b", "--buffer", "--locals", "--durations"}
+
+
+def check_discover(args):
+    """`unittest discover` imports every file its pattern matches, so a directory rule
+    alone let any tools/test_*.py a branch added run (finding H-001, memome-1 audit
+    2026-11-27). Every file it would import must be one of the gate's own scripts, by
+    name, the same rule `python3 <script>` gets. Start, pattern and top may also come
+    positionally, which the old rule never read."""
+    opts = {"start": "tools", "pattern": "test*.py", "top": None}
+    positional = []
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        flag, eq, value = arg.partition("=")
+        if flag in DISCOVER_VALUE_FLAGS:
+            if not eq:
+                if i + 1 >= len(args):
+                    refuse(f"unittest discover {flag} without a value")
+                value = args[i + 1]
+                i += 1
+            if DISCOVER_VALUE_FLAGS[flag]:
+                opts[DISCOVER_VALUE_FLAGS[flag]] = value
+        elif arg in DISCOVER_BOOL_FLAGS:
+            pass
+        elif arg.startswith("-"):
+            refuse(f"unittest discover option {arg} is not on the allow-list")
+        else:
+            positional.append(arg)
+        i += 1
+    if len(positional) > 3:
+        refuse("unittest discover takes at most start, pattern and top")
+    for key, value in zip(("start", "pattern", "top"), positional):
+        opts[key] = value
+    start = posixpath.normpath(opts["start"])
+    if start not in UNITTEST_DISCOVER_DIRS:
+        refuse(f"unittest discover outside {'/'.join(sorted(UNITTEST_DISCOVER_DIRS))}/")
+    if opts["top"] is not None and posixpath.normpath(opts["top"]) not in (".", start):
+        refuse("unittest discover with a top-level directory other than the root or tools/")
+    allowed = PY_SCRIPTS | LOCAL_PY_SCRIPTS
+    base = os.path.join(ROOT, start)
+    for here, dirs, files in os.walk(base):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for name in files:
+            if not fnmatch.fnmatch(name, opts["pattern"]):
+                continue
+            if os.path.normpath(here) != os.path.normpath(base) or name not in allowed:
+                rel = posixpath.join(start, os.path.relpath(os.path.join(here, name), base).replace(os.sep, "/"))
+                refuse(f"unittest discover would import {rel}, which is not one of the gate's own scripts")
+
+
 def check_py_module(module, rest):
     """`-m unittest` may discover only in the gate's own directory, or name a pinned
     test module; `-m doctest` takes a file, so it goes through the script rule."""
     if module == "unittest":
         target = next((a for a in rest if not a.startswith("-")), "")
         if target == "discover":
-            where = rest[rest.index("-s") + 1] if "-s" in rest[:-1] else "tools"
-            if posixpath.normpath(where) not in UNITTEST_DISCOVER_DIRS:
-                refuse(f"unittest discover outside {'/'.join(sorted(UNITTEST_DISCOVER_DIRS))}/")
-            return
+            return check_discover(rest[rest.index("discover") + 1:])
         if target and target.split(".")[0] not in PY_TEST_MODULES | LOCAL_PY_TEST_MODULES:
             refuse(f"unittest target '{target}' is not one of the gate's own test modules")
         return
@@ -740,6 +792,8 @@ except ValueError:
 if payload.get("tool_name") != "Bash":
     sys.exit(0)  # this guard speaks only for Bash; anything else keeps its own rules
 command = str((payload.get("tool_input") or {}).get("command", ""))
+# Where the command runs: discover's file check reads the tree it would import.
+ROOT = str(payload.get("cwd") or os.getcwd())
 if not command.strip():
     refuse("empty command")
 check_command(command)
