@@ -785,8 +785,8 @@ def check_command(text, depth=0):
 
 
 try:
-    payload = json.load(sys.stdin)
-except ValueError:
+    payload = json.loads(os.environ["CCGG_GUARD_INPUT"])
+except (KeyError, ValueError):
     print("audit-verifier-guard: hook input is not JSON; refusing", file=sys.stderr)
     sys.exit(2)
 if payload.get("tool_name") != "Bash":
@@ -819,8 +819,12 @@ if [ -z "${GUARD:-}" ]; then
   exit 2
 fi
 
-# The project's own allow-list, beside this file (see read_local_lists).
-printf '%s' "$INPUT" | python3 -c "$GUARD" "${BASH_SOURCE[0]%.sh}.local"
+# The project's own allow-list, beside this file (see read_local_lists). The
+# program goes in on stdin and the hook input in the environment: passed as
+# `python3 -c "$GUARD"` it was one argument over 32 KB, past Windows' 32,767-
+# character command line, and every command was refused there (memome-1 sync of
+# 3a35393, 2026-11-27). Stdin has no such limit.
+printf '%s' "$GUARD" | CCGG_GUARD_INPUT="$INPUT" python3 - "${BASH_SOURCE[0]%.sh}.local"
 STATUS=$?
 # Only two statuses are the guard's answer: 0 allow, 2 refuse. Anything else
 # means it never got to decide — an uncaught exception, a signal, an interpreter

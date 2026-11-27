@@ -736,3 +736,31 @@ class DiscoverImportsOnlyTheGateTests(unittest.TestCase):
             rc, err = self._guard(root, "python3 -m unittest discover tools 'check_*.py'")
             self.assertEqual(rc, 2)
             self.assertIn("tools/check_evil.py", err)
+
+
+class WindowsCommandLineTests(unittest.TestCase):
+    """The guard ran its program as `python3 -c "$GUARD"`. Past 32,767 characters,
+    Windows' command-line limit, the interpreter never started and every command was
+    refused (memome-1 sync of 3a35393). A python3 that enforces that limit stands in."""
+
+    LIMIT = 32767
+
+    def test_the_command_line_stays_under_the_windows_limit(self):
+        real = shutil.which("python3")
+        if real is None:
+            self.skipTest("no python3")
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = os.path.join(tmp, "python3")
+            with open(stub, "w", encoding="utf-8", newline="\n") as fh:
+                # CreateProcess takes one string: each argument quoted, each `"` in it
+                # escaped as `\"`, all joined by spaces, behind the program's path.
+                fh.write("#!/usr/bin/env bash\n"
+                         f'n=${{#0}}; for a in "$@"; do q=${{a//[^\\"]/}}; n=$((n + ${{#a}} + ${{#q}} + 3)); done\n'
+                         f'[ "$n" -le {self.LIMIT} ] || exit 87\n'
+                         f'exec "{real}" "$@"\n')
+            os.chmod(stub, 0o755)
+            env = dict(os.environ, PATH=tmp + os.pathsep + os.environ.get("PATH", ""))
+            payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "python3 tools/validate.py"}})
+            proc = subprocess.run([BASH, HOOK], input=payload, capture_output=True, text=True, env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn('"permissionDecision": "allow"', proc.stdout)
