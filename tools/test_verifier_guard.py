@@ -562,9 +562,13 @@ class RegistrationFailsClosedTests(unittest.TestCase):
         self.assertEqual(len(guards), 1)
         self.assertEqual(guards[0].get("onFailure"), "block")
 
+    @unittest.skipUnless(os.path.isfile(os.path.join(ROOT, "install.sh")),
+                         "not the guide: a project's permissions are its owner's to set")
     def test_the_audit_skill_may_run_unattended(self):
         # Since 2.1.325 a scheduled task or /loop asks before running a skill that
         # declares allowed-tools; ccgg-audit is the one such skill, so it is allowed.
+        # update.sh never writes permissions, so in an installed project this rule is
+        # the owner's to add (USER-MANUAL.md, /ccgg-audit); the memome-1 sync failed here.
         with open(os.path.join(self.ROOT, ".claude", "settings.json"), encoding="utf-8") as fh:
             settings = json.load(fh)
         self.assertIn("Skill(ccgg-audit)", settings["permissions"]["allow"])

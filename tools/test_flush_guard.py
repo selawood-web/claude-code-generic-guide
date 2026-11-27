@@ -90,7 +90,11 @@ class FlushGuardTests(unittest.TestCase):
     # --- asking again ---------------------------------------------------------
 
     def state_file(self, session="s-1"):
-        uid = os.getuid() if hasattr(os, "getuid") else "user"
+        # The hook names the folder after bash's $UID, so ask that bash. Python's
+        # os.getuid does not exist on Windows, where Git Bash still sets UID to a
+        # number: guessing "user" pointed at a folder the hook never made (memome-1).
+        uid = subprocess.run([BASH, "-c", 'printf %s "${UID:-user}"'], capture_output=True,
+                             text=True, env=self.env, check=True).stdout
         return os.path.join(self.env["TMPDIR"], f"ccgg-context-guard-{uid}", f"{session}.flush")
 
     def test_it_asks_again_only_after_another_threshold_of_growth(self):
