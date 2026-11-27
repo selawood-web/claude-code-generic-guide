@@ -34,7 +34,8 @@ Checks, in order:
  20. Every audit subagent still serializes into the inline JSON a headless run
      needs — a brief that only an interactive run can load is a boundary CI loses.
  24. Something runs the validator automatically — a repository that ships this
-     gate must not rely on someone remembering to invoke it.
+     gate must not rely on someone remembering to invoke it. In an installed
+     project a missing runner is a caution, for what the project has.
  23. No audit tool builds a child environment out of os.environ — code from the
      audited tree runs with an allow-list, never the operator's credentials.
  22. No workflow job both exposes a secret and runs a script from the checkout —
@@ -1457,8 +1458,11 @@ def blank_python_literals(text: str) -> str:
 # substitute — it is label-gated and hand-started — so the property is not "a
 # workflow file exists" but "something runs the validator without being asked".
 #
-# Installed projects are exempt. They receive tools/validate.py and decide their
-# own CI; install.sh is the file that only the guide repository has.
+# Installed projects decide their own CI (install.sh is the file only the guide
+# repository has), so there a missing runner is a caution, not a failure. It used
+# to be no message at all: memome-1 shipped 539 tool tests no CI step ran, so a
+# sync that failed 266 of them went green (memome-1 audit P-001, 2026-11-27).
+# Only for what the project has: a runner for a file it never received is no gap.
 GATE_COMMAND_RE = re.compile(r"tools/validate\.py")
 AUTOMATIC_TRIGGER_RE = re.compile(r"^\s{2,}(push|pull_request):", re.M)
 
@@ -1510,16 +1514,23 @@ def runs_gate_automatically(text: str) -> bool:
     return runs_automatically(text, GATE_COMMAND_RE)
 
 
+GATE_RUNNER_SUBJECTS = ("tools/validate.py", "tools/audit_facts.py", "tools/test_*.py")
+
+
 def check_gate_has_a_runner() -> None:
-    if not tracked("install.sh"):
-        return                      # an installed project chooses its own CI
+    guide = bool(tracked("install.sh"))
     texts = []
     for path in tracked(".github/workflows/*.yml") + tracked(".github/workflows/*.yaml"):
         with open(os.path.join(ROOT, path), encoding="utf-8", errors="replace") as fh:
             texts.append(fh.read())
-    for command, name, why in GATE_RUNNERS:
-        if not any(runs_automatically(text, command) for text in texts):
+    for (command, name, why), subject in zip(GATE_RUNNERS, GATE_RUNNER_SUBJECTS):
+        if any(runs_automatically(text, command) for text in texts):
+            continue
+        if guide:
             fail(f"no workflow runs {name} on push or pull_request — {why}")
+        elif tracked(subject):
+            warn(f"no workflow runs {name} on push or pull_request — CI stays green "
+                 f"even when it would fail; add a step to your own workflow")
 
 
 def inherited_env_uses(text: str) -> list[int]:

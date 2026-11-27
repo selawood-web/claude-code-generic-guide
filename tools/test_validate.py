@@ -4,6 +4,7 @@
 Run: python -m unittest discover -s tools -p "test_*.py"
 """
 
+import fnmatch
 import json
 import os
 import re
@@ -2824,3 +2825,52 @@ class VerifierWorktreeBaseTests(unittest.TestCase):
 
     def test_a_non_object_worktree_fails(self):
         self.assertEqual(len(self._check({"worktree": "head"})), 1)
+
+
+class InstalledProjectRunnerCautionTests(unittest.TestCase):
+    """memome-1 audit P-001: the tool tests ran in no CI step and nothing said so."""
+
+    TESTS_ONLY_MISSING = ("on:\n  push:\n  pull_request:\njobs:\n  v:\n    steps:\n"
+                          "      - run: python tools/validate.py\n"
+                          "      - run: python tools/audit_facts.py\n")
+
+    def _run(self, files, workflow):
+        listing = {".github/workflows/validate.yml": workflow}
+        def tracked(pattern):
+            if pattern == ".github/workflows/*.yml":
+                return [".github/workflows/validate.yml"] if workflow is not None else []
+            return [f for f in files if fnmatch.fnmatch(f, pattern)]
+        with tempfile.TemporaryDirectory() as tmp:
+            for path, text in listing.items():
+                if text is None:
+                    continue
+                os.makedirs(os.path.dirname(os.path.join(tmp, path)), exist_ok=True)
+                with open(os.path.join(tmp, path), "w", encoding="utf-8") as fh:
+                    fh.write(text)
+            with mock.patch.object(validate, "ROOT", tmp), \
+                    mock.patch.object(validate, "tracked", side_effect=tracked), \
+                    mock.patch.object(validate, "fail") as fail, \
+                    mock.patch.object(validate, "warn") as warn:
+                validate.check_gate_has_a_runner()
+        return [c.args[0] for c in fail.call_args_list], [c.args[0] for c in warn.call_args_list]
+
+    def test_tests_without_a_runner_are_a_caution_not_a_failure(self):
+        fails, warns = self._run(["tools/validate.py", "tools/audit_facts.py", "tools/test_x.py"],
+                                 self.TESTS_ONLY_MISSING)
+        self.assertEqual(fails, [])
+        self.assertEqual(len(warns), 1)
+        self.assertIn("the unit tests", warns[0])
+
+    def test_a_file_the_project_never_received_is_no_gap(self):
+        fails, warns = self._run(["tools/validate.py", "tools/audit_facts.py"], self.TESTS_ONLY_MISSING)
+        self.assertEqual((fails, warns), ([], []))
+
+    def test_no_workflow_at_all_warns_for_each_file_present(self):
+        fails, warns = self._run(["tools/validate.py", "tools/test_x.py"], None)
+        self.assertEqual(fails, [])
+        self.assertEqual(len(warns), 2)
+
+    def test_the_guide_still_fails(self):
+        fails, warns = self._run(["install.sh", "tools/validate.py", "tools/test_x.py"], None)
+        self.assertEqual(len(fails), 3)
+        self.assertEqual(warns, [])
