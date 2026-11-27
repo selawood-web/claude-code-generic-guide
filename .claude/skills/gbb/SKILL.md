@@ -105,9 +105,9 @@ and walk it with no instructions, as the primary portrait from Step 2, at every 
 - Build the **spatial map**: every screen, how you reach it, how you get back, and
   what on the screen tells you where you are. Mark every place the walk got lost,
   hesitated, or backed out.
-- Time the **stranger tests** from [`gbb-ladder.md`](gbb-ladder.md): first
-  success, where-am-I, back-out, recovery, one-hand. These are the numbers the ladder
-  moves.
+- Measure the **stranger tests** from [`gbb-ladder.md`](gbb-ladder.md): first
+  success, where-am-I, back-out, recovery, one-hand. The walk is saved as a replayable
+  script and map, and its results are the numbers the ladder moves.
 
 If the product cannot be run, say so and stop the full path: a council judging
 mockups produces a ladder nobody can verify. Offer the **paper path** instead —
@@ -142,7 +142,8 @@ Synthesize into `design/GBB-<slug>.md` from [`gbb-ladder.md`](gbb-ladder.md):
   reopening.
 
 ### Step 7 — Rerun: the bar moves
-On `--rerun`, re-time every stranger test and re-score every rung. A Better that
+On `--rerun`, replay the recorded walk, re-measure every stranger test and re-score
+every rung. A Better that
 passed becomes the row's new Good, and the old Best becomes the new Better — then the
 council's one Best move for that row is asked for again. This is the mechanism behind
 the motto: the ladder never runs out of a top rung. Record the score delta at the top

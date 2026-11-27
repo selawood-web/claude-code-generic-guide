@@ -11,7 +11,7 @@ target: unscheduled
 ## Summary
 One command, `/gbb`, takes a running app and returns a ranked Good / Better / Best
 ladder: evidence-based portraits of who it is for, a stranger walk with screenshots and
-a spatial map, a ten-member design council, and a timed test on every rung. Top rungs leave as feature definitions; a rerun moves the bar.
+a spatial map, a ten-member design council, and a measured test on every rung. Top rungs leave as feature definitions; a rerun moves the bar.
 
 ## Problem
 Two projects built with this repository's process are correct, well-tested and
@@ -54,7 +54,7 @@ to spectacular, each with a number that proves when it has been reached.
   design owner's review and carries the intent's test results as evidence
 - An owner can scope a run to one screen or flow with `--screen`, which runs three
   council members instead of ten
-- An owner can run `--rerun` after changes and see every stranger test re-timed, passed
+- An owner can run `--rerun` after changes and see every stranger test re-measured, passed
   Better rungs promoted to Good, and a new score-history row
 - A council member can be edited in `design-council.md` without touching the skill
 - The top three Better rungs are handed to `/feature` with the stranger test already

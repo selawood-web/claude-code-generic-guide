@@ -210,6 +210,76 @@ class LadderTests(unittest.TestCase):
             self.assertTrue(cells[3], f"the test '{cells[0]}' has no pass bar, so it can never be passed")
 
 
+class MeasuredStrangerTests(unittest.TestCase):
+    """F005: a stranger test is a check the recorded walk runs, never a stopwatch.
+
+    Seconds timed by the walking agent measure the model and its tools, so a rung
+    promoted on them moves on noise. Every test names what it measures, and no
+    measure or pass bar is a duration.
+    """
+
+    DURATION_RE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:s|secs?|seconds?|ms|min(?:ute)?s?)\b"
+                             r"|\bseconds?\b|\bminutes?\b|\btimed?\b", re.I)
+
+    def _rows(self):
+        ladder = read(".claude/skills/gbb/gbb-ladder.md")
+        table = ladder.split("## The stranger tests", 1)[1].split("\n## ", 1)[0]
+        rows = [[c.strip() for c in ln.split("|")[1:-1]] for ln in table.splitlines() if ln.startswith("| **")]
+        self.assertEqual(len(rows), 5, "the five stranger tests")
+        return rows
+
+    def test_the_table_names_a_measure_column(self):
+        ladder = read(".claude/skills/gbb/gbb-ladder.md")
+        table = ladder.split("## The stranger tests", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("| Test | Task | Measure | Pass bar |", table)
+
+    def test_every_test_names_what_it_measures(self):
+        for test, _task, measure, _bar in self._rows():
+            with self.subTest(test=test):
+                self.assertGreater(len(measure.split()), 3, f"{test} states no measure")
+
+    def test_no_measure_or_pass_bar_is_a_duration(self):
+        for test, _task, measure, bar in self._rows():
+            for what, cell in (("measure", measure), ("pass bar", bar)):
+                with self.subTest(test=test, column=what):
+                    self.assertIsNone(self.DURATION_RE.search(cell),
+                                      f"{test}'s {what} is a duration: {cell}")
+
+    def test_the_duration_pattern_catches_what_the_old_table_said(self):
+        for old in ("Under 60 seconds and no more than two wrong taps", "Correct within 3 seconds",
+                    "recovery under 20 seconds", "Seconds, and the count of wrong taps", "done in 4s"):
+            with self.subTest(old=old):
+                self.assertIsNotNone(self.DURATION_RE.search(old))
+
+    def test_the_duration_pattern_spares_counts_and_sizes(self):
+        for fine in ("7 actions", "at least 24 CSS px", "320 CSS px width", "200% text size",
+                     "WCAG 2.2 SC 2.5.8", "Every screen in the map"):
+            with self.subTest(fine=fine):
+                self.assertIsNone(self.DURATION_RE.search(fine))
+
+    def test_a_rerun_replays_the_walk(self):
+        ladder = read(".claude/skills/gbb/gbb-ladder.md")
+        rules = ladder.split("## Rerun rules", 1)[1].split("\n## ", 1)[0]
+        self.assertIn("Replay the recorded walk", rules)
+        step7 = skill().split("### Step 7", 1)[1].split("### Step 8", 1)[0]
+        self.assertIn("replay the recorded walk", step7)
+
+    def test_the_walk_records_a_script_and_a_map(self):
+        b4 = read(".claude/skills/gbb/research-protocol.md").split("### B4.", 1)[1].split("### B5.", 1)[0]
+        for artifact in ("walk.spec.ts", "map.json", "getByRole"):
+            with self.subTest(artifact=artifact):
+                self.assertIn(artifact, b4)
+
+    def test_no_gbb_file_still_says_the_tests_are_timed(self):
+        for rel in (".claude/skills/gbb/SKILL.md", ".claude/skills/gbb/gbb-ladder.md",
+                    ".claude/skills/gbb/research-protocol.md"):
+            text = canonical(read(rel))
+            for phrase in ("time the stranger tests", "re time every stranger test", "re time all five",
+                           "five timed tasks"):
+                with self.subTest(file=rel, phrase=phrase):
+                    self.assertNotIn(phrase, text)
+
+
 class IntentTests(unittest.TestCase):
     def test_the_intent_covers_every_part_of_the_language(self):
         """The design vocabulary the owner asked for, each with a reason and a test."""
