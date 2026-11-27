@@ -512,6 +512,8 @@ Never edits a tracked file. The report directory is ignored by git; keep one del
 
 **Headless, for a checkout you did not write:** `tools/audit_headless.py` runs the same steps with auto-discovery off, so the audited tree's hooks, settings, skills and agents never configure the run that reads it. The briefs are passed inline, built from the same `.claude/agents/` files, and the verifier's guard hook must come from a path you control rather than from the tree under audit. `.github/workflows/audit.yml` runs it on a manual dispatch or an `audit` label on a pull request against the default branch, posts the report as one pull-request comment, and pushes nothing. It needs an `ANTHROPIC_API_KEY` secret; without one, the deterministic half still runs.
 
+**Scheduled or `/loop` runs in an installed project:** a skill that declares `allowed-tools` asks before it runs from a scheduled task or `/loop`, and `update.sh` never writes permissions. To let the audit run there, add `"Skill(ccgg-audit)"` to `permissions.allow` in the project's `.claude/settings.json` yourself. It only skips that prompt: the audit still starts only when someone types `/ccgg-audit`.
+
 **Examples:**
 ```
 /ccgg-audit
