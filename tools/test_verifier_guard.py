@@ -145,6 +145,12 @@ REFUSED = [
     "python3 tools/test_pwn.py",
     "python3 tools/audit_pwn.py",
     "python3 -m unittest discover -s /tmp",
+    # H-001 (memome-1 audit): start, pattern and top could come positionally, and
+    # a top-level directory moved where the imports resolve.
+    "python3 -m unittest discover evil",
+    "python3 -m unittest discover tools 'test*.py' /tmp",
+    "python3 -m unittest discover -s tools -t /tmp",
+    "python3 -m unittest discover -s tools --nope",
     "python3 -m unittest test_pwn",
     "python3 -m doctest tools/pwn.py",
     # R-012: `python3 <path>` was allowed unconditionally as "the repository's
@@ -680,3 +686,53 @@ class ScopedRegistrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DiscoverImportsOnlyTheGateTests(unittest.TestCase):
+    """H-001: `unittest discover -s tools` imported any tools/test_*.py a branch added."""
+
+    def _guard(self, root, command):
+        payload = json.dumps({"tool_name": "Bash", "cwd": root, "tool_input": {"command": command}})
+        proc = subprocess.run([BASH, HOOK], input=payload, capture_output=True, text=True)
+        return proc.returncode, proc.stderr
+
+    def _tree(self, tmp, *names):
+        os.makedirs(os.path.join(tmp, "tools", "pkg"))
+        for name in names:
+            open(os.path.join(tmp, "tools", name), "w").close()
+        return tmp
+
+    def test_the_gates_own_tests_are_allowed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, "test_validate.py", "test_install.py", "validate.py")
+            rc, err = self._guard(root, "python3 -m unittest discover -s tools")
+            self.assertEqual(rc, 0, err)
+
+    def test_a_planted_test_file_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, "test_validate.py", "test_planted.py")
+            rc, err = self._guard(root, "python3 -m unittest discover -s tools")
+            self.assertEqual(rc, 2)
+            self.assertIn("tools/test_planted.py", err)
+
+    def test_a_wider_pattern_cannot_reach_other_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, "test_validate.py", "evil.py")
+            rc, err = self._guard(root, "python3 -m unittest discover -s tools -p '*.py'")
+            self.assertEqual(rc, 2)
+            self.assertIn("tools/evil.py", err)
+
+    def test_a_test_file_in_a_subdirectory_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, "test_validate.py")
+            open(os.path.join(tmp, "tools", "pkg", "test_validate.py"), "w").close()
+            rc, err = self._guard(root, "python3 -m unittest discover -s tools")
+            self.assertEqual(rc, 2)
+            self.assertIn("tools/pkg/test_validate.py", err)
+
+    def test_the_positional_pattern_is_read(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._tree(tmp, "test_validate.py", "check_evil.py")
+            rc, err = self._guard(root, "python3 -m unittest discover tools 'check_*.py'")
+            self.assertEqual(rc, 2)
+            self.assertIn("tools/check_evil.py", err)

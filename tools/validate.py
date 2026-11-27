@@ -1934,6 +1934,14 @@ def check_guard_settings_registration() -> None:
         return                      # check 6 reports it
     for problem in guard_registration_problems(settings):
         fail(problem)
+    # The verifier's worktree branches from the default branch unless baseRef is
+    # "head", so without it every finding is reproduced against main, not the
+    # commit under audit (memome-1 audit 2026-11-27). update.sh adds only hook
+    # registrations to settings.json, so an installed project's owner adds this.
+    worktree = settings.get("worktree") if isinstance(settings, dict) else None
+    if not isinstance(worktree, dict) or worktree.get("baseRef") != "head":
+        fail('.claude/settings.json: the audit verifier\'s worktree starts from the default '
+             'branch, not the audited commit; add "worktree": {"baseRef": "head"}')
 
 
 # --- 29. the verifier guard's allow-lists match the tree ----------------------
